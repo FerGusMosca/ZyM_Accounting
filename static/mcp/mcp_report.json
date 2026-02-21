@@ -1,0 +1,18 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "run_report",
+    "arguments": {
+      "report": "{{REPORT}}",
+      "portfolio": "{{PORTFOLIO}}",
+      "source": "{{SOURCE}}",
+      "rank_folder": "{{RANK_FOLDER}}",
+      "year": "{{YEAR}}",
+      "tag_model": "{{TAG_MODEL}}",
+      "doc_type": "{{DOC_TYPE}}",
+      "tag_json": "{{TAG_JSON}}"
+    }
+  }
+}

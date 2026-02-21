@@ -1,18 +1,21 @@
-# Imagen base con Python
-FROM python:3.11-slim
+FROM python:3.10-slim
 
-# Set working dir
 WORKDIR /app
 
-# Copiar requirements y instalar dependencias
+# System dependencies + wkhtmltopdf para generación de PDFs
+RUN apt-get update && apt-get install -y \
+    wkhtmltopdf \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar el resto del código
-COPY . .
+# Copy app
+COPY . /app
 
-# Exponer el puerto (lo tenés en .env como 8000)
-EXPOSE 8000
+EXPOSE 9004
 
-# Comando de arranque (ajustá si usás FastAPI/Flask)
 CMD ["python", "main.py"]

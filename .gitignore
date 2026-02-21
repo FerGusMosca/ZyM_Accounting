@@ -1,6 +1,7 @@
 # venv / env
 venv/
-.env
+venv_crossenc/
+config/depoy_config/zz_lottery_ticket/.env
 *.env
 .env_*
 .env.*
@@ -25,6 +26,7 @@ data/documents/
 # ⛔ secretos / credenciales
 config/*.json
 config/token.json
+config/deploy_config/
 *.pem
 *.p12
 *.p8
@@ -49,5 +51,5 @@ logs/
 
 last-commit.patch
 *.patch
-exports/
+exports\
 exports\debug\

@@ -1,0 +1,1 @@
+Analizá el informe anual {report} {year} de {symbol}, identificando el tono general del management, los principales riesgos, oportunidades estratégicas y las perspectivas futuras expresadas.

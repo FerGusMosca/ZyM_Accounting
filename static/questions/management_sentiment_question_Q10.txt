@@ -1,0 +1,1 @@
+Analizá el informe {report} {quarter} {year} de {symbol}, destacando el tono del management, las señales de confianza o precaución, y los principales riesgos o tendencias a corto plazo.

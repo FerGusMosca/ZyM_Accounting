@@ -1,0 +1,345 @@
+/* ==================================================================
+   MAIN.CSS - Complete GitHub-Dark Theme for zzLotteryTicket UI
+   Updated: November 07, 2025
+   Author: You + Grok (the absolute beast)
+   Fixes & Upgrades:
+     • Full compatibility with Management Sentiment page
+     • Spinner FIXED: only spins on click, never before
+     • Cleaner navbar (flex + centered + sticky)
+     • Global body/content fixes (no duplicates)
+     • Sidebar buttons: auto-width + word-wrap + hover effects
+     • Panel: more compact vertically (as requested)
+     • Form: generous spacing + perfect grid
+     • Button loading spinner: VISIBLE, CENTERED, PRO
+     • Error message styling with animation
+     • Fully responsive (mobile/tablet/desktop)
+   ================================================================== */
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: #0D1117;        /* GitHub dark background */
+  color: #E0E0E0;
+  font-family: "Inter", Arial, Helvetica, sans-serif;
+}
+
+/* ====================== NAVBAR (top menu) ====================== */
+.navbar {
+  display: flex;
+  justify-content: center;
+  background: #0D1117;
+  padding: 18px 0;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+  border-bottom: 1px solid #30363D;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar ul {
+  display: flex;
+  list-style: none;
+  gap: 35px;
+  margin: 0;
+  padding: 0;
+}
+
+.navbar a {
+  color: #58A6FF;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 16px;
+  transition: color 0.2s;
+}
+
+.navbar a:hover {
+  color: #79C0FF;
+}
+
+/* ====================== MAIN LAYOUT ====================== */
+.main-container {
+  display: flex;
+  flex: 1;
+  min-height: 100vh;
+}
+
+/* ====================== SIDEBAR (left menu) ====================== */
+.sidebar {
+  min-width: 280px;
+  max-width: 380px;
+  background: #161B22;
+  padding: 30px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border-right: 1px solid #30363D;
+  box-sizing: border-box;
+}
+
+.sidebar h2 {
+  color: #58A6FF;
+  font-size: 20px;
+  margin-bottom: 30px;
+  border-bottom: 1px solid #30363D;
+  padding-bottom: 12px;
+  text-align: center;
+}
+
+.menu {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.menu li {
+  margin: 16px 0;
+  background: #21262D;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+.menu li:hover {
+  background: #30363D;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.menu a {
+  display: block;
+  padding: 16px 20px;
+  text-decoration: none;
+  color: #E0E0E0;
+  font-weight: 600;
+  font-size: 15px;
+  word-wrap: break-word;
+  hyphens: auto;
+}
+
+/* ====================== CONTENT AREA ====================== */
+.content {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 60px 20px;
+  min-height: auto;
+}
+
+/* ====================== PANEL (form container) ====================== */
+.panel {
+  background: #161B22;
+  padding: 30px 60px;
+  border-radius: 20px;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.7);
+  width: 1200px;
+  max-width: 95%;
+  text-align: center;
+  border: 1px solid #30363D;
+}
+
+.panel h3 {
+  color: #58A6FF;
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 25px;
+}
+
+/* ====================== FORM CONTROLS ====================== */
+form {
+  display: grid;
+  grid-template-columns: 3fr 1.2fr 1fr 1.2fr 160px;
+  grid-template-areas: "symbol report quarter year button";
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+input[name="symbol"] { grid-area: symbol; }
+select[name="report"] { grid-area: report; }
+select[name="quarter"] { grid-area: quarter; }
+input[name="year"] { grid-area: year; }
+button { grid-area: button; justify-self: end; }
+
+input, select {
+  width: 100%;
+  padding: 16px 20px;
+  border: none;
+  border-radius: 10px;
+  background: #21262D;
+  color: #E6EDF3;
+  font-size: 15px;
+  box-sizing: border-box;
+  transition: all 0.2s;
+}
+
+input:focus, select:focus {
+  outline: 2px solid #58A6FF;
+  outline-offset: -2px;
+}
+
+input::placeholder {
+  color: #8B949E;
+}
+
+/* ====================== BUTTON + SPINNER (PERFECT FIX - NO SPIN BEFORE CLICK) ====================== */
+button {
+  padding: 16px 32px;
+  background: #2EA043;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  min-width: 140px;
+  position: relative;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+button:hover {
+  background: #3FB950;
+  transform: translateY(-2px);
+}
+
+button.loading {
+  pointer-events: none;
+  background: #238636;
+}
+
+button.loading .spinner {
+  opacity: 1;
+}
+
+button.loading span:not(.spinner) {
+  opacity: 0;
+}
+
+.spinner {
+  opacity: 0;                                    /* Hidden by default */
+  width: 18px;
+  height: 18px;
+  border: 3px solid #ffffff50;
+  border-top: 3px solid white;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: opacity 0.3s ease;
+}
+
+button.loading .spinner {
+  animation: spin 0.9s linear infinite;          /* Only spins when loading */
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ====================== ERROR MESSAGE ====================== */
+.error-msg {
+  color: #F85149;
+  font-weight: bold;
+  background: #3A1214;
+  border: 1px solid #F85149;
+  padding: 12px 20px;
+  border-radius: 10px;
+  margin-top: 15px;
+  text-align: center;
+  display: none;
+}
+
+.error-msg.show {
+  display: block;
+  animation: fadeIn 0.4s;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ====================== RESPONSIVE TWEAKS ====================== */
+@media (max-width: 1200px) {
+  .panel {
+    padding: 30px 40px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .main-container {
+    flex-direction: column;
+  }
+  .sidebar {
+    min-width: auto;
+    max-width: none;
+    padding: 20px;
+    border-right: none;
+    border-bottom: 1px solid #30363D;
+  }
+  .panel {
+    padding: 25px 20px;
+    width: 100%;
+  }
+  form {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "symbol"
+      "report"
+      "quarter"
+      "year"
+      "button";
+    gap: 18px;
+  }
+  button {
+    justify-self: stretch;
+  }
+}
+
+/* ====================== RESULT TABLE (Management Sentiment) ====================== */
+#result table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 12px;
+  margin-top: 20px;
+  background: transparent;
+}
+
+#result th {
+  color: #58A6FF;
+  font-weight: 600;
+  text-align: left;
+  padding: 0 0 8px 0;
+  font-size: 16px;
+  border-bottom: 1px solid #30363D;
+}
+
+#result td {
+  background: #0D1117;
+  padding: 20px 24px;
+  vertical-align: top;
+  border-radius: 10px;
+}
+
+#result tr:nth-child(1) th { padding-bottom: 12px; }
+#result tr:nth-child(1) td { font-size: 24px; font-weight: bold; color: #79C0FF; }
+
+#result tr:nth-child(2) th { font-size: 13px; color: #8B949E; padding-bottom: 4px; }
+#result tr:nth-child(2) td { font-size: 13px; color: #C9D1D9; text-align: left; }
+
+#result tr:nth-child(3) th { padding-top: 20px; }
+#result tr:nth-child(3) td ul { margin: 0; padding-left: 20px; text-align: left; }
+#result tr:nth-child(3) td li {
+  margin-bottom: 7px;
+  line-height: 1.35;
+  font-size: 13.5px;
+  color: #E6EDF3;
+}
+
+@media (max-width: 1000px) {
+  #result tr:nth-child(3) td li { font-size: 13px; }
+  #result td { padding: 16px; }
+}

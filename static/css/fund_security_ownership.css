@@ -1,0 +1,622 @@
+/* fund_security_ownership.css - Institutional Holdings Analysis */
+/* IMPORTANT: Overrides for main.css conflicts */
+
+/* ====================== RESET main.css conflicts ====================== */
+.fso-panel form {
+  display: block !important;
+  grid-template-columns: none !important;
+  grid-template-areas: none !important;
+  gap: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.fso-panel input,
+.fso-panel select {
+  width: auto;
+}
+
+.fso-panel button {
+  padding: 10px 24px;
+  min-width: auto;
+  gap: 8px;
+}
+
+/* ====================== Main Panel ====================== */
+.fso-panel {
+  max-width: 95vw;
+  width: 95vw;
+  padding: 2rem 2.5rem;
+}
+
+/* ====================== Title ====================== */
+.fso-title {
+  text-align: center;
+  font-size: 2.4rem;
+  margin: 0 0 0.5rem 0;
+  color: #58A6FF;
+  font-weight: 600;
+}
+
+.fso-subtitle {
+  text-align: center;
+  color: #8B949E;
+  font-size: 0.95rem;
+  margin: 0 0 1.5rem 0;
+}
+
+/* ====================== Tab Navigation - HORIZONTAL FIX ====================== */
+.fso-tabs {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.fso-tab {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px !important;
+  background: #21262D !important;
+  border: 1px solid #30363D !important;
+  border-radius: 8px !important;
+  color: #8B949E !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+  white-space: nowrap;
+  min-width: auto !important;
+  width: auto !important;
+  flex: 0 0 auto !important;
+}
+
+.fso-tab:hover {
+  background: #30363D !important;
+  color: #E6EDF3 !important;
+}
+
+.fso-tab.active {
+  background: #238636 !important;
+  border-color: #238636 !important;
+  color: white !important;
+}
+
+/* ====================== Tab Content ====================== */
+.fso-tab-content {
+  display: none;
+}
+
+.fso-tab-content.active {
+  display: block;
+}
+
+/* ====================== Period Selector ====================== */
+.fso-period-selector {
+  background: #161B22;
+  border: 1px solid #30363D;
+  border-radius: 10px;
+  padding: 14px 20px;
+  margin-bottom: 1.2rem;
+}
+
+.fso-period-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fso-period-row label {
+  color: #8B949E;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.fso-period-row select {
+  padding: 8px 14px !important;
+  background: #21262D !important;
+  border: 1px solid #30363D !important;
+  border-radius: 6px !important;
+  color: #E6EDF3 !important;
+  font-size: 14px !important;
+  min-width: 90px;
+  cursor: pointer;
+}
+
+.fso-period-row select:focus {
+  outline: 2px solid #58A6FF !important;
+  border-color: #58A6FF !important;
+}
+
+.fso-period-status {
+  color: #3FB950;
+  font-size: 13px;
+  margin-left: auto;
+}
+
+/* ====================== Controls Section ====================== */
+.fso-controls {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 14px !important;
+  align-items: flex-end !important;
+  flex-wrap: wrap !important;
+  margin-bottom: 1.2rem;
+  padding: 14px 18px;
+  background: #0D1117;
+  border: 1px solid #30363D;
+  border-radius: 10px;
+}
+
+.fso-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: relative;
+}
+
+.fso-control-group label {
+  color: #8B949E;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.fso-control-group input,
+.fso-control-group select {
+  padding: 8px 12px !important;
+  background: #21262D !important;
+  border: 1px solid #30363D !important;
+  border-radius: 6px !important;
+  color: #E6EDF3 !important;
+  font-size: 13px !important;
+  min-width: 100px;
+}
+
+.fso-control-group input:focus,
+.fso-control-group select:focus {
+  outline: 2px solid #58A6FF !important;
+  border-color: #58A6FF !important;
+}
+
+.fso-control-group input::placeholder {
+  color: #6E7681;
+}
+
+.fso-control-wide {
+  flex: 1;
+  min-width: 220px;
+}
+
+.fso-control-wide input {
+  width: 100%;
+}
+
+/* ====================== Suggestions Dropdown ====================== */
+.fso-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #21262D;
+  border: 1px solid #30363D;
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  display: none;
+}
+
+.fso-suggestions.active {
+  display: block;
+}
+
+.fso-suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #30363D;
+  font-size: 12px;
+  color: #E6EDF3;
+}
+
+.fso-suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.fso-suggestion-item:hover {
+  background: #30363D;
+}
+
+.fso-suggestion-item .ticker {
+  color: #58A6FF;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.fso-suggestion-item .name {
+  color: #8B949E;
+}
+
+/* ====================== Selected Entity Display ====================== */
+.fso-selected-entity {
+  background: #1A3421;
+  border: 1px solid #238636;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 1rem;
+  color: #3FB950;
+  font-size: 13px;
+  display: none;
+}
+
+.fso-selected-entity.active {
+  display: block;
+}
+
+/* ====================== Stats Box ====================== */
+.fso-stats-box {
+  display: none;
+  background: #161B22;
+  border: 1px solid #30363D;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 1rem;
+}
+
+.fso-stats-box.active {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+}
+
+.fso-stat {
+  text-align: center;
+}
+
+.fso-stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #58A6FF;
+  font-family: 'Monaco', 'Consolas', monospace;
+}
+
+.fso-stat-label {
+  font-size: 11px;
+  color: #8B949E;
+  margin-top: 3px;
+}
+
+/* ====================== Action Buttons ====================== */
+.fso-action-btn {
+  background: #238636 !important;
+  color: white !important;
+  border: none !important;
+  padding: 8px 18px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  min-width: 140px !important;
+  transition: all 0.25s !important;
+  position: relative !important;
+  display: inline-flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  height: 36px !important;
+}
+
+.fso-action-btn:hover {
+  background: #2EA043 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(46, 160, 67, 0.3) !important;
+}
+
+.fso-action-btn:active {
+  background: #238636 !important;
+  transform: translateY(0) !important;
+}
+
+.fso-action-btn:disabled {
+  background: #21262D !important;
+  color: #6E7681 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Spinner for action buttons */
+.fso-action-btn .spinner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ffffff40;
+  border-top: 2px solid white;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fso-action-btn.loading .btn-text {
+  opacity: 0;
+}
+
+.fso-action-btn.loading .spinner {
+  opacity: 1;
+  animation: fso-spin 0.8s linear infinite;
+}
+
+@keyframes fso-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ====================== Result Message ====================== */
+.fso-result {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 1rem;
+  display: none;
+}
+
+.fso-result.active {
+  display: block;
+}
+
+.fso-result.success {
+  background: #1A3421;
+  color: #3FB950;
+  border: 1px solid #238636;
+}
+
+.fso-result.error {
+  background: #3A1214;
+  color: #F85149;
+  border: 1px solid #F85149;
+}
+
+.fso-result.info {
+  background: #161B22;
+  color: #58A6FF;
+  border: 1px solid #30363D;
+}
+
+/* ====================== Results Container ====================== */
+.fso-results-container {
+  display: none;
+  background: #0D1117;
+  border: 1px solid #30363D;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.fso-results-container.active {
+  display: block;
+}
+
+.fso-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  background: #161B22;
+  border-bottom: 1px solid #30363D;
+}
+
+.fso-table-header h3 {
+  margin: 0;
+  color: #58A6FF;
+  font-size: 1rem;
+}
+
+.fso-pagination-info {
+  color: #8B949E;
+  font-size: 12px;
+}
+
+/* Table Wrapper for horizontal scroll */
+.fso-table-wrapper {
+  overflow-x: auto;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+/* ====================== Results Table ====================== */
+.fso-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.fso-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.fso-table th {
+  background: #21262D;
+  color: #E6EDF3;
+  font-weight: 600;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 2px solid #30363D;
+  white-space: nowrap;
+}
+
+.fso-table th.numeric {
+  text-align: right;
+}
+
+.fso-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid #21262D;
+  color: #C9D1D9;
+}
+
+.fso-table td.numeric {
+  text-align: right;
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 11px;
+}
+
+.fso-table tbody tr:hover {
+  background: #161B22;
+}
+
+.fso-table tbody tr:nth-child(even) {
+  background: #0D1117;
+}
+
+.fso-table tbody tr:nth-child(even):hover {
+  background: #161B22;
+}
+
+/* Rank Column */
+.fso-table .rank {
+  color: #8B949E;
+  font-weight: 500;
+  width: 50px;
+}
+
+/* Ticker highlight */
+.fso-table .ticker {
+  color: #58A6FF;
+  font-weight: 600;
+}
+
+/* Score highlights */
+.fso-table .crowd-score {
+  color: #F0883E;
+  font-weight: 600;
+}
+
+.fso-table .weight {
+  color: #3FB950;
+}
+
+.fso-table .owners {
+  color: #A371F7;
+}
+
+/* ====================== Pagination ====================== */
+.fso-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  background: #161B22;
+  border-top: 1px solid #30363D;
+}
+
+.fso-page-btn {
+  padding: 6px 14px !important;
+  background: #21262D !important;
+  border: 1px solid #30363D !important;
+  border-radius: 6px !important;
+  color: #E6EDF3 !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+  min-width: auto !important;
+  height: auto !important;
+}
+
+.fso-page-btn:hover:not(:disabled) {
+  background: #30363D !important;
+  border-color: #58A6FF !important;
+}
+
+.fso-page-btn:disabled {
+  color: #6E7681 !important;
+  cursor: not-allowed !important;
+}
+
+#pageInfo {
+  color: #8B949E;
+  font-size: 12px;
+}
+
+/* ====================== Export Container ====================== */
+.fso-export-container {
+  margin-top: 1rem;
+  text-align: right;
+}
+
+.fso-export-btn {
+  padding: 8px 16px !important;
+  background: #1F6FEB !important;
+  border: none !important;
+  border-radius: 6px !important;
+  color: white !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+  min-width: auto !important;
+  height: auto !important;
+}
+
+.fso-export-btn:hover {
+  background: #388BFD !important;
+}
+
+/* ====================== Hidden utility ====================== */
+.fso-hidden {
+  display: none !important;
+}
+
+/* ====================== Responsive ====================== */
+@media (max-width: 1024px) {
+  .fso-panel {
+    padding: 1.5rem;
+  }
+
+  .fso-title {
+    font-size: 1.8rem;
+  }
+
+  .fso-tabs {
+    flex-direction: column !important;
+  }
+
+  .fso-tab {
+    width: 100% !important;
+    text-align: center !important;
+  }
+
+  .fso-controls {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .fso-control-group {
+    width: 100%;
+  }
+
+  .fso-action-btn {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .fso-period-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .fso-period-row select {
+    width: 100%;
+  }
+
+  .fso-table th,
+  .fso-table td {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+}

@@ -1,0 +1,3 @@
+Analizá las noticias recientes relacionadas con {symbol}.
+Describí de forma concisa y analítica el sentimiento general, los temas más relevantes y las percepciones de mercado actuales.
+Respondé en español con un tono profesional, como un analista financiero.

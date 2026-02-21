@@ -1,0 +1,17 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "run_rag_ingest",
+    "arguments": {
+      "mode": "{{MODE}}",
+      "source": "{{SOURCE}}",
+      "dest_root": "{{DEST_ROOT}}",
+      "chunk_name": "{{CHUNK_NAME}}",
+      "embedding_model": "{{EMBEDDING_MODEL}}",
+      "clustering_model": "{{CLUSTERING_MODEL}}",
+      "log_posfix": "{{LOG_POSFIX}}"
+    }
+  }
+}

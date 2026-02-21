@@ -1,0 +1,169 @@
+/* PANEL */
+.panel {
+    width: 820px;
+    margin: 0 auto;
+    padding: 30px;
+}
+
+/* ===== LAYOUT SIMPLE EN FILA ===== */
+.simple-row {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 40px;
+    margin-top: 30px;
+}
+
+/* BLOQUES */
+.block {
+    display: flex;
+    flex-direction: column;
+    position: relative;    /* Needed for floating dropdown */
+}
+
+.block label {
+    margin-bottom: 6px;
+    color: #c9d1d9;
+    font-weight: 600;
+}
+
+/* INPUTS */
+.block input[type="text"],
+.block input[type="date"] {
+    width: 220px;
+    padding: 8px 10px;
+    background: #161B22;
+    border: 1px solid #30363D;
+    border-radius: 6px;
+    color: #E6EDF3;
+    font-size: 15px;
+}
+
+/* ===== DROPDOWN FLOTANTE ===== */
+.search-results {
+    position: absolute;
+    top: 42px;
+    left: 0;
+    width: 100%;
+    border: 1px solid #30363D;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #0D1117;
+    border-radius: 6px;
+    padding: 3px 0;
+    z-index: 5000;
+}
+
+.search-results div {
+    padding: 8px;
+    border-bottom: 1px solid #21262D;
+    cursor: pointer;
+}
+
+.search-results div:hover {
+    background: #1C2128;
+}
+
+/* ===== BUTTON BLOCK ===== */
+.btn-block {
+    display: flex;
+    align-items: flex-end;
+}
+
+/* ===== GREEN BUTTON + PERFECTLY CENTERED SPINNER ===== */
+.green-btn {
+    position: relative;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 32px;
+    min-height: 48px;
+    background: #238636;
+    color: white;
+    font-weight: 600;
+    font-size: 15px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.green-btn:hover {
+    background: #2ea043;
+}
+
+.green-btn .spinner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #ffffff40;
+    border-top: 3px solid white;
+    border-radius: 50%;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.green-btn.loading .btn-text {
+    opacity: 0;
+}
+
+.green-btn.loading .spinner {
+    opacity: 1;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ===== OUTPUT BOX ===== */
+.output-box {
+    margin-top: 35px;
+    padding: 15px;
+    border: 1px solid #30363D;
+    background: #0D1117;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    font-family: Consolas, monospace;
+    color: #58A6FF;
+    min-height: 40px;
+}
+
+.search-results:empty {
+    display: none;
+}
+
+/* Same universal spinner fix - works everywhere */
+.green-btn.loading .btn-text {
+    position: absolute;
+    left: -9999px;
+    opacity: 0;
+}
+
+.output-box {
+    text-align: left;    /* Align text to the left */,
+        margin-top: 35px;
+    padding: 15px;
+    border: 1px solid #30363D;
+    background: #0D1117;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    font-family: Consolas, monospace;
+    color: #58A6FF;
+    min-height: 200px;   /* bigger */
+    max-height: 400px;   /* capped */
+    overflow-y: auto;    /* scroll */
+}
+
+.disabled-btn {
+    pointer-events: none;
+    opacity: 0.4;
+}
+.enabled-btn {
+    pointer-events: auto;
+    opacity: 1;
+}
+
+

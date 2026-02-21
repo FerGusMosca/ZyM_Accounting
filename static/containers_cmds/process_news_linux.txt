@@ -1,0 +1,1 @@
+docker run --rm --name news_downloader_{timestamp} -v {commands_ini}:/app/configs/commands_mgr.ini -v {documents_path}:/zzLotteryTicket/documents -v /var/run/docker.sock:/var/run/docker.sock -e PYTHONUNBUFFERED=1 alienzimzum/zz-run-report:latest python -u -m commands.reports.run_report_cmd RunReport report=finviz_news_download portfolio={news_folder_rel_path} symbol={symbol}

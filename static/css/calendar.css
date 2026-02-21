@@ -1,0 +1,30 @@
+body {
+  background-color: #0D1117;
+  color: #C9D1D9;
+  font-family: "Segoe UI", sans-serif;
+  margin: 40px;
+}
+
+.calendar-container {
+  text-align: center;
+}
+
+table {
+  margin: 30px auto;
+  border-collapse: collapse;
+  width: 60%;
+}
+
+th, td {
+  border: 1px solid #30363D;
+  padding: 10px 20px;
+}
+
+th {
+  color: #58A6FF;
+  background-color: #161B22;
+}
+
+td {
+  background-color: #0D1117;
+}

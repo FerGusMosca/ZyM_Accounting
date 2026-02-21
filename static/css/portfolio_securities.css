@@ -1,0 +1,276 @@
+.styled-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #0D1117;
+    color: #E6EDF3;
+}
+
+.styled-table th {
+    background: #161B22;
+    padding: 10px;
+    color: #58A6FF;
+    text-align: left;
+    border-bottom: 1px solid #30363D;
+}
+
+.styled-table td {
+    padding: 10px;
+    border-bottom: 1px solid #21262D;
+}
+
+.styled-table tr:hover {
+    background: #1C2128;
+}
+
+.pagination {
+    margin-top: 20px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    color: #9EA7B3;
+}
+
+.pagination button {
+    padding: 6px 14px;
+    border-radius: 6px;
+    background: #238636;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.pagination button:disabled {
+    background: #444C56;
+    cursor: not-allowed;
+}
+
+.csv-btn {
+    display: inline-block;
+    margin-bottom: 20px;
+    padding: 8px 14px;
+    background: #238636;
+    color: white;
+    border-radius: 6px;
+    font-weight: 600;
+    text-decoration: none;
+}
+.csv-btn:hover {
+    background: #2ea043;
+}
+.actions-row {
+    display: flex;
+    justify-content: flex-end;   /* ← misma línea a la derecha */
+    align-items: center;
+    gap: 15px;                   /* separación limpia */
+    margin-bottom: 20px;
+}
+
+.add-btn {
+    padding: 8px 14px;
+    background: #0069d9;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.add-btn:hover {
+    background: #1a7cff;
+}
+
+/* === MODAL === */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.65);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.modal-box {
+    background: #0D1117;
+    padding: 20px;
+    width: 480px;
+    border-radius: 10px;
+    border: 1px solid #30363D;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #aaa;
+    cursor: pointer;
+}
+.modal-close:hover {
+    color: white;
+}
+
+/* Tabs */
+.modal-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.tab-btn {
+    padding: 6px 12px;
+    background: #161B22;
+    border: 1px solid #30363D;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #c9d1d9;
+}
+.tab-btn.active {
+    background: #238636;
+    border-color: #238636;
+    color: white;
+}
+
+/* Tab contents */
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
+}
+
+/* Search results */
+.search-results div {
+    padding: 8px;
+    border-bottom: 1px solid #21262D;
+    cursor: pointer;
+}
+.search-results div:hover {
+    background: #1C2128;
+}
+
+/* CSV box */
+#importCSV {
+    margin-top: 10px;
+}
+
+.csv-result {
+    margin-top: 10px;
+    color: #58A6FF;
+}
+
+.modal-box { width: 600px; }
+#csvTab textarea#csvInput {
+    width:100%;
+    height:200px;
+    font-size:15px;
+}
+
+/* --- Compactar controles de selección --- */
+.pf-form {
+    display: flex;
+    align-items: center;
+    gap: 10px;        /* ← acercamiento REAL */
+}
+.pf-label {
+    margin: 0;
+}
+.pf-select {
+    margin: 0;
+}
+
+/* === Uniformar botones de acciones === */
+.actions-row .csv-btn,
+.actions-row .green-btn {
+    min-width: 180px;          /* ← MISMO ANCHO */
+    text-align: center;
+    padding: 10px 16px;
+    display: inline-flex;
+    justify-content: center;   /* ← centra el texto */
+    align-items: center;
+}
+
+/* Alinear ambos en la misma línea */
+.actions-row {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 20px;
+}
+
+.csv-icon-btn {
+    background: #238636;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 18px;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    text-decoration: none;
+}
+.csv-icon-btn:hover {
+    background: #2ea043;
+}
+
+.save-btn {
+    background: linear-gradient(135deg, #4CAF50, #2e7d32);
+    border: none;
+    color: white;
+    font-size: 14px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    transition: all 0.15s ease-in-out;
+}
+
+.save-btn:disabled {
+    background: #2f3b2f;
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.save-btn:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+}
+
+.save-btn:not(:disabled):active {
+    transform: scale(0.97);
+}
+
+.filters-row {
+    margin: 15px 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filter-input {
+    padding: 8px;
+    width: 200px;
+    border: 1px solid #444;
+    background: #222;
+    color: white;
+    border-radius: 4px;
+}
+
+.clear-btn {
+    background: #666;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+}

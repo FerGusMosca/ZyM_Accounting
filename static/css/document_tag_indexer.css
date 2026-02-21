@@ -1,0 +1,604 @@
+/* document_tag_indexer.css - Inherits main.css, overrides only what's needed */
+
+/* Override ONLY the form grid from main.css for this specific page */
+.dti-page-wrapper form {
+  display: block !important;
+  grid-template-columns: none !important;
+  grid-template-areas: none !important;
+  gap: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.dti-page-wrapper input[name="symbol"],
+.dti-page-wrapper select[name="report"],
+.dti-page-wrapper select[name="quarter"],
+.dti-page-wrapper input[name="year"] {
+  grid-area: unset !important;
+}
+
+.dti-page-wrapper button {
+  grid-area: unset !important;
+  justify-self: unset !important;
+}
+
+/* Main title - centered, large */
+.dti-title {
+  text-align: center;
+  font-size: 2.8rem;
+  margin: 0 0 2.5rem 0;
+  color: #58A6FF;
+  font-weight: 600;
+}
+
+/* Toggle switch wrapper - centers the toggle */
+.dti-toggle-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 3rem;
+}
+
+/* Toggle switch container */
+.dti-toggle {
+  position: relative;
+  display: inline-flex;
+  background: #21262D;
+  border-radius: 999px;
+  padding: 4px;
+  border: 1px solid #30363D;
+}
+
+/* Hide radio inputs */
+.dti-toggle input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+
+/* Toggle labels */
+.dti-mode-label {
+  padding: 12px 32px;
+  color: #8B949E;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  user-select: none;
+  transition: color 0.3s ease;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Active label color */
+#modeOld:checked ~ label[for="modeOld"],
+#modeNew:checked ~ label[for="modeNew"] {
+  color: #E6EDF3;
+}
+
+/* Sliding background */
+.dti-mode-slider {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  height: calc(100% - 8px);
+  background: #58A6FF;
+  border-radius: 999px;
+  transition: transform 0.3s ease;
+  z-index: 1;
+}
+
+/* Move slider based on selection */
+#modeOld:checked ~ .dti-mode-slider {
+  transform: translateX(0);
+}
+
+#modeNew:checked ~ .dti-mode-slider {
+  transform: translateX(100%);
+}
+
+/* Section wrapper */
+.dti-section {
+  position: relative;
+}
+
+/* Table for controls */
+.dti-controls-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.dti-controls-table td {
+  padding: 6px;
+  vertical-align: top;
+}
+
+/* All controls in table */
+.dti-controls-table select,
+.dti-controls-table input[type="text"] {
+  width: 100%;
+  padding: 14px 16px;
+  background: #21262D;
+  border: 1px solid #30363D;
+  border-radius: 10px;
+  color: #E6EDF3;
+  font-size: 15px;
+  box-sizing: border-box;
+  transition: all 0.2s;
+}
+
+.dti-controls-table select:focus,
+.dti-controls-table input:focus {
+  outline: 2px solid #58A6FF;
+  outline-offset: -2px;
+  border-color: #58A6FF;
+}
+
+.dti-controls-table input::placeholder {
+  color: #8B949E;
+}
+
+/* Quarter select - smaller width */
+#quarterSelect {
+  text-align: center;
+}
+
+/* Hidden class */
+.dti-hidden {
+  display: none !important;
+}
+
+/* Textarea cell - full width */
+.dti-controls-table tr:nth-child(2) td {
+  padding: 12px 6px 6px 6px;
+}
+
+/* Textarea styling */
+.dti-textarea {
+  width: 100%;
+  min-height: 200px;
+  padding: 14px 16px;
+  background: #21262D;
+  border: 1px solid #30363D;
+  border-radius: 10px;
+  color: #E6EDF3;
+  font-size: 14px;
+  font-family: 'Courier New', 'Monaco', monospace;
+  resize: vertical;
+  box-sizing: border-box;
+  line-height: 1.6;
+  transition: all 0.2s;
+  display: block;
+}
+
+.dti-textarea::placeholder {
+  color: #8B949E;
+}
+
+.dti-textarea:focus {
+  outline: 2px solid #58A6FF;
+  outline-offset: -2px;
+  border-color: #58A6FF;
+}
+
+/* Button container - FIXED position, never moves */
+.dti-button-container {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 56px;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Submit button */
+.dti-submit-btn {
+  background: #2EA043;
+  color: white;
+  border: none;
+  padding: 14px 40px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  min-width: 220px;
+  transition: all 0.25s;
+}
+
+.dti-submit-btn:hover {
+  background: #3FB950;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(46, 160, 67, 0.4);
+}
+
+.dti-submit-btn:active {
+  background: #238636;
+  transform: translateY(0);
+}
+
+/* Result message */
+.dti-result {
+  min-height: 3rem;
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-size: 15px;
+  line-height: 1.5;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  text-align: left;
+}
+
+.dti-result.dti-visible {
+  opacity: 1;
+}
+
+.dti-result.dti-success {
+  background: #1A3421;
+  color: #3FB950;
+  border: 1px solid #2EA043;
+  border-left: 4px solid #2EA043;
+}
+
+.dti-result.dti-error {
+  background: #3A1214;
+  color: #F85149;
+  border: 1px solid #F85149;
+  border-left: 4px solid #F85149;
+}
+
+/* Placeholder text for old runs */
+.dti-placeholder {
+  text-align: center;
+  color: #8B949E;
+  font-style: italic;
+  padding: 5rem 0;
+  font-size: 17px;
+}
+
+/* Responsive - wrap controls on smaller screens */
+@media (max-width: 1100px) {
+  .dti-controls-table,
+  .dti-controls-table tbody,
+  .dti-controls-table tr {
+    display: block;
+    width: 100%;
+  }
+
+  .dti-controls-table td {
+    display: block;
+    width: 100%;
+    padding: 6px 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .dti-title {
+    font-size: 2rem;
+  }
+
+  .dti-mode-label {
+    padding: 10px 24px;
+    font-size: 14px;
+  }
+
+  .dti-submit-btn {
+    width: 100%;
+  }
+
+  .dti-button-container {
+    justify-content: stretch;
+  }
+}
+
+#newRunForm {
+  display: block !important;
+  grid-template-columns: none !important;
+  grid-template-areas: none !important;
+}
+
+/* ===== DTI SUBMIT BUTTON SPINNER ===== */
+.dti-submit-btn {
+  position: relative;              /* Required for absolute spinner positioning */
+  display: inline-flex;
+  justify-content: center;          /* Center content horizontally */
+  align-items: center;              /* Center content vertically */
+}
+
+.dti-submit-btn .spinner {
+  position: absolute;              /* Overlay spinner on top of button */
+  width: 20px;
+  height: 20px;
+  border: 3px solid #ffffff40;
+  border-top: 3px solid white;
+  border-radius: 50%;
+  opacity: 0;                      /* Hidden by default */
+  pointer-events: none;
+}
+
+/* Loading state: hide text, show spinner */
+.dti-submit-btn.loading .btn-text {
+  opacity: 0;                      /* Hide button text */
+}
+
+.dti-submit-btn.loading .spinner {
+  opacity: 1;                      /* Show spinner */
+  animation: spin 0.8s linear infinite;
+}
+
+
+/* Old Runs Table */
+.dti-old-runs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.dti-old-title {
+  margin: 0;
+  font-size: 1.8rem;
+  color: #58A6FF;
+}
+
+.dti-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dti-page-btn {
+  background: #21262D;
+  color: #E6EDF3;
+  border: 1px solid #30363D;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dti-page-btn:hover:not(:disabled) {
+  background: #30363D;
+  border-color: #58A6FF;
+}
+
+.dti-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dti-table-container {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid #30363D;
+  background: #161B22;
+}
+
+.dti-runs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.dti-runs-table th,
+.dti-runs-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #30363D;
+}
+
+.dti-runs-table th {
+  background: #21262D;
+  color: #8B949E;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+
+.dti-runs-table tr:hover {
+  background: #1F2937;
+}
+
+.dti-runs-table .json-cell {
+  text-align: center;
+}
+
+.dti-runs-table .view-json-btn {
+  background: #238636;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.dti-runs-table .view-json-btn:hover {
+  background: #2EA043;
+}
+
+/* Modal */
+.dti-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.dti-modal-content {
+  background: #161B22;
+  border: 1px solid #30363D;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dti-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #30363D;
+  background: #21262D;
+}
+
+.dti-modal-close {
+  background: none;
+  border: none;
+  color: #F85149;
+  font-size: 28px;
+  cursor: pointer;
+}
+
+/* Make main DTI panel larger */
+.dti-panel {
+  max-width: 90vw;        /* before: limited by main.css */
+  width: 90vw;
+
+  padding: 1rem 1.5rem;  /* more breathing room */
+}
+
+/* Same size & style for View JSON / View Rank */
+.dti-runs-table .view-json-btn,
+.dti-runs-table .view-rank-btn {
+  background: #238636;
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  min-width: 96px;     /* 👈 asegura mismo ancho */
+  text-align: center;
+}
+
+.dti-runs-table .view-json-btn:hover,
+.dti-runs-table .view-rank-btn:hover {
+  background: #2EA043;
+}
+
+#jsonContent {
+  margin: 0;
+  padding: 20px;
+  background: #0D1117;
+  color: #E6EDF3;
+  font-family: 'Courier New', monospace;
+  font-size: 13.5px;
+  overflow: auto;
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Alignment and improved presentation for JSON in the modal */
+#jsonContent {
+  margin: 0;
+  padding: 20px;
+  background: #0d1117;               /* darker background for better contrast */
+  color: #c9d1d9;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre;                  /* preserves spaces and line breaks */
+  text-align: left;                  /* left-aligned text */
+  overflow-x: auto;                  /* horizontal scroll if content is too wide */
+  overflow-y: auto;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+}
+
+/* Optional: better visual indentation */
+#jsonContent {
+  tab-size: 2;                       /* 2-space indentation */
+}
+
+/* Ensure the pre element has no unwanted margins */
+.dti-modal-content pre {
+  margin: 0 !important;
+}
+
+/* Rank Folder modal tweaks */
+#rankModal .dti-modal-content {
+  max-width: 1200px;
+  width: 90vw;
+  max-height: 70vh;
+}
+
+#rankContent {
+  white-space: pre-wrap; /* permite cortar líneas */
+  word-break: break-all; /* paths largos no rompen layout */
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Rank modal: compact header, more room for path */
+#rankModal .dti-modal-header {
+  padding: 8px 16px;          /* antes 16px 24px */
+  min-height: unset;
+}
+
+#rankModal .dti-modal-header h3 {
+  font-size: 16px;
+  margin: 0;
+}
+
+#rankModal .dti-modal-close {
+  font-size: 22px;
+}
+
+#rankContent {
+  padding: 16px 24px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-all;
+  text-align: left;
+}
+
+.dti-runs-table .run-query-btn {
+  background: #8250DF;          /* violeta: acción distinta */
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  min-width: 96px;
+  text-align: center;
+}
+
+.dti-runs-table .run-query-btn:hover {
+  background: #6E40C9;
+}
+
+
+#runQueryModal .dti-modal-content {
+  max-width: 1000px;
+}
+
+#runQueryResponse {
+  margin: 0;
+  padding: 20px;
+  background: #0D1117;
+  color: #C9D1D9;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 180px;
+  white-space: pre-wrap;
+  overflow-y: auto;
+  border-top: 1px solid #30363D;
+}
+
+
+#runQueryResponse {
+  text-align: left;
+}

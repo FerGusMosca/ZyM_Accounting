@@ -1,0 +1,1 @@
+Analizá el archivo de competencia del reporte anual {report} {year} de {symbol}, identificando los principales competidores, presiones regulatorias, amenazas operativas y riesgos estratégicos de largo plazo.

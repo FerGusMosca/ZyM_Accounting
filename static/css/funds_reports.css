@@ -1,0 +1,129 @@
+/* funds_reports.css – Final version: zero waste, spinner centered, perfect layout (30-nov-2025) */
+
+.panel {
+    width: 95%;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 12px 18px;
+    min-height: 90vh;
+    background: #161B22;
+    border: 1px solid #30363D;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-sizing: border-box;
+}
+
+h3 {
+    margin: 0 0 6px;
+    text-align: center;
+    color: #79C0FF;
+    font-size: 1.8rem;
+    font-weight: 600;
+}
+
+textarea {
+    width: 100%;
+    min-height: 90px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: #0D1117;
+    color: #C9D1D9;
+    border: 1px solid #30363D;
+    font-size: 16px;
+    line-height: 1.5;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: #58A6FF;
+    box-shadow: 0 0 0 3px rgba(88,166,255,.2);
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    width: 100%;
+    gap: 10px;
+}
+
+button {
+    min-width: 160px;
+    height: 48px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+#result {
+    flex: 1;
+    margin: 0;
+    max-height: 60vh;   /* adjustable */
+    overflow-y: auto;
+
+    /* Background + subtle border */
+    background: #0D1117;
+    border: 1px solid #30363D;
+    border-radius: 12px;
+
+    /* Inner spacing (increase if needed) */
+    padding: 2px 18px;
+
+    /* Vertical scroll when content exceeds container */
+    overflow-y: auto;
+
+    /* Text formatting */
+    text-align: left;
+    line-height: 1.7;
+    font-size: 16px;
+    color: #E6EDF3;
+
+    /* Preserve formatting and long lines */
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+
+#result h4 {
+    color: #79C0FF;
+    font-size: 1.4rem;
+    margin: 0 0 18px;
+    font-weight: 600;
+}
+
+/* ============================================
+   Funds Reports — Local independent spinner
+   (Does NOT collide with main.css)
+   ============================================ */
+.fr-spinner {
+    width: 18px;
+    height: 18px;
+    border: 3px solid #ffffff40;
+    border-top: 3px solid #fff;
+    border-radius: 50%;
+    opacity: 0;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    transition: opacity .25s;
+}
+
+/* Spinner animates ONLY when button has .loading */
+button.loading .fr-spinner {
+    opacity: 1;
+    animation: fr-spin .8s linear infinite;
+}
+
+@keyframes fr-spin {
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+button.loading .fr-spinner { opacity:1 !important; }
+button.loading span:not(.fr-spinner) { opacity:0 !important; }

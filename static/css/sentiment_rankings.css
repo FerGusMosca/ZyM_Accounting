@@ -1,0 +1,108 @@
+/* Sentiment Rankings page - full CSS */
+
+/* Textarea styling */
+textarea {
+    width: 100%;
+    height: 120px;
+    resize: none;
+    padding: 14px 18px;
+    border-radius: 10px;
+    background: #161B22;
+    color: #C9D1D9;
+    border: 1px solid #30363D;
+    display: block;
+    font-size: 16px;
+    line-height: 1.5;
+    box-sizing: border-box;
+    margin: 20px 0;
+    font-family: inherit;
+}
+
+/* Form layout */
+form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 95%;
+    max-width: 1300px;
+    margin: 0 auto;
+}
+
+/* Submit button + perfectly centered spinner */
+button {
+    position: relative;
+    align-self: flex-end;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 10px 30px;
+    background-color: #238636;
+    color: white;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 15px;
+    margin-top: 10px;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background-color: #2ea043;
+}
+
+/* Spinner (inherits from main.css but we force size/color if needed) */
+button .spinner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #ffffff40;
+    border-top: 3px solid white;
+    border-radius: 50%;
+}
+
+/* Universal spinner fix - text disappears completely, no offset */
+button.loading span:not(.spinner) {
+    position: absolute;
+    left: -9999px;
+    opacity: 0;
+}
+
+button.loading .spinner {
+    opacity: 1;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Result box */
+#result {
+    margin: 30px auto;
+    width: 95%;
+    max-width: 1300px;
+    background: #0D1117;
+    border-radius: 10px;
+    padding: 25px;
+    color: #E6EDF3;
+    text-align: left;
+    white-space: pre-wrap;
+    line-height: 1.6;
+    font-size: 15px;
+}
+
+/* Title */
+h3 {
+    text-align: center;
+    color: #58A6FF;
+    margin-bottom: 20px;
+}
+
+/* Response sections */
+.response-block h4 {
+    color: #9CC4FF;
+    margin-bottom: 10px;
+}

@@ -1,0 +1,525 @@
+/* billing_extractor_n_generator.css */
+
+/* Panel */
+.beg-panel {
+  max-width: 92vw;
+  width: 92vw;
+  padding: 2rem 2.5rem;
+}
+
+/* Title */
+.beg-title {
+  text-align: center;
+  font-size: 2.6rem;
+  margin: 0 0 2rem 0;
+  color: #58A6FF;
+  font-weight: 600;
+}
+
+/* ── Upload Zone ── */
+.beg-upload-zone {
+  border: 2px dashed #30363D;
+  border-radius: 16px;
+  background: #161B22;
+  padding: 3rem 2rem;
+  text-align: center;
+  transition: all 0.3s;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+}
+
+.beg-upload-zone:hover,
+.beg-upload-zone.drag-over {
+  border-color: #58A6FF;
+  background: #1A2332;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(88, 166, 255, 0.12);
+}
+
+.beg-upload-icon {
+  font-size: 3.5rem;
+  margin-bottom: 1rem;
+}
+
+.beg-upload-text {
+  font-size: 1.2rem;
+  color: #E6EDF3;
+  font-weight: 500;
+  margin-bottom: 0.4rem;
+}
+
+.beg-upload-subtext {
+  font-size: 0.9rem;
+  color: #8B949E;
+  margin-bottom: 1.2rem;
+}
+
+.beg-file-badge {
+  display: inline-block;
+  margin-top: 0.8rem;
+  padding: 6px 14px;
+  background: #1A3421;
+  border: 1px solid #2EA043;
+  border-radius: 20px;
+  color: #3FB950;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* ── Buttons ── */
+.beg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s;
+  padding: 13px 28px;
+  position: relative;
+}
+
+.beg-btn-primary {
+  background: #2EA043;
+  color: white;
+}
+
+.beg-btn-primary:hover {
+  background: #3FB950;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(46, 160, 67, 0.4);
+}
+
+.beg-btn-secondary {
+  background: #21262D;
+  color: #58A6FF;
+  border: 1px solid #30363D;
+}
+
+.beg-btn-secondary:hover {
+  background: #2D333B;
+  border-color: #58A6FF;
+  transform: translateY(-2px);
+}
+
+.beg-btn-small {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: #21262D;
+  color: #58A6FF;
+  border: 1px solid #30363D;
+  border-radius: 8px;
+}
+
+.beg-btn-small:hover {
+  background: #2D333B;
+  border-color: #58A6FF;
+}
+
+.beg-btn-icon {
+  padding: 6px 12px;
+  font-size: 13px;
+  background: #0D1117;
+  color: #8B949E;
+  border: 1px solid #21262D;
+  border-radius: 6px;
+  min-width: auto;
+}
+
+.beg-btn-icon:hover {
+  color: #58A6FF;
+  border-color: #30363D;
+}
+
+.beg-btn-danger-icon {
+  padding: 6px 12px;
+  font-size: 13px;
+  background: #0D1117;
+  color: #8B949E;
+  border: 1px solid #21262D;
+  border-radius: 6px;
+  min-width: auto;
+}
+
+.beg-btn-danger-icon:hover {
+  color: #F85149;
+  border-color: #3A1214;
+}
+
+/* Spinner */
+.beg-btn .spinner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 3px solid #ffffff40;
+  border-top: 3px solid white;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.beg-btn.loading .btn-text {
+  opacity: 0;
+}
+
+.beg-btn.loading .spinner {
+  opacity: 1;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ── Controls Row ── */
+.beg-controls-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  background: #161B22;
+  border: 1px solid #30363D;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 1.5rem;
+}
+
+.beg-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.beg-control-group label {
+  font-size: 12px;
+  color: #8B949E;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.beg-input {
+  padding: 10px 14px;
+  background: #21262D;
+  border: 1px solid #30363D;
+  border-radius: 8px;
+  color: #E6EDF3;
+  font-size: 14px;
+  transition: all 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.beg-input:focus {
+  outline: 2px solid #58A6FF;
+  outline-offset: -2px;
+  border-color: #58A6FF;
+}
+
+/* ── Button Container ── */
+.beg-button-container {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+/* ── Status ── */
+.beg-status {
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+}
+
+.beg-status.success {
+  background: #1A3421;
+  color: #3FB950;
+  border: 1px solid #2EA043;
+  border-left: 4px solid #2EA043;
+}
+
+.beg-status.error {
+  background: #3A1214;
+  color: #F85149;
+  border: 1px solid #F85149;
+  border-left: 4px solid #F85149;
+}
+
+.beg-status.info {
+  background: #0D2137;
+  color: #58A6FF;
+  border: 1px solid #1F6FEB;
+  border-left: 4px solid #1F6FEB;
+}
+
+/* ── Section Header ── */
+.beg-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.beg-section-header h2 {
+  font-size: 1.3rem;
+  color: #E6EDF3;
+  margin: 0;
+}
+
+.beg-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  background: #1F6FEB;
+  color: white;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+/* ── Preview Table ── */
+.beg-table-wrapper {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid #30363D;
+  margin-bottom: 2rem;
+}
+
+.beg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.beg-table th {
+  background: #21262D;
+  color: #8B949E;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #30363D;
+  white-space: nowrap;
+}
+
+.beg-table td {
+  padding: 12px 14px;
+  color: #C9D1D9;
+  border-bottom: 1px solid #21262D;
+  vertical-align: middle;
+}
+
+.beg-table tr:last-child td {
+  border-bottom: none;
+}
+
+.beg-table tr:hover td {
+  background: #161B22;
+}
+
+.beg-table td.beg-amount {
+  font-family: 'Courier New', monospace;
+  color: #3FB950;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.beg-table td.beg-comp-nro {
+  font-family: 'Courier New', monospace;
+  color: #58A6FF;
+  font-size: 12px;
+}
+
+.beg-table td.beg-desc {
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.beg-table td.beg-warn {
+  color: #D29922;
+  font-style: italic;
+}
+
+.beg-row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ── PDF Gallery ── */
+.beg-pdf-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 2rem;
+}
+
+.beg-pdf-card {
+  background: #161B22;
+  border: 1px solid #30363D;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s;
+}
+
+.beg-pdf-card:hover {
+  border-color: #58A6FF;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(88,166,255,0.1);
+}
+
+.beg-pdf-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #58A6FF;
+  font-family: 'Courier New', monospace;
+}
+
+.beg-pdf-card-client {
+  font-size: 13px;
+  color: #E6EDF3;
+}
+
+.beg-pdf-card-amount {
+  font-size: 18px;
+  font-weight: 700;
+  color: #3FB950;
+  font-family: 'Courier New', monospace;
+}
+
+.beg-pdf-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ── Modal ── */
+.beg-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.beg-modal-content {
+  background: #161B22;
+  border: 1px solid #30363D;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.8);
+}
+
+.beg-modal-large {
+  max-width: 920px;
+}
+
+.beg-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  border-bottom: 1px solid #30363D;
+  background: #21262D;
+}
+
+.beg-modal-header h3 {
+  color: #58A6FF;
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.beg-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.beg-modal-close {
+  background: none;
+  border: none;
+  color: #F85149;
+  font-size: 28px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  transition: transform 0.2s;
+}
+
+.beg-modal-close:hover {
+  transform: scale(1.2);
+}
+
+.beg-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ── Invoice HTML render ── */
+.invoice-wrapper {
+  background: white;
+  color: #111;
+  padding: 0;
+  border-radius: 4px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+/* ── Utilities ── */
+.beg-hidden {
+  display: none !important;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .beg-controls-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .beg-title {
+    font-size: 1.8rem;
+  }
+
+  .beg-panel {
+    padding: 1.2rem;
+  }
+
+  .beg-controls-row {
+    grid-template-columns: 1fr;
+  }
+
+  .beg-button-container {
+    flex-direction: column;
+  }
+
+  .beg-btn {
+    width: 100%;
+  }
+}

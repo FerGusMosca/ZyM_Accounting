@@ -1,0 +1,5 @@
+Actúa como un analista financiero senior. Analiza el siguiente dataset de noticias sobre la empresa <TICKER>. 
+Entrega: (1) Temas alcistas principales, (2) Riesgos bajistas clave, (3) Hechos neutrales relevantes, 
+(4) Resumen de sentimiento del mercado (Alcista / Bajista / Mixto), 
+(5) Catalizadores futuros probables, 
+(6) Un resumen final accionable en 5 bullets. Usa solo información del dataset.

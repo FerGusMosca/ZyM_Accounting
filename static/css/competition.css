@@ -1,0 +1,151 @@
+/* ARCHIVO COMPLETO: /static/css/competition.css */
+/* ===== RESULT LAYOUT ===== */
+#result {
+  max-height: none;
+  overflow: visible;
+  text-align: left;
+  padding: 10px 20px;
+}
+
+/* ===== CONFIDENCE HEADER ===== */
+.confidence {
+  font-size: 20px;
+  font-weight: bold;
+  color: #79C0FF;
+  margin-top: 10px;
+  margin-bottom: 20px;
+}
+
+/* ===== SECTION BLOCKS ===== */
+.section {
+  background: #0D1117;
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin-top: 20px;
+  box-shadow: 0 0 6px rgba(88,166,255,0.15);
+}
+
+.section h3 {
+  color: #58A6FF;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.section ul {
+  list-style-type: disc;
+  padding-left: 25px;
+}
+
+.section li {
+  color: #E6EDF3;
+  margin-bottom: 7px;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+/* ===== SOURCE BLOCK ===== */
+.source {
+  margin-top: 25px;
+  font-size: 13px;
+  color: #8B949E;
+  background: #0D1117;
+  padding: 12px 20px;
+  border-radius: 8px;
+  border-left: 3px solid #30363D;
+}
+
+/* ===== LOADER FIX (BUTTON) ===== */
+.btn-search.loading #btnText {
+  display: none;
+}
+
+.btn-search.loading #loader {
+  display: inline-block !important;
+}
+
+/* ===== LOADER ICON ===== */
+.loader {
+  width: 18px;
+  height: 18px;
+  display: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'%3E%3Cpath fill='%23fff' d='M12 2a1 1 0 0 1 1 1v2a1 1 0 1 1-2 0V3a1 1 0 0 1 1-1m5.657 3.343a1 1 0 0 1 1.414 1.414l-1.414 1.414a1 1 0 0 1-1.414-1.414zM21 11h-2a1 1 0 1 1 0-2h2a1 1 0 1 1 0 2m-3.343 7.657a1 1 0 0 1-1.414-1.414l1.414-1.414a1 1 0 0 1 1.414 1.414zM13 21v-2a1 1 0 1 1 2 0v2a1 1 0 1 1-2 0m-7.657-3.343a1 1 0 1 1 1.414-1.414L7.17 17.657a1 1 0 0 1-1.414 1.414zM3 13H1a1 1 0 1 1 0-2h2a1 1 0 1 1 0 2m3.343-7.657A1 1 0 1 1 7.757 6.757L6.343 5.343z'/%3E%3CanimateTransform attributeName='transform' type='rotate' dur='1s' repeatCount='indefinite' from='0 12 12' to='360 12 12'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+
+/* ===== SEARCH BUTTON RIPPLE EFFECT ===== */
+.btn-search {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease;
+  cursor: pointer;
+}
+
+.btn-search::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.6s ease, height 0.6s ease;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.btn-search:active::before {
+  width: 300px;
+  height: 300px;
+}
+
+.btn-search.searching {
+  transform: scale(0.95);
+}
+
+/* ===== TEXT Z-INDEX FIX ===== */
+#btnText {
+  position: relative;
+  z-index: 1;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 900px) {
+  .section h3 { font-size: 14px; }
+  .section li { font-size: 13px; }
+}
+
+/* ARCHIVO: /static/css/competition.css */
+/* Add at the end - NEW UNIQUE IDS */
+
+#searchBtnIcon {
+  display: none;
+  width: 18px;
+  height: 18px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") center/contain no-repeat;
+  position: relative;
+  z-index: 1;
+}
+
+/* FORCE BUTTON LOADING STATE (GLOBAL OVERRIDE FIX) */
+#searchBtn.loading {
+  background: #2ea043 !important;     /* keep green */
+  opacity: 0.8 !important;
+  cursor: wait !important;
+}
+
+#searchBtn.loading #btnText {
+  display: none !important;
+}
+
+#searchBtn.loading #loader {
+  display: inline-block !important;
+}
+
+/* Universal spinner fix for Competition page - keeps main.css untouched */
+button.loading span:not(.spinner) {
+    position: absolute;   /* Removes text from document flow */
+    left: -9999px;        /* Extra safety - text completely disappears */
+    opacity: 0;           /* Maintains smooth fade-out */
+}

@@ -1,0 +1,25 @@
+/* Base form inputs */
+select, input[type="number"] {
+  width: 100%;
+  padding: 12px 16px;
+  margin: 10px 0;
+  background: #161b22;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+/* Quarter selector hidden by default */
+#quarterSelector {
+  display: none;
+}
+
+/* Panel spacing fixes */
+form {
+  display: flex;
+  flex-direction: column;
+  width: 95%;
+  max-width: 1300px;
+  margin: 0 auto;
+}

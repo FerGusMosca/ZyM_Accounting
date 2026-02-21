@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "run_report",
+    "arguments": {
+      "report": "finviz_news_download",
+      "portfolio": "{{PORTFOLIO}}",
+      "symbol": "{{SYMBOL}}"
+    }
+  }
+}
