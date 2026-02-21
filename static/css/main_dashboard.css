@@ -1,0 +1,455 @@
+/* main_dashboard.css — ZyM Accounting Dashboard */
+/* Requires: main.css already loaded for base theme variables */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap');
+
+/* ── Root & Body ── */
+body {
+  margin: 0;
+  padding: 0;
+  background: #0D1117;
+  font-family: 'Outfit', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Layout ── */
+.dash-root {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar ── */
+.dash-sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: #161B22;
+  border-right: 1px solid #21262D;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.dash-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 24px 24px;
+  border-bottom: 1px solid #21262D;
+}
+
+.dash-brand-icon {
+  width: 38px;
+  height: 38px;
+  background: linear-gradient(135deg, #1F6FEB, #58A6FF);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'DM Serif Display', serif;
+  font-size: 20px;
+  color: white;
+  font-weight: 400;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(31, 111, 235, 0.35);
+}
+
+.dash-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.dash-brand-name {
+  font-family: 'DM Serif Display', serif;
+  font-size: 18px;
+  color: #E6EDF3;
+  letter-spacing: 0.02em;
+}
+
+.dash-brand-sub {
+  font-size: 11px;
+  color: #58A6FF;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dash-nav {
+  padding: 20px 12px;
+  flex: 1;
+}
+
+.dash-nav-section {
+  font-size: 10px;
+  color: #484F58;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  padding: 0 12px;
+  margin-bottom: 8px;
+}
+
+.dash-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #8B949E;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  margin-bottom: 2px;
+}
+
+.dash-nav-item:hover {
+  background: #21262D;
+  color: #E6EDF3;
+}
+
+.dash-nav-item.active {
+  background: #1C2128;
+  color: #58A6FF;
+  border: 1px solid #30363D;
+}
+
+.dash-nav-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+}
+
+.dash-sidebar-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #21262D;
+}
+
+.dash-version {
+  font-size: 11px;
+  color: #484F58;
+  font-family: 'DM Mono', monospace;
+}
+
+/* ── Main Content ── */
+.dash-main {
+  flex: 1;
+  overflow-y: auto;
+  background: #0D1117;
+}
+
+/* ── Hero ── */
+.dash-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  min-height: 440px;
+  border-bottom: 1px solid #21262D;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle grid background */
+.dash-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(88, 166, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 166, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+.dash-hero-content {
+  padding: 60px 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.dash-hero-eyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #58A6FF;
+  font-weight: 600;
+  margin-bottom: 16px;
+  font-family: 'DM Mono', monospace;
+}
+
+.dash-hero-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 3.8rem;
+  color: #E6EDF3;
+  margin: 0 0 20px;
+  line-height: 1.1;
+  font-weight: 400;
+}
+
+.dash-hero-title em {
+  color: #58A6FF;
+  font-style: italic;
+}
+
+.dash-hero-subtitle {
+  font-size: 15px;
+  color: #8B949E;
+  line-height: 1.7;
+  max-width: 380px;
+  margin: 0 0 32px;
+  font-weight: 300;
+}
+
+.dash-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 26px;
+  background: #1F6FEB;
+  color: white;
+  border-radius: 10px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  width: fit-content;
+  transition: all 0.25s;
+  letter-spacing: 0.01em;
+}
+
+.dash-hero-cta:hover {
+  background: #388BFD;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(31, 111, 235, 0.35);
+}
+
+/* ── Ledger Visual ── */
+.dash-hero-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 48px 40px 24px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Gradient fade on left edge */
+.dash-hero-visual::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+  background: linear-gradient(to right, #0D1117, transparent);
+  z-index: 2;
+}
+
+.dash-ledger {
+  background: #161B22;
+  border: 1px solid #30363D;
+  border-radius: 14px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  font-size: 13px;
+}
+
+.dash-ledger-header {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1.2fr 0.6fr;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #21262D;
+  color: #484F58;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  font-family: 'DM Mono', monospace;
+  border-bottom: 1px solid #30363D;
+}
+
+.dash-ledger-row {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1.2fr 0.6fr;
+  gap: 8px;
+  padding: 11px 16px;
+  border-bottom: 1px solid #21262D;
+  color: #C9D1D9;
+  align-items: center;
+  animation: fadeSlideIn 0.4s ease both;
+  transition: background 0.15s;
+}
+
+.dash-ledger-row:hover {
+  background: #1C2128;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateX(10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.dash-ledger-total {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1.2fr 0.6fr;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #1C2128;
+  color: #8B949E;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mono { font-family: 'DM Mono', monospace; font-size: 11.5px; }
+.green { color: #3FB950; }
+.bold { font-weight: 600; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'DM Mono', monospace;
+}
+
+.badge.ok {
+  background: #1A3421;
+  color: #3FB950;
+  border: 1px solid #2EA043;
+}
+
+.badge.pending {
+  background: #2D2A1A;
+  color: #D29922;
+  border: 1px solid #9E6A03;
+}
+
+/* ── Cards ── */
+.dash-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 40px 48px;
+}
+
+.dash-card {
+  background: #161B22;
+  border: 1px solid #21262D;
+  border-radius: 14px;
+  padding: 28px 24px;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.25s;
+  position: relative;
+  overflow: hidden;
+}
+
+.dash-card:not(.dash-card-soon):hover {
+  border-color: #58A6FF;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+}
+
+/* Active card top accent */
+.dash-card:not(.dash-card-soon)::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #1F6FEB, #58A6FF);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.dash-card:not(.dash-card-soon):hover::before {
+  opacity: 1;
+}
+
+.dash-card-soon {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dash-card-icon {
+  font-size: 28px;
+}
+
+.dash-card-body h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #E6EDF3;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash-card-body p {
+  margin: 0;
+  font-size: 13px;
+  color: #8B949E;
+  line-height: 1.6;
+  font-weight: 300;
+}
+
+.dash-card-arrow {
+  margin-top: auto;
+  color: #58A6FF;
+  font-size: 18px;
+  align-self: flex-end;
+  transition: transform 0.2s;
+}
+
+.dash-card:hover .dash-card-arrow {
+  transform: translateX(4px);
+}
+
+.dash-chip {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: #21262D;
+  color: #484F58;
+  border-radius: 20px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+/* ── Responsive ── */
+@media (max-width: 1100px) {
+  .dash-hero {
+    grid-template-columns: 1fr;
+  }
+  .dash-hero-visual {
+    display: none;
+  }
+  .dash-cards {
+    grid-template-columns: 1fr;
+    padding: 24px;
+  }
+}
+
+@media (max-width: 700px) {
+  .dash-sidebar {
+    display: none;
+  }
+  .dash-hero-content {
+    padding: 40px 24px;
+  }
+  .dash-hero-title {
+    font-size: 2.6rem;
+  }
+}

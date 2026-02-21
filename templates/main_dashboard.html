@@ -1,23 +1,134 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZyM Accounting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/main.css">
-  <title>Main Dashboard</title>
+  <link rel="stylesheet" href="/static/css/main_dashboard.css">
 </head>
 <body>
-  <div class="main-container">
-    <div class="sidebar">
-      <h2>Commands</h2>
-       <ul class="menu">
-       <li><a href="/billing_extractor_n_generator">🐑 Extractor Facturas</a></li>
 
-      </ul>
+<div class="dash-root">
+
+  <!-- ── LEFT SIDEBAR ── -->
+  <aside class="dash-sidebar">
+
+    <div class="dash-brand">
+      <div class="dash-brand-icon">Z</div>
+      <div class="dash-brand-text">
+        <span class="dash-brand-name">ZyM</span>
+        <span class="dash-brand-sub">Accounting</span>
+      </div>
     </div>
-    <div class="content">
-      <p>Welcome to zzLotteryTicket UI Dashboard</p>
+
+    <nav class="dash-nav">
+      <div class="dash-nav-section">Módulos</div>
+      <a href="/billing_extractor_n_generator" class="dash-nav-item">
+        <span class="dash-nav-icon">🧾</span>
+        <span>Extractor de Facturas</span>
+      </a>
+      <!-- future modules go here -->
+    </nav>
+
+    <div class="dash-sidebar-footer">
+      <div class="dash-version">v1.0.0</div>
     </div>
-  </div>
+
+  </aside>
+
+  <!-- ── MAIN CONTENT ── -->
+  <main class="dash-main">
+
+    <!-- Hero section -->
+    <section class="dash-hero">
+      <div class="dash-hero-content">
+        <div class="dash-hero-eyebrow">Sistema Contable</div>
+        <h1 class="dash-hero-title">ZyM <em>Accounting</em></h1>
+        <p class="dash-hero-subtitle">Gestión de facturación, generación de comprobantes y trazabilidad contable para SERVICONS.</p>
+        <a href="/billing_extractor_n_generator" class="dash-hero-cta">
+          Ir al Extractor de Facturas →
+        </a>
+      </div>
+
+      <!-- Decorative accounting grid -->
+      <div class="dash-hero-visual" aria-hidden="true">
+        <div class="dash-ledger">
+          <div class="dash-ledger-header">
+            <span>Comprobante</span><span>Cliente</span><span>Importe</span><span>Estado</span>
+          </div>
+          <div class="dash-ledger-row" style="animation-delay:0.1s">
+            <span class="mono">C00002-00000149</span>
+            <span>MORVILLO F.</span>
+            <span class="green mono">$ 2.000.000</span>
+            <span class="badge ok">✓</span>
+          </div>
+          <div class="dash-ledger-row" style="animation-delay:0.2s">
+            <span class="mono">C00002-00000148</span>
+            <span>MONICA</span>
+            <span class="green mono">$ 160.000</span>
+            <span class="badge ok">✓</span>
+          </div>
+          <div class="dash-ledger-row" style="animation-delay:0.3s">
+            <span class="mono">C00001-00000496</span>
+            <span>BERTOL A.</span>
+            <span class="green mono">$ 602.000</span>
+            <span class="badge ok">✓</span>
+          </div>
+          <div class="dash-ledger-row" style="animation-delay:0.4s">
+            <span class="mono">C00001-00000495</span>
+            <span>M. REISSIAN</span>
+            <span class="green mono">$ 646.177</span>
+            <span class="badge ok">✓</span>
+          </div>
+          <div class="dash-ledger-row" style="animation-delay:0.5s">
+            <span class="mono">C00002-00000147</span>
+            <span>MONICA</span>
+            <span class="green mono">$ 137.520</span>
+            <span class="badge pending">⏳</span>
+          </div>
+          <div class="dash-ledger-total">
+            <span colspan="2">Total</span>
+            <span class="green mono bold">$ 3.545.697</span>
+            <span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cards -->
+    <section class="dash-cards">
+      <a href="/billing_extractor_n_generator" class="dash-card">
+        <div class="dash-card-icon">🧾</div>
+        <div class="dash-card-body">
+          <h3>Extractor de Facturas</h3>
+          <p>Importá tu Excel de facturación y generá facturas C en PDF listas para enviar.</p>
+        </div>
+        <div class="dash-card-arrow">→</div>
+      </a>
+
+      <div class="dash-card dash-card-soon">
+        <div class="dash-card-icon">📊</div>
+        <div class="dash-card-body">
+          <h3>Reportes <span class="dash-chip">Próximamente</span></h3>
+          <p>Resúmenes mensuales, totales por cliente y exportación a Excel.</p>
+        </div>
+      </div>
+
+      <div class="dash-card dash-card-soon">
+        <div class="dash-card-icon">🏛️</div>
+        <div class="dash-card-body">
+          <h3>Integración ARCA <span class="dash-chip">Próximamente</span></h3>
+          <p>Generación de CAE en tiempo real directamente desde AFIP.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
 </body>
 </html>
