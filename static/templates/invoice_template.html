@@ -1,395 +1,411 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <style>
-    /* ── Page setup for PDF (wkhtmltopdf) ── */
-    @page {
-      size: A4;
-      margin: 1cm 1.4cm 1.2cm 1.4cm;
-    }
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    background: white;
+    color: #111;
+  }
 
-    body {
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 11.5px;
-      color: #111;
-      background: white;
-    }
+  .inv-page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 10mm 12mm 12mm 12mm;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
 
-    table {
-      border-collapse: collapse;
-    }
+  /* ══ ENCABEZADO ══ */
+  .inv-header {
+    display: flex;
+    align-items: stretch;
+    border: 1.5px solid #333;
+  }
 
-    .full-width {
-      width: 100%;
-    }
+  .inv-emisor-block {
+    flex: 1;
+    padding: 10px 14px;
+    border-right: 1.5px solid #333;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
 
-    /* ── ORIGINAL / DUPLICADO banner ── */
-    .inv-copy-label {
-      text-align: center;
-      padding: 6px 0 5px;
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 3px;
-      border-bottom: 1px solid #bbb;
-    }
+  .inv-logo-wrap { margin-bottom: 8px; }
 
-    /* ── Header row: Emisor | C FACTURA ── */
-    .inv-header-table {
-      width: 100%;
-    }
+  .inv-logo {
+    max-height: 72px;
+    max-width: 230px;
+    object-fit: contain;
+    display: block;
+  }
 
-    .inv-header-left {
-      width: 50%;
-      padding: 12px 14px;
-      border-right: 1px solid #ccc;
-      vertical-align: top;
-    }
+  .inv-emisor-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 2px;
+  }
 
-    .inv-header-right {
-      width: 50%;
-      padding: 12px 14px;
-      vertical-align: top;
-    }
+  .inv-emisor-row {
+    font-size: 10px;
+    color: #333;
+    line-height: 1.5;
+  }
 
-    .inv-emisor-name {
-      font-size: 16px;
-      font-weight: 800;
-      margin-bottom: 8px;
-    }
+  .inv-emisor-label { font-weight: 700; color: #111; }
 
-    .inv-logo {
-      max-height: 52px;
-      max-width: 180px;
-      margin-bottom: 6px;
-      display: block;
-    }
+  /* Bloque central tipo comprobante */
+  .inv-tipo-block {
+    width: 86px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-right: 1.5px solid #333;
+    padding: 8px 4px;
+    gap: 5px;
+  }
 
-    .inv-label {
-      font-weight: bold;
-    }
+  .inv-tipo-original {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: #333;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: center;
+  }
 
-    .inv-field {
-      margin-top: 5px;
-      line-height: 1.45;
-    }
+  .inv-tipo-letra {
+    font-size: 36px;
+    font-weight: 900;
+    color: #111;
+    border: 2.5px solid #333;
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
 
-    /* C box + FACTURA title */
-    .inv-type-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
+  .inv-tipo-nombre {
+    font-size: 8.5px;
+    font-weight: 700;
+    text-align: center;
+    color: #333;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
 
-    .inv-type-box {
-      border: 2.5px solid #333;
-      padding: 4px 11px;
-      font-size: 26px;
-      font-weight: 900;
-      line-height: 1;
-      text-align: center;
-    }
+  /* Bloque derecho datos comprobante */
+  .inv-comp-block {
+    width: 195px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
 
-    .inv-type-title {
-      font-size: 26px;
-      font-weight: 900;
-      letter-spacing: 1px;
-    }
+  .inv-comp-row {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
 
-    .inv-type-cod {
-      font-size: 10px;
-      color: #666;
-      margin-top: 2px;
-    }
+  .inv-label-small {
+    font-size: 8.5px;
+    color: #666;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
 
-    .inv-right-data {
-      font-size: 10.5px;
-      line-height: 1.7;
-    }
+  .inv-value {
+    font-size: 11px;
+    color: #111;
+    font-weight: 600;
+  }
 
-    /* ── Período facturado ── */
-    .inv-periodo {
-      padding: 7px 14px;
-      background: #f4f4f4;
-      border-top: 1px solid #ccc;
-      border-bottom: 1px solid #ccc;
-      font-size: 10.5px;
-    }
+  /* ══ PERÍODO + VENCIMIENTO ══ */
+  .inv-periodo-row {
+    display: flex;
+    border: 1.5px solid #333;
+  }
 
-    /* ── Cliente ── */
-    .inv-cliente {
-      padding: 9px 14px;
-      border-bottom: 1px solid #ddd;
-    }
+  .inv-periodo-cell {
+    flex: 1;
+    text-align: center;
+    padding: 6px 6px;
+    border-right: 1.5px solid #333;
+  }
+  .inv-periodo-cell:last-child { border-right: none; }
+  .inv-periodo-cell .inv-value { font-size: 11px; margin-top: 2px; }
 
-    .inv-cliente-table {
-      width: 100%;
-      font-size: 10.5px;
-    }
+  /* ══ RECEPTOR ══ */
+  .inv-receptor-block {
+    border: 1.5px solid #333;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
 
-    .inv-cliente-table td {
-      vertical-align: top;
-      padding: 2px 0;
-    }
+  .inv-receptor-title {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 4px;
+  }
 
-    /* ── Items table ── */
-    .inv-items {
-      width: 100%;
-      font-size: 10.5px;
-      border-top: 1px solid #bbb;
-    }
+  .inv-receptor-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 24px;
+    align-items: start;
+  }
 
-    .inv-items th {
-      background: #e8e8e8;
-      padding: 7px 8px;
-      text-align: left;
-      border-top: 1px solid #bbb;
-      border-bottom: 1px solid #bbb;
-      font-size: 10px;
-      white-space: nowrap;
-    }
+  .inv-receptor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
 
-    .inv-items th.right,
-    .inv-items td.right {
-      text-align: right;
-    }
+  .inv-receptor-value {
+    font-size: 11px;
+    color: #111;
+    font-weight: 500;
+  }
 
-    .inv-items th.center,
-    .inv-items td.center {
-      text-align: center;
-    }
+  /* ══ TABLA CONCEPTO ══ */
+  .inv-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    flex: 1;
+  }
 
-    .inv-items td {
-      padding: 10px 8px;
-      vertical-align: top;
-      border-bottom: 1px solid #eee;
-    }
+  .inv-items-table thead tr { background: #f0f0f0; }
 
-    /* spacer rows */
-    .inv-items tr.spacer td {
-      padding: 16px 8px;
-      border-bottom: none;
-    }
+  .inv-items-table th {
+    border: 1px solid #888;
+    padding: 6px 10px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #333;
+    text-align: center;
+  }
 
-    /* ── Totals ── */
-    .inv-totals {
-      border-top: 1px solid #ccc;
-      margin-top: 0;
-    }
+  .inv-items-table td {
+    border: 1px solid #bbb;
+    padding: 12px 10px;
+    font-size: 11px;
+    color: #111;
+    vertical-align: top;
+  }
 
-    .inv-totals table {
-      width: 100%;
-    }
+  .inv-td-desc {
+    width: 70%;
+    line-height: 1.6;
+  }
 
-    .inv-totals td {
-      padding: 5px 10px;
-      font-size: 11px;
-    }
+  .inv-td-amount {
+    width: 30%;
+    text-align: right;
+    font-weight: 700;
+    font-size: 12px;
+    vertical-align: middle;
+  }
 
-    .inv-totals tr.total-final td {
-      border-top: 1px solid #ccc;
-      font-weight: bold;
-    }
+  /* ══ TOTALES ══ */
+  .inv-totals { border: 1.5px solid #333; }
 
-    .inv-totals .lbl {
-      text-align: right;
-      white-space: nowrap;
-    }
+  .inv-total-row {
+    display: flex;
+    border-bottom: 1px solid #ccc;
+  }
+  .inv-total-row:last-child { border-bottom: none; }
 
-    .inv-totals .val {
-      text-align: right;
-      white-space: nowrap;
-      min-width: 110px;
-    }
+  .inv-total-label {
+    flex: 1;
+    padding: 6px 12px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-right: 1px solid #ccc;
+  }
 
-    /* ── Footer tagline ── */
-    .inv-tagline {
-      padding: 10px 14px;
-      text-align: center;
-      font-style: italic;
-      color: #555;
-      border-top: 1px solid #ccc;
-      font-size: 10.5px;
-    }
+  .inv-total-value {
+    width: 200px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: right;
+    color: #111;
+  }
 
-    /* ── CAE / ARCA footer ── */
-    .inv-footer {
-      padding: 9px 14px;
-      background: #f9f9f9;
-      border-top: 1px solid #ccc;
-      font-size: 10px;
-    }
+  .inv-total-final .inv-total-label,
+  .inv-total-final .inv-total-value {
+    font-size: 13px;
+    background: #f5f5f5;
+    padding: 8px 12px;
+  }
 
-    .inv-footer .cae-line {
-      margin-top: 3px;
-      font-size: 10px;
-    }
+  /* ══ PIE ══ */
+  .inv-footer {
+    border: 1.5px solid #333;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: auto;
+  }
 
-    .inv-footer .disclaimer {
-      color: #888;
-      font-style: italic;
-      font-size: 9px;
-      margin-top: 3px;
-    }
+  .inv-footer-row {
+    font-size: 10px;
+    color: #333;
+    line-height: 1.5;
+  }
 
-    .inv-page-num {
-      color: #888;
-      font-size: 9px;
-    }
-  </style>
+  .inv-footer-row strong { font-weight: 700; color: #111; }
+
+  @media print {
+    body { background: white; }
+    .inv-page { width: 100%; min-height: 100vh; padding: 8mm 10mm; }
+  }
+</style>
 </head>
 <body>
+<div class="inv-page">
 
-<table class="full-width" style="border: 1px solid #ccc;">
+  <!-- ENCABEZADO -->
+  <div class="inv-header">
 
-  <!-- ── COPY LABEL ── -->
-  <tr>
-    <td colspan="2" class="inv-copy-label">{{COPY_LABEL}}</td>
-  </tr>
-
-  <!-- ── HEADER: Emisor left | C FACTURA right ── -->
-  <tr>
-    <td class="inv-header-left">
-      {{LOGO_TAG}}
+    <div class="inv-emisor-block">
+      <div class="inv-logo-wrap">{{LOGO_TAG}}</div>
       <div class="inv-emisor-name">{{EMISOR_RAZON_SOCIAL}}</div>
-      <div class="inv-field"><span class="inv-label">Razón Social:</span> {{CLIENTE_NOMBRE}}</div>
-      <div class="inv-field"><span class="inv-label">Domicilio Comercial:</span> {{EMISOR_DOMICILIO}}</div>
-      <div class="inv-field"><span class="inv-label">Condición frente al IVA:</span> {{EMISOR_COND_IVA}}</div>
-    </td>
-    <td class="inv-header-right">
-      <div class="inv-type-row">
-        <div>
-          <div class="inv-type-box">C</div>
-          <div class="inv-type-cod">COD. 011</div>
-        </div>
-        <div class="inv-type-title">FACTURA</div>
+      <div class="inv-emisor-row"><span class="inv-emisor-label">Domicilio Comercial:</span> {{EMISOR_DOMICILIO}}</div>
+      <div class="inv-emisor-row"><span class="inv-emisor-label">Condición frente al IVA:</span> {{EMISOR_COND_IVA}}</div>
+      <div class="inv-emisor-row"><span class="inv-emisor-label">CUIT:</span> {{EMISOR_CUIT}}</div>
+      <div class="inv-emisor-row"><span class="inv-emisor-label">Ingresos Brutos:</span> {{EMISOR_IB}}</div>
+      <div class="inv-emisor-row"><span class="inv-emisor-label">Inicio de Actividades:</span> {{EMISOR_INICIO_ACT}}</div>
+    </div>
+
+    <div class="inv-tipo-block">
+      <div class="inv-tipo-original">{{COPY_LABEL}}</div>
+      <div class="inv-tipo-letra">C</div>
+      <div class="inv-tipo-nombre">Factura C</div>
+    </div>
+
+    <div class="inv-comp-block">
+      <div class="inv-comp-row">
+        <span class="inv-label-small">Punto de Venta</span>
+        <span class="inv-value">{{PUNTO_VENTA}}</span>
       </div>
-      <div class="inv-right-data">
-        <div><strong>Punto de Venta:</strong> {{PUNTO_VENTA}}&nbsp;&nbsp;&nbsp;<strong>Comp. Nro:</strong> {{COMP_NRO}}</div>
-        <div><strong>Fecha de Emisión:</strong> {{FECHA_EMISION}}</div>
-        <br>
-        <div><strong>CUIT:</strong> {{EMISOR_CUIT}}</div>
-        <div><strong>Ingresos Brutos:</strong> {{EMISOR_IB}}</div>
-        <div><strong>Fecha de Inicio de Actividades:</strong> {{EMISOR_INICIO_ACT}}</div>
+      <div class="inv-comp-row">
+        <span class="inv-label-small">Comprobante Nro.</span>
+        <span class="inv-value">{{COMP_NRO}}</span>
       </div>
-    </td>
-  </tr>
+      <div class="inv-comp-row">
+        <span class="inv-label-small">Fecha de Emisión</span>
+        <span class="inv-value">{{FECHA_EMISION}}</span>
+      </div>
+      <div class="inv-comp-row">
+        <span class="inv-label-small">Código de Autorización (AFIP)</span>
+        <span class="inv-value">{{EMISOR_CUIT}}</span>
+      </div>
+    </div>
+  </div>
 
-  <!-- ── PERÍODO FACTURADO ── -->
-  <tr>
-    <td colspan="2" class="inv-periodo">
-      <strong>Período Facturado Desde:</strong> {{FECHA_EMISION}}&nbsp;&nbsp;
-      <strong>Hasta:</strong> {{FECHA_EMISION}}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-      <strong>Fecha de Vto. para el pago:</strong> {{VENCIMIENTO}}
-    </td>
-  </tr>
+  <!-- PERÍODO + VENCIMIENTO -->
+  <div class="inv-periodo-row">
+    <div class="inv-periodo-cell">
+      <span class="inv-label-small">Período Facturado Desde</span>
+      <div class="inv-value">{{FECHA_EMISION}}</div>
+    </div>
+    <div class="inv-periodo-cell">
+      <span class="inv-label-small">Período Facturado Hasta</span>
+      <div class="inv-value">{{FECHA_EMISION}}</div>
+    </div>
+    <div class="inv-periodo-cell">
+      <span class="inv-label-small">Fecha de Vto. para el Pago</span>
+      <div class="inv-value">{{VENCIMIENTO}}</div>
+    </div>
+  </div>
 
-  <!-- ── CLIENTE ── -->
-  <tr>
-    <td colspan="2" class="inv-cliente">
-      <table class="inv-cliente-table">
-        <tr>
-          <td style="width:50%">
-            {{DNI_ROW}}
-            <div class="inv-field"><span class="inv-label">Condición frente al IVA:</span> Consumidor Final</div>
-            <div class="inv-field"><span class="inv-label">Condición de venta:</span> Transferencia Bancaria</div>
-          </td>
-          <td style="width:50%">
-            <div class="inv-field"><span class="inv-label">Apellido y Nombre / Razón Social:</span> {{CLIENTE_NOMBRE}}</div>
-            <div class="inv-field"><span class="inv-label">Domicilio:</span> {{CLIENTE_DOMICILIO}}</div>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
+  <!-- RECEPTOR -->
+  <div class="inv-receptor-block">
+    <div class="inv-receptor-title">Datos del Receptor</div>
+    <div class="inv-receptor-grid">
+      <div class="inv-receptor-field">
+        <span class="inv-label-small">Apellido y Nombre / Razón Social</span>
+        <span class="inv-receptor-value">{{CLIENTE_RAZON_SOCIAL}}</span>
+      </div>
+      <div class="inv-receptor-field">
+        <span class="inv-label-small">CUIT</span>
+        <span class="inv-receptor-value">{{CLIENTE_CUIT}}</span>
+      </div>
+      <div class="inv-receptor-field">
+        <span class="inv-label-small">Domicilio</span>
+        <span class="inv-receptor-value">{{CLIENTE_DOMICILIO}}</span>
+      </div>
+      {{DNI_ROW}}
+      <div class="inv-receptor-field">
+        <span class="inv-label-small">Condición frente al IVA</span>
+        <span class="inv-receptor-value">Consumidor Final</span>
+      </div>
+    </div>
+  </div>
 
-  <!-- ── ITEMS TABLE ── -->
-  <tr>
-    <td colspan="2" style="padding:0">
-      <table class="inv-items full-width">
-        <thead>
-          <tr>
-            <th style="width:7%">Código</th>
-            <th style="width:38%">Producto / Servicio</th>
-            <th class="right" style="width:8%">Cantidad</th>
-            <th class="center" style="width:10%">U. Medida</th>
-            <th class="right" style="width:13%">Precio Unit.</th>
-            <th class="right" style="width:7%">% Bonif</th>
-            <th class="right" style="width:9%">Imp. Bonif.</th>
-            <th class="right" style="width:8%">Subtotal</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td></td>
-            <td>{{DESCRIPCION}}</td>
-            <td class="right">1,00</td>
-            <td class="center">unidades</td>
-            <td class="right">{{IMPORTE}}</td>
-            <td class="right">0,00</td>
-            <td class="right">0,00</td>
-            <td class="right">{{IMPORTE}}</td>
-          </tr>
-          <!-- spacer rows for visual breathing room -->
-          <tr class="spacer"><td colspan="8"></td></tr>
-          <tr class="spacer"><td colspan="8"></td></tr>
-          <tr class="spacer"><td colspan="8"></td></tr>
-          <tr class="spacer"><td colspan="8"></td></tr>
-          <tr class="spacer"><td colspan="8"></td></tr>
-          <tr class="spacer"><td colspan="8"></td></tr>
-        </tbody>
-      </table>
-    </td>
-  </tr>
+  <!-- CONCEPTO -->
+  <table class="inv-items-table">
+    <thead>
+      <tr>
+        <th style="width:70%">Descripción del Servicio / Producto</th>
+        <th style="width:30%">Importe</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="inv-td-desc">{{DESCRIPCION}}</td>
+        <td class="inv-td-amount">$ {{IMPORTE}}</td>
+      </tr>
+    </tbody>
+  </table>
 
-  <!-- ── TOTALS ── -->
-  <tr>
-    <td colspan="2" class="inv-totals">
-      <table>
-        <tr>
-          <td style="width:65%"></td>
-          <td class="lbl">Subtotal: $</td>
-          <td class="val">{{IMPORTE}}</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td class="lbl">Importe Otros Tributos: $</td>
-          <td class="val">0,00</td>
-        </tr>
-        <tr class="total-final">
-          <td></td>
-          <td class="lbl">Importe Total: $</td>
-          <td class="val">{{IMPORTE}}</td>
-        </tr>
-      </table>
-    </td>
-  </tr>
+  <!-- TOTALES -->
+  <div class="inv-totals">
+    <div class="inv-total-row">
+      <span class="inv-total-label">Subtotal</span>
+      <span class="inv-total-value">$ {{IMPORTE}}</span>
+    </div>
+    <div class="inv-total-row inv-total-final">
+      <span class="inv-total-label">Importe Total</span>
+      <span class="inv-total-value">$ {{IMPORTE}}</span>
+    </div>
+  </div>
 
-  <!-- ── TAGLINE ── -->
-  <tr>
-    <td colspan="2" class="inv-tagline">
-      "Servicios Integrales, remodelaciones."
-    </td>
-  </tr>
+  <!-- PIE -->
+  <div class="inv-footer">
+    {{CAE_ROW}}
+    <div class="inv-footer-row">
+      Comprobante emitido por <strong>{{EMISOR_RAZON_SOCIAL}}</strong> — CUIT <strong>{{EMISOR_CUIT}}</strong>
+    </div>
+  </div>
 
-  <!-- ── FOOTER / CAE ── -->
-  <tr>
-    <td colspan="2" class="inv-footer">
-      <div class="inv-page-num">Pág. 1/1</div>
-      {{CAE_ROW}}
-      <div class="disclaimer">Comprobante Autorizado</div>
-      <div class="disclaimer">Esta Agencia no se responsabiliza por los datos ingresados en el detalle de la operación</div>
-    </td>
-  </tr>
-
-</table>
-
+</div>
 </body>
 </html>

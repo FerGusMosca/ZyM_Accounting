@@ -7,7 +7,7 @@
   padding: 2rem 2.5rem;
 }
 
-/* Title */
+/* Título */
 .beg-title {
   text-align: center;
   font-size: 2.6rem;
@@ -16,7 +16,7 @@
   font-weight: 600;
 }
 
-/* ── Upload Zone ── */
+/* ── Zona de carga ── */
 .beg-upload-zone {
   border: 2px dashed #30363D;
   border-radius: 16px;
@@ -54,6 +54,14 @@
   margin-bottom: 1.2rem;
 }
 
+.beg-upload-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
 .beg-file-badge {
   display: inline-block;
   margin-top: 0.8rem;
@@ -66,7 +74,7 @@
   font-weight: 500;
 }
 
-/* ── Buttons ── */
+/* ── Botones ── */
 .beg-btn {
   display: inline-flex;
   align-items: center;
@@ -80,13 +88,13 @@
   transition: all 0.25s;
   padding: 13px 28px;
   position: relative;
+  text-decoration: none;
 }
 
 .beg-btn-primary {
   background: #2EA043;
   color: white;
 }
-
 .beg-btn-primary:hover {
   background: #3FB950;
   transform: translateY(-2px);
@@ -98,7 +106,6 @@
   color: #58A6FF;
   border: 1px solid #30363D;
 }
-
 .beg-btn-secondary:hover {
   background: #2D333B;
   border-color: #58A6FF;
@@ -113,7 +120,6 @@
   border: 1px solid #30363D;
   border-radius: 8px;
 }
-
 .beg-btn-small:hover {
   background: #2D333B;
   border-color: #58A6FF;
@@ -128,11 +134,7 @@
   border-radius: 6px;
   min-width: auto;
 }
-
-.beg-btn-icon:hover {
-  color: #58A6FF;
-  border-color: #30363D;
-}
+.beg-btn-icon:hover { color: #58A6FF; border-color: #30363D; }
 
 .beg-btn-danger-icon {
   padding: 6px 12px;
@@ -143,39 +145,26 @@
   border-radius: 6px;
   min-width: auto;
 }
-
-.beg-btn-danger-icon:hover {
-  color: #F85149;
-  border-color: #3A1214;
-}
+.beg-btn-danger-icon:hover { color: #F85149; border-color: #3A1214; }
 
 /* Spinner */
 .beg-btn .spinner {
   position: absolute;
-  width: 20px;
-  height: 20px;
+  width: 20px; height: 20px;
   border: 3px solid #ffffff40;
   border-top: 3px solid white;
   border-radius: 50%;
   opacity: 0;
   pointer-events: none;
 }
-
-.beg-btn.loading .btn-text {
-  opacity: 0;
-}
-
+.beg-btn.loading .btn-text { opacity: 0; }
 .beg-btn.loading .spinner {
   opacity: 1;
   animation: spin 0.8s linear infinite;
 }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* ── Controls Row ── */
+/* ── Controles del emisor ── */
 .beg-controls-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -212,14 +201,28 @@
   width: 100%;
   box-sizing: border-box;
 }
-
 .beg-input:focus {
   outline: 2px solid #58A6FF;
   outline-offset: -2px;
   border-color: #58A6FF;
 }
 
-/* ── Button Container ── */
+/* Campo bloqueado (condición IVA desde .env) */
+.beg-input-locked {
+  background: #161B22 !important;
+  border-color: #21262D !important;
+  color: #8B949E !important;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.beg-field-note {
+  font-size: 10px;
+  color: #6E7681;
+  font-style: italic;
+}
+
+/* ── Contenedor de botones de acción ── */
 .beg-button-container {
   display: flex;
   justify-content: center;
@@ -228,7 +231,7 @@
   flex-wrap: wrap;
 }
 
-/* ── Status ── */
+/* ── Estado / mensajes ── */
 .beg-status {
   padding: 14px 18px;
   border-radius: 10px;
@@ -236,36 +239,34 @@
   line-height: 1.5;
   margin-bottom: 1.5rem;
 }
-
 .beg-status.success {
-  background: #1A3421;
-  color: #3FB950;
-  border: 1px solid #2EA043;
-  border-left: 4px solid #2EA043;
+  background: #1A3421; color: #3FB950;
+  border: 1px solid #2EA043; border-left: 4px solid #2EA043;
 }
-
 .beg-status.error {
-  background: #3A1214;
-  color: #F85149;
-  border: 1px solid #F85149;
-  border-left: 4px solid #F85149;
+  background: #3A1214; color: #F85149;
+  border: 1px solid #F85149; border-left: 4px solid #F85149;
 }
-
 .beg-status.info {
-  background: #0D2137;
-  color: #58A6FF;
-  border: 1px solid #1F6FEB;
-  border-left: 4px solid #1F6FEB;
+  background: #0D2137; color: #58A6FF;
+  border: 1px solid #1F6FEB; border-left: 4px solid #1F6FEB;
 }
 
-/* ── Section Header ── */
+/* Lista de errores en el status */
+.beg-status-list {
+  margin: 8px 0 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* ── Encabezado de sección ── */
 .beg-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1rem;
 }
-
 .beg-section-header h2 {
   font-size: 1.3rem;
   color: #E6EDF3;
@@ -283,7 +284,7 @@
   margin-left: 8px;
 }
 
-/* ── Preview Table ── */
+/* ── Tabla de vista previa ── */
 .beg-table-wrapper {
   overflow-x: auto;
   border-radius: 10px;
@@ -317,13 +318,8 @@
   vertical-align: middle;
 }
 
-.beg-table tr:last-child td {
-  border-bottom: none;
-}
-
-.beg-table tr:hover td {
-  background: #161B22;
-}
+.beg-table tr:last-child td { border-bottom: none; }
+.beg-table tr:hover td { background: #161B22; }
 
 .beg-table td.beg-amount {
   font-family: 'Courier New', monospace;
@@ -331,20 +327,17 @@
   font-weight: 600;
   white-space: nowrap;
 }
-
 .beg-table td.beg-comp-nro {
   font-family: 'Courier New', monospace;
   color: #58A6FF;
   font-size: 12px;
 }
-
 .beg-table td.beg-desc {
-  max-width: 280px;
+  max-width: 260px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .beg-table td.beg-warn {
   color: #D29922;
   font-style: italic;
@@ -355,7 +348,7 @@
   gap: 6px;
 }
 
-/* ── PDF Gallery ── */
+/* ── Galería de PDFs generados ── */
 .beg-pdf-gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -373,32 +366,27 @@
   gap: 10px;
   transition: all 0.2s;
 }
-
 .beg-pdf-card:hover {
   border-color: #58A6FF;
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(88,166,255,0.1);
 }
-
 .beg-pdf-card-title {
   font-size: 13px;
   font-weight: 600;
   color: #58A6FF;
   font-family: 'Courier New', monospace;
 }
-
 .beg-pdf-card-client {
   font-size: 13px;
   color: #E6EDF3;
 }
-
 .beg-pdf-card-amount {
   font-size: 18px;
   font-weight: 700;
   color: #3FB950;
   font-family: 'Courier New', monospace;
 }
-
 .beg-pdf-card-actions {
   display: flex;
   gap: 8px;
@@ -409,7 +397,7 @@
 .beg-modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0,0,0,0.85);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -430,9 +418,7 @@
   box-shadow: 0 24px 64px rgba(0,0,0,0.8);
 }
 
-.beg-modal-large {
-  max-width: 920px;
-}
+.beg-modal-large { max-width: 920px; }
 
 .beg-modal-header {
   display: flex;
@@ -442,19 +428,16 @@
   border-bottom: 1px solid #30363D;
   background: #21262D;
 }
-
 .beg-modal-header h3 {
   color: #58A6FF;
   font-size: 1.2rem;
   margin: 0;
 }
-
 .beg-modal-actions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-
 .beg-modal-close {
   background: none;
   border: none;
@@ -463,14 +446,10 @@
   cursor: pointer;
   line-height: 1;
   padding: 0;
-  width: 32px;
-  height: 32px;
+  width: 32px; height: 32px;
   transition: transform 0.2s;
 }
-
-.beg-modal-close:hover {
-  transform: scale(1.2);
-}
+.beg-modal-close:hover { transform: scale(1.2); }
 
 .beg-modal-body {
   padding: 24px;
@@ -478,7 +457,7 @@
   flex: 1;
 }
 
-/* ── Invoice HTML render ── */
+/* Render de factura HTML */
 .invoice-wrapper {
   background: white;
   color: #111;
@@ -490,36 +469,18 @@
   margin: 0 auto;
 }
 
-/* ── Utilities ── */
-.beg-hidden {
-  display: none !important;
-}
+/* ── Utilidades ── */
+.beg-hidden { display: none !important; }
 
 /* ── Responsive ── */
 @media (max-width: 900px) {
-  .beg-controls-row {
-    grid-template-columns: 1fr 1fr;
-  }
+  .beg-controls-row { grid-template-columns: 1fr 1fr; }
 }
-
 @media (max-width: 600px) {
-  .beg-title {
-    font-size: 1.8rem;
-  }
-
-  .beg-panel {
-    padding: 1.2rem;
-  }
-
-  .beg-controls-row {
-    grid-template-columns: 1fr;
-  }
-
-  .beg-button-container {
-    flex-direction: column;
-  }
-
-  .beg-btn {
-    width: 100%;
-  }
+  .beg-title { font-size: 1.8rem; }
+  .beg-panel { padding: 1.2rem; }
+  .beg-controls-row { grid-template-columns: 1fr; }
+  .beg-button-container { flex-direction: column; }
+  .beg-btn { width: 100%; }
+  .beg-upload-buttons { flex-direction: column; align-items: center; }
 }

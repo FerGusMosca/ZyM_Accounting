@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Billing Extractor & Generator</title>
+  <title>Extracción y Generación de Facturas</title>
   <link rel="stylesheet" href="/static/css/main.css">
   <link rel="stylesheet" href="/static/css/billing_extractor_n_generator.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -17,60 +17,66 @@
 
 <nav class="navbar">
   <ul>
-    <li><a href="/">🏠 Home</a></li>
+    <li><a href="/">🏠 Inicio</a></li>
   </ul>
 </nav>
 
 <div class="content">
   <div class="panel beg-panel">
 
-    <h1 class="beg-title">🧾 Billing Extractor & Generator</h1>
+    <h1 class="beg-title">🧾 Extracción y Generación de Facturas</h1>
 
-    <!-- Upload Section -->
+    <!-- Zona de carga -->
     <div class="beg-upload-zone" id="uploadZone">
       <div class="beg-upload-inner">
         <div class="beg-upload-icon">📂</div>
         <div class="beg-upload-text">Arrastrá tu Excel de facturación acá</div>
-        <div class="beg-upload-subtext">o hacé click para seleccionar el archivo</div>
+        <div class="beg-upload-subtext">o hacé clic para seleccionar el archivo (.xlsx / .xls)</div>
         <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
-        <button type="button" class="beg-btn beg-btn-primary" id="selectFileBtn">Seleccionar archivo</button>
+        <div class="beg-upload-buttons">
+          <button type="button" class="beg-btn beg-btn-primary" id="selectFileBtn">Seleccionar archivo</button>
+          <a href="/billing_extractor_n_generator/download_modelo" class="beg-btn beg-btn-secondary" download>
+            📥 Descargar Excel modelo
+          </a>
+        </div>
         <span id="uploadedFile" class="beg-file-badge beg-hidden"></span>
       </div>
     </div>
 
-    <!-- Controls row -->
+    <!-- Controles del emisor -->
     <div class="beg-controls-row beg-hidden" id="controlsRow">
       <div class="beg-control-group">
-        <label>Emisor (Razón Social)</label>
-        <input type="text" id="inputEmisor" class="beg-input" value="SERVICONS" placeholder="Razón Social del Emisor">
+        <label>Razón Social (Emisor)</label>
+        <input type="text" id="inputEmisor" class="beg-input" placeholder="Razón Social del Emisor">
       </div>
       <div class="beg-control-group">
         <label>CUIT Emisor</label>
-        <input type="text" id="inputCuit" class="beg-input" value="20314931824" placeholder="CUIT">
+        <input type="text" id="inputCuit" class="beg-input" placeholder="CUIT">
       </div>
       <div class="beg-control-group">
         <label>Domicilio Comercial</label>
-        <input type="text" id="inputDomicilio" class="beg-input" value="Lamas Andres 2530 Piso:1 Dpto:A - Ciudad de Buenos Aires" placeholder="Domicilio">
+        <input type="text" id="inputDomicilio" class="beg-input" placeholder="Domicilio">
       </div>
       <div class="beg-control-group">
         <label>Ingresos Brutos</label>
-        <input type="text" id="inputIB" class="beg-input" value="20314931824" placeholder="Ingresos Brutos">
+        <input type="text" id="inputIB" class="beg-input" placeholder="Ingresos Brutos">
       </div>
       <div class="beg-control-group">
-        <label>Inicio Actividades</label>
-        <input type="text" id="inputInicioAct" class="beg-input" value="01/09/2024" placeholder="dd/mm/aaaa">
+        <label>Inicio de Actividades</label>
+        <input type="text" id="inputInicioAct" class="beg-input" placeholder="dd/mm/aaaa">
       </div>
       <div class="beg-control-group">
         <label>Condición IVA Emisor</label>
-        <select id="inputCondIVA" class="beg-input">
+        <!-- Bloqueado: el valor viene del .env (emisor_cond_iva) -->
+        <select id="inputCondIVA" class="beg-input beg-input-locked" disabled>
           <option value="Responsable Monotributo">Responsable Monotributo</option>
           <option value="Responsable Inscripto">Responsable Inscripto</option>
-          <option value="Exento">Exento</option>
         </select>
+        <span class="beg-field-note">⚙️ Definido en configuración</span>
       </div>
     </div>
 
-    <!-- Action buttons -->
+    <!-- Botones de acción -->
     <div class="beg-button-container beg-hidden" id="actionButtons">
       <button type="button" class="beg-btn beg-btn-secondary" id="previewBtn">
         <span class="btn-text">👁 Vista Previa</span>
@@ -82,10 +88,10 @@
       </button>
     </div>
 
-    <!-- Result/status message -->
+    <!-- Mensaje de estado -->
     <div id="statusMessage" class="beg-status beg-hidden"></div>
 
-    <!-- Preview Table -->
+    <!-- Tabla de vista previa -->
     <div id="previewSection" class="beg-hidden">
       <div class="beg-section-header">
         <h2>📋 Facturas a generar <span id="invoiceCount" class="beg-badge">0</span></h2>
@@ -98,7 +104,7 @@
               <th>Comp. Nro</th>
               <th>Fecha</th>
               <th>CUIT Cliente</th>
-              <th>Cliente</th>
+              <th>Razón Social</th>
               <th>Descripción</th>
               <th>Importe</th>
               <th>Vencimiento</th>
@@ -110,7 +116,7 @@
       </div>
     </div>
 
-    <!-- Generated PDFs section -->
+    <!-- Facturas generadas -->
     <div id="generatedSection" class="beg-hidden">
       <div class="beg-section-header">
         <h2>✅ Facturas Generadas</h2>
@@ -122,7 +128,7 @@
   </div>
 </div>
 
-<!-- Invoice Modal (PDF Preview) -->
+<!-- Modal de factura (Vista previa PDF) -->
 <div id="invoiceModal" class="beg-modal beg-hidden">
   <div class="beg-modal-content beg-modal-large">
     <div class="beg-modal-header">

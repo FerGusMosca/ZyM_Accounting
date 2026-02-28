@@ -1,20 +1,21 @@
 /**
  * billing_extractor_n_generator.js
- * Handles: xlsx upload → parse → preview table → invoice modal (web render)
- *          → backend PDF generation via /generate_pdf (wkhtmltopdf)
- *          → batch ZIP via /generate_all
  *
- * API change: /generate_pdf now accepts { row, emisor, copy_label }
- * The backend owns the template rendering — JS just shows a live preview.
+ * Cambios respecto a versión anterior:
+ * - Carga datos del emisor desde /emisor_settings (pre-rellena y bloquea IVA)
+ * - Nuevo mapeo de columnas del xlsx v2 (razon_social en col 2, domicilio en col 3)
+ * - Mensajes de error descriptivos al no encontrar filas válidas
+ * - Botón "Descargar Excel modelo" en la zona de carga
+ * - Todo el texto de la UI en español
  */
 
-// ─── State ─────────────────────────────────────────────────────────────────────
+// ─── Estado ────────────────────────────────────────────────────────────────────
 const state = {
   rows: [],
-  generatedPDFs: {}   // comp_nro → { url, filename }
+  generatedPDFs: {}  // comp_nro → { url, filename }
 };
 
-// ─── DOM refs ──────────────────────────────────────────────────────────────────
+// ─── Refs al DOM ───────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
 const fileInput        = $('fileInput');
@@ -38,17 +39,27 @@ const invoiceRender    = $('invoiceRender');
 const modalTitle       = $('modalTitle');
 const downloadInvBtn   = $('downloadInvoiceBtn');
 
-// ─── UI helpers ────────────────────────────────────────────────────────────────
-function showStatus(msg, type = 'info') {
-  statusMessage.textContent = msg;
+// ─── Helpers de UI ─────────────────────────────────────────────────────────────
+function showStatus(msg, type = 'info', list = []) {
+  let html = msg;
+  if (list.length) {
+    html += '<ul class="beg-status-list">' +
+      list.map(item => `<li>${item}</li>`).join('') +
+      '</ul>';
+  }
+  statusMessage.innerHTML = html;
   statusMessage.className = `beg-status ${type}`;
   statusMessage.classList.remove('beg-hidden');
 }
+
 function hideStatus() { statusMessage.classList.add('beg-hidden'); }
 
 function fmtCurrency(val) {
   if (!val && val !== 0) return '$ 0,00';
-  return '$ ' + parseFloat(val).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return '$ ' + parseFloat(val).toLocaleString('es-AR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 }
 
 function emisorData() {
@@ -63,15 +74,55 @@ function emisorData() {
 }
 
 function isSkippable(row) {
-  const comp = String(row.comp_nro || '').toUpperCase();
-  return comp.startsWith('EMITIR') || comp === '' || !row.amount;
+  const comp = String(row.comp_nro || '').toUpperCase().trim();
+  if (!comp)                    return [true, 'Comp. Nro vacío'];
+  if (comp.startsWith('EMITIR'))return [true, `Pendiente: ${row.comp_nro}`];
+  if (!row.amount || row.amount === 0) return [true, 'Importe cero o vacío'];
+  if (!row.razon_social_cliente)       return [true, 'Sin razón social del cliente'];
+  return [false, ''];
 }
 
-// ─── File Upload ───────────────────────────────────────────────────────────────
+// ─── Carga inicial de settings del emisor ─────────────────────────────────────
+async function loadEmisorSettings() {
+  try {
+    const resp = await fetch('/billing_extractor_n_generator/emisor_settings');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.status !== 'ok') return;
+
+    // Pre-cargar campos
+    if (data.razon_social) $('inputEmisor').value    = data.razon_social;
+    if (data.cuit)         $('inputCuit').value       = data.cuit;
+    if (data.domicilio)    $('inputDomicilio').value  = data.domicilio;
+    if (data.ib)           $('inputIB').value         = data.ib;
+    if (data.inicio_act)   $('inputInicioAct').value  = data.inicio_act;
+
+    // Condición IVA: seleccionar la opción correcta y bloquear el campo
+    if (data.cond_iva) {
+      const sel = $('inputCondIVA');
+      for (const opt of sel.options) {
+        if (opt.value === data.cond_iva) {
+          opt.selected = true;
+          break;
+        }
+      }
+    }
+    // El campo ya está disabled en el HTML; nos aseguramos
+    $('inputCondIVA').disabled = true;
+
+  } catch (e) {
+    console.warn('No se pudieron cargar los settings del emisor:', e);
+  }
+}
+
+// Cargar settings al iniciar la página
+loadEmisorSettings();
+
+// ─── Carga del archivo ─────────────────────────────────────────────────────────
 selectFileBtn.addEventListener('click', () => fileInput.click());
 
 uploadZone.addEventListener('click', e => {
-  if (!e.target.closest('button')) fileInput.click();
+  if (!e.target.closest('button') && !e.target.closest('a')) fileInput.click();
 });
 uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
 uploadZone.addEventListener('dragleave', ()  => uploadZone.classList.remove('drag-over'));
@@ -97,33 +148,55 @@ async function processFile(file) {
     const ws  = wb.Sheets[wb.SheetNames[0]];
     const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
 
-    // Column layout (no header):
-    // 0:fecha  1:cuit_cli  2:domicilio_cli  3:nombre_cli  4:desc
-    // 5:amount  6:comp_nro  7:cae  8:vencimiento
+    /**
+     * Nuevo layout de columnas (sin fila de encabezado):
+     *   0: fecha_emision
+     *   1: cuit_cliente
+     *   2: razon_social_cliente   ← NUEVO
+     *   3: domicilio_cliente      ← NUEVO
+     *   4: nombre_contacto
+     *   5: descripcion
+     *   6: importe
+     *   7: comp_nro
+     *   8: cae_number
+     *   9: vencimiento
+     */
     state.rows = raw
       .filter(r => r && r[0])
       .map((r, i) => ({
-        idx:               i,
-        fecha_emision:     fmtDate(r[0]),
-        cuit_cliente:      String(r[1] || '').trim(),
-        domicilio_cliente: String(r[2] || '').trim(),
-        nombre_cliente:    String(r[3] || '').trim(),
-        descripcion:       String(r[4] || '').trim(),
-        amount:            parseFloat(r[5]) || 0,
-        comp_nro:          String(r[6] || '').trim(),
-        cae_number:        r[7] ? String(r[7]).replace(/\.0+$/, '').trim() : '',
-        vencimiento:       r[8] ? String(r[8]).replace(/VENCIMIENTO\s*/i, '').trim() : ''
+        idx:                   i,
+        fecha_emision:         fmtDate(r[0]),
+        cuit_cliente:          cleanStr(r[1]),
+        razon_social_cliente:  cleanStr(r[2]),
+        domicilio_cliente:     cleanStr(r[3]),
+        nombre_contacto:       cleanStr(r[4]),
+        descripcion:           cleanStr(r[5]),
+        amount:                parseFloat(r[6]) || 0,
+        comp_nro:              cleanStr(r[7]),
+        cae_number:            r[8] ? String(r[8]).replace(/\.0+$/, '').trim() : '',
+        vencimiento:           r[9] ? String(r[9]).replace(/VENCIMIENTO\s*/i, '').trim() : ''
       }));
 
-    uploadedFile.textContent = `📄 ${file.name}  (${state.rows.length} filas)`;
+    const validCount = state.rows.filter(r => !isSkippable(r)[0]).length;
+
+    uploadedFile.textContent = `📄 ${file.name}  (${state.rows.length} filas · ${validCount} válidas)`;
     uploadedFile.classList.remove('beg-hidden');
     controlsRow.classList.remove('beg-hidden');
     actionButtons.classList.remove('beg-hidden');
-    showStatus(`✅ Archivo cargado: ${state.rows.length} filas detectadas`, 'success');
+    showStatus(
+      `✅ Archivo cargado: <strong>${state.rows.length}</strong> filas detectadas, ` +
+      `<strong>${validCount}</strong> listas para generar.`,
+      'success'
+    );
 
   } catch (err) {
     showStatus(`❌ Error al leer el archivo: ${err.message}`, 'error');
   }
+}
+
+function cleanStr(val) {
+  if (val === null || val === undefined) return '';
+  return String(val).trim();
 }
 
 function fmtDate(val) {
@@ -147,23 +220,26 @@ function loadXLSX() {
     const s = document.createElement('script');
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
     s.onload = resolve;
-    s.onerror = () => reject(new Error('No se pudo cargar XLSX'));
+    s.onerror = () => reject(new Error('No se pudo cargar la librería XLSX'));
     document.head.appendChild(s);
   });
 }
 
-// ─── Preview table ─────────────────────────────────────────────────────────────
+// ─── Tabla de vista previa ──────────────────────────────────────────────────────
 previewBtn.addEventListener('click', renderPreviewTable);
 
 function renderPreviewTable() {
-  if (!state.rows.length) { showStatus('⚠️ No hay datos cargados.', 'error'); return; }
+  if (!state.rows.length) {
+    showStatus('⚠️ No hay datos cargados.', 'error');
+    return;
+  }
 
   previewTableBody.innerHTML = '';
   let validCount = 0;
 
   state.rows.forEach((row, i) => {
-    const skip = isSkippable(row);
-    const tr   = document.createElement('tr');
+    const [skip, motivo] = isSkippable(row);
+    const tr = document.createElement('tr');
     if (skip) tr.style.opacity = '0.4';
 
     tr.innerHTML = `
@@ -171,15 +247,17 @@ function renderPreviewTable() {
       <td class="beg-comp-nro">${row.comp_nro || '—'}</td>
       <td>${row.fecha_emision || '—'}</td>
       <td>${row.cuit_cliente}</td>
-      <td>${row.nombre_cliente}</td>
-      <td class="beg-desc ${skip ? 'beg-warn' : ''}" title="${row.descripcion}">${row.descripcion || '(sin descripción)'}</td>
+      <td>${row.razon_social_cliente || '—'}</td>
+      <td class="beg-desc ${skip ? 'beg-warn' : ''}" title="${row.descripcion}">
+        ${skip ? `⏭ ${motivo}` : (row.descripcion || '(sin descripción)')}
+      </td>
       <td class="beg-amount">${fmtCurrency(row.amount)}</td>
       <td>${row.vencimiento || '—'}</td>
       ${skip
-        ? `<td><span style="color:#8B949E;font-size:11px">⏭ omitida</span></td>`
+        ? `<td><span style="color:#8B949E;font-size:11px">omitida</span></td>`
         : `<td><div class="beg-row-actions">
-            <button class="beg-btn beg-btn-icon" onclick="previewSingle(${i})" title="Ver">👁</button>
-            <button class="beg-btn beg-btn-icon" onclick="generateSingle(${i})" title="PDF">⚡</button>
+            <button class="beg-btn beg-btn-icon" onclick="previewSingle(${i})" title="Ver factura">👁</button>
+            <button class="beg-btn beg-btn-icon" onclick="generateSingle(${i})" title="Generar PDF">⚡</button>
           </div></td>`
       }
     `;
@@ -192,17 +270,16 @@ function renderPreviewTable() {
   hideStatus();
 }
 
-// ─── Web preview (iframe of backend-rendered HTML) ─────────────────────────────
+// ─── Vista previa individual (HTML del backend en iframe) ──────────────────────
 window.previewSingle = async function(idx) {
-  const row   = state.rows[idx];
+  const row    = state.rows[idx];
   const emisor = emisorData();
 
-  modalTitle.textContent = `🧾 ${row.comp_nro} — ${row.nombre_cliente}`;
-  invoiceRender.innerHTML = '<div style="color:#8B949E;padding:40px;text-align:center">⏳ Cargando preview...</div>';
+  modalTitle.textContent = `🧾 ${row.comp_nro} — ${row.razon_social_cliente}`;
+  invoiceRender.innerHTML = '<div style="color:#8B949E;padding:40px;text-align:center">⏳ Cargando vista previa...</div>';
   invoiceModal.classList.remove('beg-hidden');
 
   try {
-    // Ask backend to render the HTML (uses the template + logo)
     const resp = await fetch('/billing_extractor_n_generator/generate_pdf', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -212,11 +289,9 @@ window.previewSingle = async function(idx) {
     const contentType = resp.headers.get('content-type') || '';
 
     if (contentType.includes('application/pdf')) {
-      // Backend returned a real PDF → show in an iframe
       const blob = await resp.blob();
       const url  = URL.createObjectURL(blob);
       invoiceRender.innerHTML = `<iframe src="${url}" style="width:100%;height:70vh;border:none;border-radius:4px"></iframe>`;
-      // Wire download button
       downloadInvBtn.onclick = () => {
         const a = document.createElement('a');
         a.href     = url;
@@ -224,7 +299,6 @@ window.previewSingle = async function(idx) {
         a.click();
       };
     } else {
-      // Fallback: backend returned HTML (no wkhtmltopdf) → show in iframe via blob
       const html = await resp.text();
       const blob = new Blob([html], { type: 'text/html' });
       const url  = URL.createObjectURL(blob);
@@ -236,14 +310,14 @@ window.previewSingle = async function(idx) {
       };
     }
   } catch (err) {
-    invoiceRender.innerHTML = `<div style="color:#F85149;padding:20px">Error: ${err.message}</div>`;
+    invoiceRender.innerHTML = `<div style="color:#F85149;padding:20px">❌ Error: ${err.message}</div>`;
   }
 };
 
 closeModal.addEventListener('click', () => invoiceModal.classList.add('beg-hidden'));
 invoiceModal.addEventListener('click', e => { if (e.target === invoiceModal) invoiceModal.classList.add('beg-hidden'); });
 
-// ─── Generate single PDF ───────────────────────────────────────────────────────
+// ─── Generar PDF individual ─────────────────────────────────────────────────────
 window.generateSingle = async function(idx) {
   const row    = state.rows[idx];
   const emisor = emisorData();
@@ -272,11 +346,9 @@ async function _fetchPdfBlob(row, emisor, copyLabel = 'ORIGINAL') {
     });
 
     const contentType = resp.headers.get('content-type') || '';
-
     if (contentType.includes('application/pdf')) {
       return await resp.blob();
     } else {
-      // HTML fallback — open print dialog
       const html = await resp.text();
       const win  = window.open('', '_blank');
       if (win) {
@@ -298,10 +370,24 @@ function triggerDownload(url, filename) {
   a.href = url; a.download = filename; a.click();
 }
 
-// ─── Generate all ──────────────────────────────────────────────────────────────
+// ─── Generar todas ──────────────────────────────────────────────────────────────
 generateAllBtn.addEventListener('click', async () => {
-  const valid = state.rows.filter(r => !isSkippable(r));
-  if (!valid.length) { showStatus('⚠️ No hay facturas válidas.', 'error'); return; }
+  const validRows = state.rows.filter(r => !isSkippable(r)[0]);
+
+  if (!validRows.length) {
+    const motivos = state.rows.map(r => {
+      const [, mot] = isSkippable(r);
+      const comp = r.comp_nro || `fila ${r.idx + 1}`;
+      return mot ? `<strong>${comp}:</strong> ${mot}` : null;
+    }).filter(Boolean);
+
+    showStatus(
+      '⚠️ No hay facturas válidas para generar. Revisá los siguientes problemas:',
+      'error',
+      motivos
+    );
+    return;
+  }
 
   generateAllBtn.classList.add('loading');
   pdfGallery.innerHTML = '';
@@ -309,8 +395,8 @@ generateAllBtn.addEventListener('click', async () => {
   const emisor = emisorData();
   let done = 0;
 
-  for (const row of valid) {
-    showStatus(`⏳ Generando ${done + 1}/${valid.length}: ${row.comp_nro}...`, 'info');
+  for (const row of validRows) {
+    showStatus(`⏳ Generando ${done + 1}/${validRows.length}: ${row.comp_nro}...`, 'info');
     const blob = await _fetchPdfBlob(row, emisor);
     if (blob) {
       const filename = `factura_${row.comp_nro.replace(/[^a-z0-9]/gi, '_')}.pdf`;
@@ -324,16 +410,16 @@ generateAllBtn.addEventListener('click', async () => {
   }
 
   generateAllBtn.classList.remove('loading');
-  showStatus(`✅ ${done} facturas generadas.`, 'success');
+  showStatus(`✅ ${done} factura${done !== 1 ? 's' : ''} generada${done !== 1 ? 's' : ''} correctamente.`, 'success');
 });
 
-// ─── PDF Gallery cards ─────────────────────────────────────────────────────────
+// ─── Tarjetas de la galería de PDFs ────────────────────────────────────────────
 function addToPDFGallery(row, url, filename) {
   const card = document.createElement('div');
   card.className = 'beg-pdf-card';
   card.innerHTML = `
     <div class="beg-pdf-card-title">${row.comp_nro}</div>
-    <div class="beg-pdf-card-client">${row.nombre_cliente}</div>
+    <div class="beg-pdf-card-client">${row.razon_social_cliente}</div>
     <div class="beg-pdf-card-amount">${fmtCurrency(row.amount)}</div>
     <div class="beg-pdf-card-actions">
       <button class="beg-btn beg-btn-icon" onclick="window.open('${url}','_blank')">👁 Ver</button>
@@ -348,7 +434,7 @@ function addToPDFGalleryPrintOnly(row) {
   card.className = 'beg-pdf-card';
   card.innerHTML = `
     <div class="beg-pdf-card-title">${row.comp_nro}</div>
-    <div class="beg-pdf-card-client">${row.nombre_cliente}</div>
+    <div class="beg-pdf-card-client">${row.razon_social_cliente}</div>
     <div class="beg-pdf-card-amount">${fmtCurrency(row.amount)}</div>
     <div class="beg-pdf-card-actions">
       <button class="beg-btn beg-btn-icon" onclick="previewSingle(${row.idx})">🖨 Imprimir</button>
@@ -357,10 +443,13 @@ function addToPDFGalleryPrintOnly(row) {
   pdfGallery.appendChild(card);
 }
 
-// ─── Download all ZIP ──────────────────────────────────────────────────────────
+// ─── Descargar ZIP ─────────────────────────────────────────────────────────────
 downloadAllBtn.addEventListener('click', async () => {
   const entries = Object.values(state.generatedPDFs);
-  if (!entries.length) { showStatus('⚠️ Primero generá las facturas.', 'error'); return; }
+  if (!entries.length) {
+    showStatus('⚠️ Primero generá las facturas.', 'error');
+    return;
+  }
 
   try {
     await loadJSZip();
