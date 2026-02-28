@@ -13,190 +13,185 @@
   }
 
   .inv-page {
-    width: 210mm;
-    min-height: 297mm;
-    padding: 10mm 12mm 12mm 12mm;
-    background: white;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
+    width: 190mm;
+    margin: 8mm auto;
   }
 
-  /* ══ ENCABEZADO ══ */
+  /* ── separador entre bloques ── */
+  .inv-gap { height: 4px; }
+
+  /* ════════════════════════════════════
+     ENCABEZADO — 3 columnas con table
+  ════════════════════════════════════ */
   .inv-header {
-    display: flex;
-    align-items: stretch;
+    width: 100%;
+    border-collapse: collapse;
     border: 1.5px solid #333;
   }
 
-  .inv-emisor-block {
-    flex: 1;
+  .td-emisor {
+    width: 56%;
     padding: 10px 14px;
     border-right: 1.5px solid #333;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    vertical-align: top;
   }
 
-  .inv-logo-wrap { margin-bottom: 8px; }
-
   .inv-logo {
-    max-height: 72px;
-    max-width: 230px;
-    object-fit: contain;
+    height: 62px;
+    max-width: 200px;
     display: block;
+    margin-bottom: 7px;
   }
 
   .inv-emisor-name {
     font-size: 13px;
     font-weight: 700;
-    color: #111;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
   }
 
   .inv-emisor-row {
     font-size: 10px;
+    line-height: 1.7;
     color: #333;
-    line-height: 1.5;
   }
 
-  .inv-emisor-label { font-weight: 700; color: #111; }
+  .lbl { font-weight: 700; color: #111; }
 
-  /* Bloque central tipo comprobante */
-  .inv-tipo-block {
-    width: 86px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+  /* col central */
+  .td-tipo {
+    width: 82px;
+    text-align: center;
+    vertical-align: middle;
     border-right: 1.5px solid #333;
-    padding: 8px 4px;
-    gap: 5px;
+    padding: 10px 6px;
   }
 
-  .inv-tipo-original {
+  .inv-copy-label {
     font-size: 8.5px;
     font-weight: 700;
-    color: #333;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    text-align: center;
+    letter-spacing: 0.05em;
+    display: block;
+    margin-bottom: 5px;
   }
 
   .inv-tipo-letra {
-    font-size: 36px;
+    display: inline-block;
+    font-size: 38px;
     font-weight: 900;
-    color: #111;
     border: 2.5px solid #333;
     width: 52px;
     height: 52px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
+    line-height: 50px;
+    text-align: center;
+    border-radius: 3px;
+    margin-bottom: 5px;
   }
 
   .inv-tipo-nombre {
     font-size: 8.5px;
     font-weight: 700;
-    text-align: center;
-    color: #333;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    display: block;
   }
 
-  /* Bloque derecho datos comprobante */
-  .inv-comp-block {
-    width: 195px;
+  /* col derecha */
+  .td-comp {
+    width: 38%;
     padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    vertical-align: top;
   }
 
-  .inv-comp-row {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  .inv-label-small {
-    font-size: 8.5px;
-    color: #666;
+  /* ── etiqueta + valor genérico ── */
+  .f-label {
+    font-size: 8px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    color: #666;
+    display: block;
+    margin-top: 5px;
+    margin-bottom: 1px;
   }
 
-  .inv-value {
+  .f-label:first-child { margin-top: 0; }
+
+  .f-value {
     font-size: 11px;
-    color: #111;
     font-weight: 600;
+    color: #111;
+    display: block;
   }
 
-  /* ══ PERÍODO + VENCIMIENTO ══ */
-  .inv-periodo-row {
-    display: flex;
+  /* ════════════════════════════════════
+     PERÍODO / VENCIMIENTO
+  ════════════════════════════════════ */
+  .inv-periodo {
+    width: 100%;
+    border-collapse: collapse;
     border: 1.5px solid #333;
   }
 
-  .inv-periodo-cell {
-    flex: 1;
+  .inv-periodo td {
+    width: 33.33%;
     text-align: center;
-    padding: 6px 6px;
+    padding: 7px 8px;
     border-right: 1.5px solid #333;
   }
-  .inv-periodo-cell:last-child { border-right: none; }
-  .inv-periodo-cell .inv-value { font-size: 11px; margin-top: 2px; }
 
-  /* ══ RECEPTOR ══ */
-  .inv-receptor-block {
+  .inv-periodo td:last-child { border-right: none; }
+
+  /* ════════════════════════════════════
+     RECEPTOR
+  ════════════════════════════════════ */
+  .inv-receptor {
+    width: 100%;
+    border-collapse: collapse;
     border: 1.5px solid #333;
-    padding: 10px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
   }
 
-  .inv-receptor-title {
+  .inv-receptor-hdr {
     font-size: 8.5px;
     font-weight: 700;
-    color: #555;
     text-transform: uppercase;
     letter-spacing: 0.06em;
+    color: #555;
+    background: #f5f5f5;
+    padding: 5px 12px;
     border-bottom: 1px solid #ddd;
-    padding-bottom: 4px;
+  }
+
+  .inv-receptor-body {
+    padding: 8px 12px 10px 12px;
   }
 
   .inv-receptor-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px 24px;
-    align-items: start;
-  }
-
-  .inv-receptor-field {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .inv-receptor-value {
-    font-size: 11px;
-    color: #111;
-    font-weight: 500;
-  }
-
-  /* ══ TABLA CONCEPTO ══ */
-  .inv-items-table {
     width: 100%;
     border-collapse: collapse;
-    flex: 1;
   }
 
-  .inv-items-table thead tr { background: #f0f0f0; }
+  .inv-receptor-grid td {
+    width: 50%;
+    padding: 3px 0 3px 0;
+    vertical-align: top;
+  }
 
-  .inv-items-table th {
+  .inv-receptor-grid td:first-child {
+    padding-right: 16px;
+  }
+
+  /* ════════════════════════════════════
+     TABLA CONCEPTO
+  ════════════════════════════════════ */
+  .inv-items {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1.5px solid #333;
+  }
+
+  .inv-items th {
+    background: #f0f0f0;
     border: 1px solid #888;
     padding: 6px 10px;
     font-size: 9px;
@@ -207,20 +202,16 @@
     text-align: center;
   }
 
-  .inv-items-table td {
+  .inv-items td {
     border: 1px solid #bbb;
     padding: 12px 10px;
     font-size: 11px;
-    color: #111;
     vertical-align: top;
   }
 
-  .inv-td-desc {
-    width: 70%;
-    line-height: 1.6;
-  }
+  .td-desc { width: 70%; line-height: 1.6; }
 
-  .inv-td-amount {
+  .td-amount {
     width: 30%;
     text-align: right;
     font-weight: 700;
@@ -228,182 +219,209 @@
     vertical-align: middle;
   }
 
-  /* ══ TOTALES ══ */
-  .inv-totals { border: 1.5px solid #333; }
+  /* ════════════════════════════════════
+     TOTALES
+  ════════════════════════════════════ */
+  .inv-totals {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1.5px solid #333;
+  }
 
-  .inv-total-row {
-    display: flex;
+  .inv-totals td {
+    padding: 6px 12px;
     border-bottom: 1px solid #ccc;
   }
-  .inv-total-row:last-child { border-bottom: none; }
 
-  .inv-total-label {
-    flex: 1;
-    padding: 6px 12px;
-    font-size: 10px;
-    font-weight: 700;
-    color: #444;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    border-right: 1px solid #ccc;
-  }
-
-  .inv-total-value {
-    width: 200px;
-    padding: 6px 12px;
-    font-size: 12px;
-    font-weight: 700;
-    text-align: right;
-    color: #111;
-  }
-
-  .inv-total-final .inv-total-label,
-  .inv-total-final .inv-total-value {
-    font-size: 13px;
+  .inv-totals tr:last-child td {
+    border-bottom: none;
     background: #f5f5f5;
     padding: 8px 12px;
   }
 
-  /* ══ PIE ══ */
+  .td-total-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #444;
+    border-right: 1px solid #ccc;
+  }
+
+  .inv-totals tr:last-child .td-total-label {
+    font-size: 13px;
+  }
+
+  .td-total-value {
+    width: 200px;
+    text-align: right;
+    font-size: 12px;
+    font-weight: 700;
+    color: #111;
+  }
+
+  .inv-totals tr:last-child .td-total-value {
+    font-size: 13px;
+  }
+
+  /* ════════════════════════════════════
+     PIE
+  ════════════════════════════════════ */
   .inv-footer {
     border: 1.5px solid #333;
     padding: 8px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    margin-top: auto;
-  }
-
-  .inv-footer-row {
     font-size: 10px;
     color: #333;
-    line-height: 1.5;
+    line-height: 1.6;
   }
 
-  .inv-footer-row strong { font-weight: 700; color: #111; }
+  .inv-footer strong { font-weight: 700; color: #111; }
+
+  @page {
+    size: A4;
+    margin: 0;
+  }
 
   @media print {
-    body { background: white; }
-    .inv-page { width: 100%; min-height: 100vh; padding: 8mm 10mm; }
+    body { margin: 0; }
+    .inv-page { margin: 8mm auto; }
   }
 </style>
 </head>
 <body>
 <div class="inv-page">
 
-  <!-- ENCABEZADO -->
-  <div class="inv-header">
+  <!-- ════ ENCABEZADO ════ -->
+  <table class="inv-header" cellspacing="0" cellpadding="0">
+    <tr>
+      <!-- Emisor -->
+      <td class="td-emisor">
+        {{LOGO_TAG}}
+        <div class="inv-emisor-name">{{EMISOR_RAZON_SOCIAL}}</div>
+        <div class="inv-emisor-row"><span class="lbl">Domicilio Comercial:</span> {{EMISOR_DOMICILIO}}</div>
+        <div class="inv-emisor-row"><span class="lbl">Condición frente al IVA:</span> {{EMISOR_COND_IVA}}</div>
+        <div class="inv-emisor-row"><span class="lbl">CUIT:</span> {{EMISOR_CUIT}}</div>
+        <div class="inv-emisor-row"><span class="lbl">Ingresos Brutos:</span> {{EMISOR_IB}}</div>
+        <div class="inv-emisor-row"><span class="lbl">Inicio de Actividades:</span> {{EMISOR_INICIO_ACT}}</div>
+      </td>
+      <!-- Tipo comprobante -->
+      <td class="td-tipo">
+        <span class="inv-copy-label">{{COPY_LABEL}}</span>
+        <div class="inv-tipo-letra">C</div>
+        <span class="inv-tipo-nombre">Factura C</span>
+      </td>
+      <!-- Datos del comprobante -->
+      <td class="td-comp">
+        <span class="f-label">Punto de Venta</span>
+        <span class="f-value">{{PUNTO_VENTA}}</span>
+        <span class="f-label">Comprobante Nro.</span>
+        <span class="f-value">{{COMP_NRO}}</span>
+        <span class="f-label">Fecha de Emisión</span>
+        <span class="f-value">{{FECHA_EMISION}}</span>
+        <span class="f-label">Código de Autorización (AFIP)</span>
+        <span class="f-value">{{EMISOR_CUIT}}</span>
+      </td>
+    </tr>
+  </table>
 
-    <div class="inv-emisor-block">
-      <div class="inv-logo-wrap">{{LOGO_TAG}}</div>
-      <div class="inv-emisor-name">{{EMISOR_RAZON_SOCIAL}}</div>
-      <div class="inv-emisor-row"><span class="inv-emisor-label">Domicilio Comercial:</span> {{EMISOR_DOMICILIO}}</div>
-      <div class="inv-emisor-row"><span class="inv-emisor-label">Condición frente al IVA:</span> {{EMISOR_COND_IVA}}</div>
-      <div class="inv-emisor-row"><span class="inv-emisor-label">CUIT:</span> {{EMISOR_CUIT}}</div>
-      <div class="inv-emisor-row"><span class="inv-emisor-label">Ingresos Brutos:</span> {{EMISOR_IB}}</div>
-      <div class="inv-emisor-row"><span class="inv-emisor-label">Inicio de Actividades:</span> {{EMISOR_INICIO_ACT}}</div>
-    </div>
+  <div class="inv-gap"></div>
 
-    <div class="inv-tipo-block">
-      <div class="inv-tipo-original">{{COPY_LABEL}}</div>
-      <div class="inv-tipo-letra">C</div>
-      <div class="inv-tipo-nombre">Factura C</div>
-    </div>
+  <!-- ════ PERÍODO + VENCIMIENTO ════ -->
+  <table class="inv-periodo" cellspacing="0" cellpadding="0">
+    <tr>
+      <td>
+        <span class="f-label">Período Facturado Desde</span>
+        <span class="f-value">{{FECHA_EMISION}}</span>
+      </td>
+      <td>
+        <span class="f-label">Período Facturado Hasta</span>
+        <span class="f-value">{{FECHA_EMISION}}</span>
+      </td>
+      <td>
+        <span class="f-label">Fecha de Vto. para el Pago</span>
+        <span class="f-value">{{VENCIMIENTO}}</span>
+      </td>
+    </tr>
+  </table>
 
-    <div class="inv-comp-block">
-      <div class="inv-comp-row">
-        <span class="inv-label-small">Punto de Venta</span>
-        <span class="inv-value">{{PUNTO_VENTA}}</span>
-      </div>
-      <div class="inv-comp-row">
-        <span class="inv-label-small">Comprobante Nro.</span>
-        <span class="inv-value">{{COMP_NRO}}</span>
-      </div>
-      <div class="inv-comp-row">
-        <span class="inv-label-small">Fecha de Emisión</span>
-        <span class="inv-value">{{FECHA_EMISION}}</span>
-      </div>
-      <div class="inv-comp-row">
-        <span class="inv-label-small">Código de Autorización (AFIP)</span>
-        <span class="inv-value">{{EMISOR_CUIT}}</span>
-      </div>
-    </div>
-  </div>
+  <div class="inv-gap"></div>
 
-  <!-- PERÍODO + VENCIMIENTO -->
-  <div class="inv-periodo-row">
-    <div class="inv-periodo-cell">
-      <span class="inv-label-small">Período Facturado Desde</span>
-      <div class="inv-value">{{FECHA_EMISION}}</div>
-    </div>
-    <div class="inv-periodo-cell">
-      <span class="inv-label-small">Período Facturado Hasta</span>
-      <div class="inv-value">{{FECHA_EMISION}}</div>
-    </div>
-    <div class="inv-periodo-cell">
-      <span class="inv-label-small">Fecha de Vto. para el Pago</span>
-      <div class="inv-value">{{VENCIMIENTO}}</div>
-    </div>
-  </div>
+  <!-- ════ RECEPTOR ════ -->
+  <table class="inv-receptor" cellspacing="0" cellpadding="0">
+    <tr>
+      <td class="inv-receptor-hdr">Datos del Receptor</td>
+    </tr>
+    <tr>
+      <td class="inv-receptor-body">
+        <table class="inv-receptor-grid" cellspacing="0" cellpadding="0">
+          <tr>
+            <td>
+              <span class="f-label">Apellido y Nombre / Razón Social</span>
+              <span class="f-value">{{CLIENTE_RAZON_SOCIAL}}</span>
+            </td>
+            <td>
+              <span class="f-label">CUIT</span>
+              <span class="f-value">{{CLIENTE_CUIT}}</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="f-label">Domicilio</span>
+              <span class="f-value">{{CLIENTE_DOMICILIO}}</span>
+            </td>
+            <td>
+              {{DNI_ROW}}
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <span class="f-label">Condición frente al IVA</span>
+              <span class="f-value">Consumidor Final</span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 
-  <!-- RECEPTOR -->
-  <div class="inv-receptor-block">
-    <div class="inv-receptor-title">Datos del Receptor</div>
-    <div class="inv-receptor-grid">
-      <div class="inv-receptor-field">
-        <span class="inv-label-small">Apellido y Nombre / Razón Social</span>
-        <span class="inv-receptor-value">{{CLIENTE_RAZON_SOCIAL}}</span>
-      </div>
-      <div class="inv-receptor-field">
-        <span class="inv-label-small">CUIT</span>
-        <span class="inv-receptor-value">{{CLIENTE_CUIT}}</span>
-      </div>
-      <div class="inv-receptor-field">
-        <span class="inv-label-small">Domicilio</span>
-        <span class="inv-receptor-value">{{CLIENTE_DOMICILIO}}</span>
-      </div>
-      {{DNI_ROW}}
-      <div class="inv-receptor-field">
-        <span class="inv-label-small">Condición frente al IVA</span>
-        <span class="inv-receptor-value">Consumidor Final</span>
-      </div>
-    </div>
-  </div>
+  <div class="inv-gap"></div>
 
-  <!-- CONCEPTO -->
-  <table class="inv-items-table">
+  <!-- ════ CONCEPTO ════ -->
+  <table class="inv-items" cellspacing="0" cellpadding="0">
     <thead>
       <tr>
-        <th style="width:70%">Descripción del Servicio / Producto</th>
-        <th style="width:30%">Importe</th>
+        <th class="td-desc">Descripción del Servicio / Producto</th>
+        <th class="td-amount">Importe</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td class="inv-td-desc">{{DESCRIPCION}}</td>
-        <td class="inv-td-amount">$ {{IMPORTE}}</td>
+        <td class="td-desc">{{DESCRIPCION}}</td>
+        <td class="td-amount">$ {{IMPORTE}}</td>
       </tr>
     </tbody>
   </table>
 
-  <!-- TOTALES -->
-  <div class="inv-totals">
-    <div class="inv-total-row">
-      <span class="inv-total-label">Subtotal</span>
-      <span class="inv-total-value">$ {{IMPORTE}}</span>
-    </div>
-    <div class="inv-total-row inv-total-final">
-      <span class="inv-total-label">Importe Total</span>
-      <span class="inv-total-value">$ {{IMPORTE}}</span>
-    </div>
-  </div>
+  <div class="inv-gap"></div>
 
-  <!-- PIE -->
+  <!-- ════ TOTALES ════ -->
+  <table class="inv-totals" cellspacing="0" cellpadding="0">
+    <tr>
+      <td class="td-total-label">Subtotal</td>
+      <td class="td-total-value">$ {{IMPORTE}}</td>
+    </tr>
+    <tr>
+      <td class="td-total-label">Importe Total</td>
+      <td class="td-total-value">$ {{IMPORTE}}</td>
+    </tr>
+  </table>
+
+  <div class="inv-gap"></div>
+
+  <!-- ════ PIE ════ -->
   <div class="inv-footer">
     {{CAE_ROW}}
-    <div class="inv-footer-row">
-      Comprobante emitido por <strong>{{EMISOR_RAZON_SOCIAL}}</strong> — CUIT <strong>{{EMISOR_CUIT}}</strong>
-    </div>
+    Comprobante emitido por <strong>{{EMISOR_RAZON_SOCIAL}}</strong> — CUIT <strong>{{EMISOR_CUIT}}</strong>
   </div>
 
 </div>

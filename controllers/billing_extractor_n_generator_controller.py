@@ -147,10 +147,8 @@ def _build_invoice_html(row: dict, emisor: dict, copy_label: str = "ORIGINAL") -
     vto        = row.get("vencimiento") or fecha
 
     dni_row = (
-        f'<div class="inv-receptor-field">'
-        f'<span class="inv-label-small">DNI</span>'
-        f'<span class="inv-receptor-value">{dni}</span>'
-        f'</div>'
+        f'<span class="f-label">DNI</span>'
+        f'<span class="f-value">{dni}</span>'
         if dni else ""
     )
 
