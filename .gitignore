@@ -5,7 +5,7 @@ config/depoy_config/zz_lottery_ticket/.env
 *.env
 .env_*
 .env.*
-
+config/certs/
 # app
 __pycache__/
 *.py[cod]

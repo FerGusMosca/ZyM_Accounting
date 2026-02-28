@@ -1,23 +1,23 @@
 # billing_extractor_n_generator_controller.py
 """
-Controlador para Extracción y Generación de Facturas
-- Parsea xlsx de entrada
-- Renderiza facturas desde static/templates/invoice_template.html
-- Embebe logo desde static/img/logo_factura.png en base64
-- Genera PDFs vía wkhtmltopdf con fallback HTML
-- Lee datos del emisor desde settings (.env)
+Billing Extraction and Generation Controller
+- Parses input xlsx
+- Renders invoices from static/templates/invoice_template.html
+- Embeds logo from static/img/logo_factura.png as base64
+- Generates PDFs via wkhtmltopdf with HTML fallback
+- Reads issuer data from settings (.env)
 
-Nuevo layout de columnas del xlsx (v2, sin fila de encabezado):
-  0: fecha_emision
-  1: cuit_cliente
-  2: razon_social_cliente   ← NUEVA col (era nombre antes)
-  3: domicilio_cliente      ← NUEVA col
-  4: nombre_contacto        ← antes era col 2
-  5: descripcion            ← antes era col 4
-  6: importe                ← antes era col 5
-  7: comp_nro               ← antes era col 6
-  8: cae_number             ← antes era col 7
-  9: vencimiento            ← antes era col 8
+xlsx column layout (v2, no header row):
+  0: fecha_emision        → invoice date
+  1: cuit_cliente         → client CUIT
+  2: razon_social_cliente → client business name
+  3: domicilio_cliente    → client address
+  4: nombre_contacto      → contact name
+  5: descripcion          → service description
+  6: importe              → amount
+  7: comp_nro             → invoice number (e.g. C00002-00000144)
+  8: cae_number           → CAE (filled after AFIP registration)
+  9: vencimiento          → CAE expiration date
 """
 
 import base64
@@ -41,7 +41,44 @@ from common.util.std_in_out.root_locator import RootLocator
 logger = logging.getLogger(__name__)
 
 
-# ── Rutas ──────────────────────────────────────────────────────────────────────
+# ── ARCA client factory ────────────────────────────────────────────────────────
+
+def _get_arca_client():
+    """
+    Return (ARCAClient, None) if fully configured,
+    or (None, "error message") if something is missing.
+    """
+    try:
+        from common.config.settings import get_settings
+        from service_client.ARCA_client import ARCAClient
+
+        s    = get_settings()
+        cuit = getattr(s, "arca_cuit",      None)
+        cert = getattr(s, "arca_cert_path", None)
+        key  = getattr(s, "arca_key_path",  None)
+
+        if not cuit or not cert or not key:
+            return None, "ARCA not configured in .env (missing ARCA_CUIT, ARCA_CERT_PATH or ARCA_KEY_PATH)"
+
+        root     = Path(RootLocator.get_root())
+        cert_abs = str(root / cert)
+        key_abs  = str(root / key)
+
+        if not Path(cert_abs).exists():
+            return None, f"Certificate not found: {cert_abs}"
+        if not Path(key_abs).exists():
+            return None, f"Private key not found: {key_abs}"
+
+        homo   = str(getattr(s, "arca_homo", "true")).lower() != "false"
+        client = ARCAClient(cert_path=cert_abs, key_path=key_abs, cuit=cuit, homo=homo)
+        return client, None
+
+    except Exception as exc:
+        return None, str(exc)
+
+
+# ── Path helpers ───────────────────────────────────────────────────────────────
+
 def _root() -> Path:
     return Path(RootLocator.get_root())
 
@@ -55,65 +92,74 @@ def _modelo_xlsx_path() -> Path:
     return _root() / "static" / "downloads" / "modelo_facturacion.xlsx"
 
 
-# ── Carga de logo ──────────────────────────────────────────────────────────────
+# ── Logo loader ────────────────────────────────────────────────────────────────
+
 def _load_logo_tag() -> str:
-    """Retorna un <img> con el logo embebido en base64, o '' si no existe."""
+    """Return an <img> tag with the logo embedded as base64, or '' if missing."""
     path = _logo_path()
     if not path.exists():
-        logger.warning(f"Logo no encontrado en {path} — omitiendo")
+        logger.warning("Logo not found at %s — skipping", path)
         return ""
     try:
-        with open(path, "rb") as f:
-            data = base64.b64encode(f.read()).decode("ascii")
+        data = base64.b64encode(path.read_bytes()).decode("ascii")
         ext  = path.suffix.lstrip(".").lower()
         mime = "image/png" if ext == "png" else f"image/{ext}"
-        return f'<img class="inv-logo" src="data:{mime};base64,{data}" alt="Logo Empresa">'
-    except Exception as e:
-        logger.warning(f"No se pudo cargar el logo: {e}")
+        return f'<img class="inv-logo" src="data:{mime};base64,{data}" alt="Company Logo">'
+    except Exception as exc:
+        logger.warning("Could not load logo: %s", exc)
         return ""
 
 
-# ── Carga de template ──────────────────────────────────────────────────────────
+# ── Template loader ────────────────────────────────────────────────────────────
+
 def _load_template() -> str:
     path = _template_path()
     if not path.exists():
         raise FileNotFoundError(
-            f"Template de factura no encontrado en: {path}\n"
-            "Colocá invoice_template.html en static/templates/"
+            f"Invoice template not found at: {path}\n"
+            "Place invoice_template.html in static/templates/"
         )
     return path.read_text(encoding="utf-8")
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+# ── Formatting helpers ─────────────────────────────────────────────────────────
+
 def _fmt_ar(val: float) -> str:
-    """Formatea número al estilo argentino: 1.234.567,89"""
+    """Format a number using Argentine locale: 1.234.567,89"""
     return f"{val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
+
 def _extract_pv_comp(comp_nro: str) -> tuple[str, str]:
+    """Extract (sales_point, invoice_seq) from 'C00002-00000144'."""
     m = re.match(r"[Cc](\d{5})-(\d{8})", comp_nro)
     return (m.group(1), m.group(2)) if m else ("00002", "00000000")
 
+
 def _extract_dni(cuit: str) -> str:
+    """Extract the DNI portion from a CUIT string."""
     m = re.match(r"\d{2}-(\d{7,8})-\d", cuit)
     return m.group(1) if m else ""
 
+
 def _is_skippable(row: dict) -> tuple[bool, str]:
     """
-    Retorna (bool, motivo) indicando si la fila debe omitirse.
-    Ahora devuelve el motivo para mensajes más descriptivos al usuario.
+    Return (should_skip, reason).
+    Rows missing required data or marked as pending are skipped.
     """
     comp = str(row.get("comp_nro", "")).strip().upper()
     if not comp:
-        return True, "Comp. Nro vacío"
+        return True, "Empty comp_nro"
     if comp.startswith("EMITIR"):
-        return True, f"Pendiente de emisión: {row.get('comp_nro', '')}"
+        return True, f"Pending emission: {row.get('comp_nro', '')}"
     if not row.get("amount") or row.get("amount", 0) == 0:
-        return True, "Importe cero o vacío"
+        return True, "Zero or missing amount"
     if not row.get("razon_social_cliente"):
-        return True, "Sin razón social del cliente"
+        return True, "Missing client business name"
     return False, ""
 
+
 def _fmt_date(val) -> str:
+    """Normalize various date representations to DD/MM/YYYY."""
     import datetime
     if val is None:
         return ""
@@ -126,17 +172,12 @@ def _fmt_date(val) -> str:
     return s.split(" ")[0]
 
 
-# ── Constructor de HTML de factura ─────────────────────────────────────────────
+# ── Invoice HTML builder ───────────────────────────────────────────────────────
+
 def _build_invoice_html(row: dict, emisor: dict, copy_label: str = "ORIGINAL") -> str:
     """
-    Carga invoice_template.html y sustituye todos los tokens {{TOKEN}}.
-    El logo se embebe en base64 para funcionar correctamente en browser y wkhtmltopdf.
-
-    Nuevo token:
-      {{CLIENTE_RAZON_SOCIAL}} → col 2 del xlsx (razón social del cliente)
-      {{CLIENTE_CUIT}}         → col 1 del xlsx
-      {{CLIENTE_DOMICILIO}}    → col 3 del xlsx (nueva columna)
-      {{DNI_ROW}}              → fila con DNI si aplica
+    Load invoice_template.html and substitute all {{TOKEN}} placeholders.
+    The logo is embedded as base64 so it works in both browsers and wkhtmltopdf.
     """
     template   = _load_template()
     logo_tag   = _load_logo_tag()
@@ -156,7 +197,7 @@ def _build_invoice_html(row: dict, emisor: dict, copy_label: str = "ORIGINAL") -
 
     tokens = {
         "{{COPY_LABEL}}":            copy_label,
-        "{{LOGO_TAG}}":              logo_tag,   # no-op si template ya tiene logo embebido
+        "{{LOGO_TAG}}":              logo_tag,
         "{{EMISOR_RAZON_SOCIAL}}":   emisor["razon_social"],
         "{{EMISOR_DOMICILIO}}":      emisor["domicilio"],
         "{{EMISOR_COND_IVA}}":       emisor["cond_iva"],
@@ -167,32 +208,33 @@ def _build_invoice_html(row: dict, emisor: dict, copy_label: str = "ORIGINAL") -
         "{{COMP_NRO}}":              comp,
         "{{FECHA_EMISION}}":         fecha,
         "{{VENCIMIENTO}}":           vto,
-        "{{CLIENTE_RAZON_SOCIAL}}":  row["razon_social_cliente"],   # col 2
-        "{{CLIENTE_CUIT}}":          row["cuit_cliente"],            # col 1
-        "{{CLIENTE_DOMICILIO}}":     row["domicilio_cliente"],       # col 3
+        "{{CLIENTE_RAZON_SOCIAL}}":  row["razon_social_cliente"],
+        "{{CLIENTE_CUIT}}":          row["cuit_cliente"],
+        "{{CLIENTE_DOMICILIO}}":     row["domicilio_cliente"],
         "{{DNI_ROW}}":               dni_row,
         "{{DESCRIPCION}}":           row["descripcion"],
         "{{IMPORTE}}":               amount_str,
         "{{CAE_ROW}}":               cae_row,
     }
 
-    html = template
+    result = template
     for token, value in tokens.items():
-        html = html.replace(token, str(value))
-    return html
+        result = result.replace(token, str(value))
+    return result
 
 
-# ── PDF vía wkhtmltopdf ────────────────────────────────────────────────────────
+# ── PDF generation ─────────────────────────────────────────────────────────────
+
 def _html_to_pdf_bytes(html_content: str) -> Optional[bytes]:
     """
-    Convierte HTML → PDF usando wkhtmltopdf.
-    El logo ya está embebido en base64, no requiere acceso a archivos externos.
-    Retorna None si wkhtmltopdf no está disponible.
+    Convert HTML → PDF using wkhtmltopdf.
+    The logo is already embedded as base64, so no external file access is needed.
+    Returns None if wkhtmltopdf is not available.
     """
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            html_path = os.path.join(tmpdir, "factura.html")
-            pdf_path  = os.path.join(tmpdir, "factura.pdf")
+            html_path = os.path.join(tmpdir, "invoice.html")
+            pdf_path  = os.path.join(tmpdir, "invoice.pdf")
 
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
@@ -210,44 +252,37 @@ def _html_to_pdf_bytes(html_content: str) -> Optional[bytes]:
                 html_path,
                 pdf_path,
             ]
-
             result = subprocess.run(cmd, capture_output=True, timeout=30)
 
             if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 500:
                 with open(pdf_path, "rb") as f:
                     return f.read()
 
-            stderr = result.stderr.decode("utf-8", errors="replace")
-            logger.error(f"wkhtmltopdf no produjo salida. stderr: {stderr}")
+            logger.error(
+                "wkhtmltopdf produced no output. stderr: %s",
+                result.stderr.decode("utf-8", errors="replace"),
+            )
             return None
 
     except FileNotFoundError:
-        logger.warning("wkhtmltopdf no encontrado en PATH")
+        logger.warning("wkhtmltopdf not found in PATH")
         return None
     except subprocess.TimeoutExpired:
-        logger.error("wkhtmltopdf expiró después de 30s")
+        logger.error("wkhtmltopdf timed out after 30s")
         return None
-    except Exception as e:
-        logger.exception(f"Error al generar PDF: {e}")
+    except Exception as exc:
+        logger.exception("Error generating PDF: %s", exc)
         return None
 
 
-# ── Parser de XLSX ─────────────────────────────────────────────────────────────
+# ── xlsx parser ────────────────────────────────────────────────────────────────
+
 def _parse_xlsx(file_bytes: bytes) -> list[dict]:
     """
-    Nuevo layout de columnas (sin fila de encabezado):
-      0: fecha_emision
-      1: cuit_cliente
-      2: razon_social_cliente   ← NUEVO (antes nombre_cliente)
-      3: domicilio_cliente      ← NUEVO
-      4: nombre_contacto        ← antes en col 2
-      5: descripcion
-      6: importe
-      7: comp_nro
-      8: cae_number
-      9: vencimiento
+    Parse the input xlsx file into a list of row dicts.
+    See module docstring for column layout.
     """
-    df = pd.read_excel(io.BytesIO(file_bytes), header=None, dtype=str)
+    df   = pd.read_excel(io.BytesIO(file_bytes), header=None, dtype=str)
     rows = []
 
     for i, row in df.iterrows():
@@ -260,28 +295,28 @@ def _parse_xlsx(file_bytes: bytes) -> list[dict]:
         except (ValueError, TypeError):
             amount = 0.0
 
-        # CAE: col 8
-        cae_raw   = str(row.iloc[8]).strip() if len(row) > 8 and pd.notna(row.iloc[8]) else ""
-        cae_clean = re.sub(r"\.0+$", "", cae_raw).strip()
+        def _col(idx: int) -> str:
+            return str(row.iloc[idx]).strip() if len(row) > idx and pd.notna(row.iloc[idx]) else ""
+
+        # CAE: strip trailing ".0" artifacts from float-parsed strings
+        cae_clean = re.sub(r"\.0+$", "", _col(8)).strip()
         if cae_clean.lower() in ("nan", "none", ""):
             cae_clean = ""
 
-        # Vencimiento: col 9
-        venc_raw   = str(row.iloc[9]).strip() if len(row) > 9 and pd.notna(row.iloc[9]) else ""
-        venc_clean = re.sub(r"VENCIMIENTO\s*", "", venc_raw, flags=re.IGNORECASE).strip()
+        venc_clean = re.sub(r"VENCIMIENTO\s*", "", _col(9), flags=re.IGNORECASE).strip()
         if venc_clean.lower() in ("nan", "none"):
             venc_clean = ""
 
         rows.append({
             "idx":                   i,
             "fecha_emision":         _fmt_date(fecha),
-            "cuit_cliente":          str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else "",
-            "razon_social_cliente":  str(row.iloc[2]).strip() if pd.notna(row.iloc[2]) else "",
-            "domicilio_cliente":     str(row.iloc[3]).strip() if len(row) > 3 and pd.notna(row.iloc[3]) else "",
-            "nombre_contacto":       str(row.iloc[4]).strip() if len(row) > 4 and pd.notna(row.iloc[4]) else "",
-            "descripcion":           str(row.iloc[5]).strip() if len(row) > 5 and pd.notna(row.iloc[5]) else "",
+            "cuit_cliente":          _col(1),
+            "razon_social_cliente":  _col(2),
+            "domicilio_cliente":     _col(3),
+            "nombre_contacto":       _col(4),
+            "descripcion":           _col(5),
             "amount":                amount,
-            "comp_nro":              str(row.iloc[7]).strip() if len(row) > 7 and pd.notna(row.iloc[7]) else "",
+            "comp_nro":              _col(7),
             "cae_number":            cae_clean,
             "vencimiento":           venc_clean,
         })
@@ -289,18 +324,22 @@ def _parse_xlsx(file_bytes: bytes) -> list[dict]:
     return rows
 
 
-# ── Controlador ────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Controller
+# ══════════════════════════════════════════════════════════════════════════════
+
 class BillingExtractorNGeneratorController:
     """
-    Controlador FastAPI — registrado en prefijo /billing_extractor_n_generator
+    FastAPI controller — mounted at /billing_extractor_n_generator
 
-    Rutas:
-        GET  /                    → Página HTML
-        POST /parse_xlsx          → Excel → JSON de filas
-        POST /generate_pdf        → { row, emisor } → PDF binario
-        POST /generate_all        → Excel + emisor → ZIP de PDFs
-        GET  /download_modelo     → Descarga Excel modelo
-        GET  /emisor_settings     → Datos del emisor desde .env (para pre-cargar en UI)
+    Routes:
+        GET  /                → HTML page
+        POST /parse_xlsx      → Excel → JSON rows
+        POST /generate_pdf    → { row, emisor } → PDF binary
+        POST /generate_all    → Excel + emisor → ZIP of PDFs
+        GET  /download_modelo → Download sample Excel template
+        GET  /emisor_settings → Issuer data from .env (for UI pre-fill)
+        POST /registrar_arca  → Register one invoice in AFIP and return CAE
     """
 
     def __init__(self):
@@ -309,66 +348,61 @@ class BillingExtractorNGeneratorController:
         templates_path = os.path.join(RootLocator.get_root(), "templates")
         self.templates = Jinja2Templates(directory=templates_path)
 
-        # Importar settings una sola vez
         try:
             from common.config.settings import get_settings
             self._settings = get_settings()
         except Exception:
             self._settings = None
 
+        # ── Route definitions ──────────────────────────────────────────────────
+
         @self.router.get("/", response_class=HTMLResponse)
         async def page(request: Request):
             return self.templates.TemplateResponse(
                 "billing_extractor_n_generator.html",
-                {"request": request}
+                {"request": request},
             )
 
         @self.router.get("/emisor_settings")
         async def emisor_settings():
-            """
-            Devuelve los datos del emisor configurados en .env.
-            El frontend los usa para pre-completar (y bloquear) los campos.
-            """
+            """Return issuer data from .env for UI pre-population."""
             try:
                 s = self._settings
                 if s is None:
-                    raise ValueError("Settings no disponibles")
+                    raise ValueError("Settings not available")
 
-                # Mapeo de condición IVA desde código → label legible
                 cond_iva_map = {
-                    "RESP_MONOTR":   "Responsable Monotributo",
-                    "RESP_INSCR":    "Responsable Inscripto",
+                    "RESP_MONOTR": "Responsable Monotributo",
+                    "RESP_INSCR":  "Responsable Inscripto",
                 }
                 cond_iva_code  = getattr(s, "emisor_cond_iva", "RESP_MONOTR")
                 cond_iva_label = cond_iva_map.get(cond_iva_code.upper(), "Responsable Monotributo")
 
                 return JSONResponse({
-                    "status":      "ok",
-                    "razon_social": getattr(s, "emisor_razon_social", ""),
-                    "cuit":         getattr(s, "emisor_cuit", ""),
-                    "domicilio":    getattr(s, "emisor_domicilio", ""),
-                    "ib":           getattr(s, "emisor_ib", ""),
-                    "inicio_act":   getattr(s, "emisor_inicio_act", ""),
-                    "cond_iva":     cond_iva_label,
+                    "status":        "ok",
+                    "razon_social":  getattr(s, "emisor_razon_social", ""),
+                    "cuit":          getattr(s, "emisor_cuit",         ""),
+                    "domicilio":     getattr(s, "emisor_domicilio",    ""),
+                    "ib":            getattr(s, "emisor_ib",           ""),
+                    "inicio_act":    getattr(s, "emisor_inicio_act",   ""),
+                    "cond_iva":      cond_iva_label,
                     "cond_iva_code": cond_iva_code,
                 })
-            except Exception as e:
-                logger.exception("Error al leer settings del emisor")
-                return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+            except Exception as exc:
+                logger.exception("Error reading issuer settings")
+                return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
 
         @self.router.get("/download_modelo")
         async def download_modelo():
-            """Descarga el Excel modelo para carga de datos."""
+            """Download the sample xlsx template."""
             path = _modelo_xlsx_path()
             if not path.exists():
                 return JSONResponse(
-                    {"status": "error", "message": "Archivo modelo no encontrado en static/downloads/"},
-                    status_code=404
+                    {"status": "error", "message": "Template file not found in static/downloads/"},
+                    status_code=404,
                 )
-            with open(path, "rb") as f:
-                content = f.read()
             return StreamingResponse(
-                io.BytesIO(content),
+                io.BytesIO(path.read_bytes()),
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers={"Content-Disposition": 'attachment; filename="modelo_facturacion.xlsx"'},
             )
@@ -376,35 +410,33 @@ class BillingExtractorNGeneratorController:
         @self.router.post("/parse_xlsx")
         async def parse_xlsx(file: UploadFile = File(...)):
             try:
-                file_bytes = await file.read()
-                rows = _parse_xlsx(file_bytes)
-
+                rows    = _parse_xlsx(await file.read())
                 valid   = []
                 skipped = []
                 for r in rows:
-                    skip, motivo = _is_skippable(r)
+                    skip, reason = _is_skippable(r)
                     if skip:
-                        skipped.append({"comp_nro": r.get("comp_nro", ""), "motivo": motivo})
+                        skipped.append({"comp_nro": r.get("comp_nro", ""), "motivo": reason})
                     else:
                         valid.append(r)
 
                 return JSONResponse({
-                    "status":  "ok",
-                    "total":   len(rows),
-                    "valid":   len(valid),
-                    "skipped": len(skipped),
+                    "status":         "ok",
+                    "total":          len(rows),
+                    "valid":          len(valid),
+                    "skipped":        len(skipped),
                     "skipped_detail": skipped,
-                    "rows":    rows,
+                    "rows":           rows,
                 })
-            except Exception as e:
-                logger.exception("Error al parsear xlsx")
-                return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
+            except Exception as exc:
+                logger.exception("Error parsing xlsx")
+                return JSONResponse({"status": "error", "message": str(exc)}, status_code=400)
 
         @self.router.post("/generate_pdf")
         async def generate_pdf(request: Request):
             """
-            Espera JSON: { row: {...}, emisor: {...}, copy_label?: "ORIGINAL" }
-            Retorna: PDF (application/pdf) o HTML de fallback si no hay backend PDF.
+            Expects JSON: { row: {...}, emisor: {...}, copy_label?: "ORIGINAL" }
+            Returns: PDF binary or HTML fallback if wkhtmltopdf is unavailable.
             """
             try:
                 body       = await request.json()
@@ -412,72 +444,68 @@ class BillingExtractorNGeneratorController:
                 emisor     = body.get("emisor", {})
                 copy_label = body.get("copy_label", "ORIGINAL")
 
-                html      = _build_invoice_html(row, emisor, copy_label)
-                safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", row.get("comp_nro", "factura"))
-                filename  = f"factura_{safe_name}.pdf"
-
-                pdf_bytes = _html_to_pdf_bytes(html)
+                invoice_html = _build_invoice_html(row, emisor, copy_label)
+                safe_name    = re.sub(r"[^a-zA-Z0-9_\-]", "_", row.get("comp_nro", "invoice"))
+                pdf_bytes    = _html_to_pdf_bytes(invoice_html)
 
                 if pdf_bytes:
                     return StreamingResponse(
                         io.BytesIO(pdf_bytes),
                         media_type="application/pdf",
-                        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-                    )
-                else:
-                    logger.warning("wkhtmltopdf no disponible — retornando HTML para impresión")
-                    return StreamingResponse(
-                        io.BytesIO(html.encode("utf-8")),
-                        media_type="text/html",
-                        headers={
-                            "Content-Disposition": f'inline; filename="{safe_name}.html"',
-                            "X-Pdf-Backend": "none",
-                        },
+                        headers={"Content-Disposition": f'attachment; filename="factura_{safe_name}.pdf"'},
                     )
 
-            except FileNotFoundError as e:
-                return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
-            except Exception as e:
-                logger.exception("Error al generar PDF")
-                return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+                logger.warning("wkhtmltopdf unavailable — returning HTML for printing")
+                return StreamingResponse(
+                    io.BytesIO(invoice_html.encode("utf-8")),
+                    media_type="text/html",
+                    headers={
+                        "Content-Disposition": f'inline; filename="{safe_name}.html"',
+                        "X-Pdf-Backend": "none",
+                    },
+                )
+
+            except FileNotFoundError as exc:
+                return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+            except Exception as exc:
+                logger.exception("Error generating PDF")
+                return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
 
         @self.router.post("/generate_all")
         async def generate_all(
             file:        UploadFile = File(...),
             emisor_json: str        = Form(...),
         ):
-            """Batch: Excel + JSON del emisor → ZIP de PDFs (o HTML de fallback)."""
+            """Batch: Excel + issuer JSON → ZIP of PDFs (or HTML fallback files)."""
             import zipfile
             try:
                 emisor     = json.loads(emisor_json)
-                file_bytes = await file.read()
-                rows       = _parse_xlsx(file_bytes)
+                rows       = _parse_xlsx(await file.read())
                 valid_rows = [r for r in rows if not _is_skippable(r)[0]]
 
                 if not valid_rows:
                     skipped_detail = [
-                        {"comp_nro": r.get("comp_nro", f"fila {r['idx']}"), "motivo": _is_skippable(r)[1]}
+                        {
+                            "comp_nro": r.get("comp_nro", f"row {r['idx']}"),
+                            "motivo":   _is_skippable(r)[1],
+                        }
                         for r in rows
                     ]
                     return JSONResponse(
-                        {
-                            "status":  "error",
-                            "message": "No hay filas válidas para generar.",
-                            "detalle": skipped_detail,
-                        },
+                        {"status": "error", "message": "No valid rows to generate.", "detalle": skipped_detail},
                         status_code=400,
                     )
 
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
                     for row in valid_rows:
-                        html      = _build_invoice_html(row, emisor)
-                        pdf_bytes = _html_to_pdf_bytes(html)
-                        safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", row["comp_nro"])
+                        invoice_html = _build_invoice_html(row, emisor)
+                        safe_name    = re.sub(r"[^a-zA-Z0-9_\-]", "_", row["comp_nro"])
+                        pdf_bytes    = _html_to_pdf_bytes(invoice_html)
                         if pdf_bytes:
                             zf.writestr(f"factura_{safe_name}.pdf", pdf_bytes)
                         else:
-                            zf.writestr(f"factura_{safe_name}.html", html.encode("utf-8"))
+                            zf.writestr(f"factura_{safe_name}.html", invoice_html.encode("utf-8"))
 
                 zip_buffer.seek(0)
                 return StreamingResponse(
@@ -486,8 +514,107 @@ class BillingExtractorNGeneratorController:
                     headers={"Content-Disposition": 'attachment; filename="facturas.zip"'},
                 )
 
-            except FileNotFoundError as e:
-                return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
-            except Exception as e:
-                logger.exception("Error en generate_all")
-                return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+            except FileNotFoundError as exc:
+                return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+            except Exception as exc:
+                logger.exception("Error in generate_all")
+                return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+
+        @self.router.post("/registrar_arca")
+        async def registrar_arca(request: Request):
+            """
+            Register a single invoice in ARCA/AFIP and return the full debug log.
+
+            Request JSON: { row: {...} }
+            Response: {
+                status:   "ok" | "error" | "not_configured",
+                log:      [...],   ← lines for the debug console
+                cae:      str,
+                cae_vto:  str,
+                cbte_nro: int
+            }
+            """
+            log_lines: list[str] = []
+
+            def log(msg: str) -> None:
+                log_lines.append(msg)
+                logger.info("[ARCA] %s", msg)
+
+            try:
+                body = await request.json()
+                row  = body.get("row", {})
+
+                log("── Iniciando registro en ARCA ──────────────────")
+
+                client, err = _get_arca_client()
+                if err:
+                    log(f"❌ Error de configuración: {err}")
+                    return JSONResponse({"status": "not_configured", "log": log_lines, "error": err})
+
+                log(f"🌐 Ambiente: {'HOMOLOGACIÓN' if client.homo else 'PRODUCCIÓN'}")
+                log(f"🔑 CUIT autenticante: {client.cuit}")
+                log(f"📄 Certificado: {Path(client.cert_path).name}")
+
+                # Step 1: WSAA token
+                log("")
+                log("── WSAA: obteniendo token ──────────────────────")
+                try:
+                    token_data = client._get_token()
+                    log(f"✅ Token OK  |  expira: {token_data.get('expiration', '?')}")
+                except Exception as exc:
+                    log(f"❌ WSAA falló: {exc}")
+                    return JSONResponse({"status": "error", "log": log_lines, "error": str(exc)})
+
+                # Step 2: last invoice number
+                m  = re.match(r"[Cc](\d+)-", row.get("comp_nro", ""))
+                pv = int(m.group(1)) if m else 2
+                log("")
+                log(f"── WSFE: consultando último comprobante PV={pv} ─")
+                try:
+                    ultimo   = client.get_last_invoice_number(pv)
+                    cbte_nro = ultimo + 1
+                    log(f"✅ Último emitido: {ultimo}  →  nuevo será: {cbte_nro}")
+                except Exception as exc:
+                    log(f"❌ FECompUltimoAutorizado falló: {exc}")
+                    return JSONResponse({"status": "error", "log": log_lines, "error": str(exc)})
+
+                # Step 3: request CAE
+                log("")
+                log("── WSFE: solicitando CAE ───────────────────────")
+                log(f"   Fecha:   {row.get('fecha_emision', '?')}")
+                log(f"   Importe: {row.get('amount', '?')}")
+                log(f"   CUIT cliente: {row.get('cuit_cliente', '?')}")
+                try:
+                    result = client.issue_invoice(row)
+                    log(f"✅ CAE obtenido: {result['cae']}")
+                    log(f"   Vto CAE:  {result['cae_vto']}")
+                    log(f"   Cbte Nro: {result['invoice_number']}")
+                    if result.get("obs"):
+                        log("")
+                        log("⚠️  Observaciones AFIP:")
+                        for obs in result["obs"]:
+                            log(f"   {obs}")
+                    log("")
+                    log("── XML respuesta completa ──────────────────────")
+                    raw = result.get("raw_xml", "")
+                    for chunk in [raw[i:i+120] for i in range(0, min(len(raw), 1200), 120)]:
+                        log(chunk)
+                    if len(raw) > 1200:
+                        log(f"   ... ({len(raw)} chars total, showing first 1200)")
+
+                    return JSONResponse({
+                        "status":   "ok",
+                        "log":      log_lines,
+                        "cae":      result["cae"],
+                        "cae_vto":  result["cae_vto"],
+                        "cbte_nro": result["invoice_number"],
+                    })
+
+                except Exception as exc:
+                    log(f"❌ FECAESolicitar falló: {exc}")
+                    return JSONResponse({"status": "error", "log": log_lines, "error": str(exc)})
+
+            except Exception as exc:
+                log_lines.append(f"❌ Error inesperado: {exc}")
+                logger.exception("Unexpected error in registrar_arca")
+                return JSONResponse({"status": "error", "log": log_lines, "error": str(exc)}, status_code=500)

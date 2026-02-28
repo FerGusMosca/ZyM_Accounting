@@ -484,3 +484,56 @@
   .beg-btn { width: 100%; }
   .beg-upload-buttons { flex-direction: column; align-items: center; }
 }
+
+/* ── Consola ARCA ──────────────────────────────────────────────────────────── */
+.beg-arca-console {
+  margin-top: 24px;
+  border: 1px solid #30363D;
+  border-radius: 8px;
+  background: #0D1117;
+  overflow: hidden;
+}
+
+.beg-arca-console-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: #161B22;
+  border-bottom: 1px solid #30363D;
+  font-size: 13px;
+  font-weight: 600;
+  color: #58A6FF;
+  letter-spacing: 0.04em;
+}
+
+.beg-arca-console-body {
+  padding: 14px 16px;
+  min-height: 120px;
+  max-height: 380px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.beg-arca-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Botón ARCA en galería y tabla */
+.beg-btn-arca {
+  background: linear-gradient(135deg, #1a3a5c, #0d2137);
+  border: 1px solid #58A6FF44;
+  color: #58A6FF;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.beg-btn-arca:hover {
+  background: #1f4878;
+  border-color: #58A6FF;
+}

@@ -258,6 +258,7 @@ function renderPreviewTable() {
         : `<td><div class="beg-row-actions">
             <button class="beg-btn beg-btn-icon" onclick="previewSingle(${i})" title="Ver factura">👁</button>
             <button class="beg-btn beg-btn-icon" onclick="generateSingle(${i})" title="Generar PDF">⚡</button>
+            <button class="beg-btn beg-btn-arca" onclick="registrarEnArca(${i})" title="Registrar en ARCA">🏛</button>
           </div></td>`
       }
     `;
@@ -424,6 +425,7 @@ function addToPDFGallery(row, url, filename) {
     <div class="beg-pdf-card-actions">
       <button class="beg-btn beg-btn-icon" onclick="window.open('${url}','_blank')">👁 Ver</button>
       <a href="${url}" download="${filename}" class="beg-btn beg-btn-icon">⬇️ PDF</a>
+      <button class="beg-btn beg-btn-arca" onclick="registrarEnArca(${row.idx})">🏛 ARCA</button>
     </div>
   `;
   pdfGallery.appendChild(card);
@@ -475,4 +477,80 @@ function loadJSZip() {
     s.onerror = reject;
     document.head.appendChild(s);
   });
+}
+
+// ─── ARCA: Registrar factura ────────────────────────────────────────────────────
+window.registrarEnArca = async function(idx) {
+  const row = state.rows[idx];
+  arcaConsoleOpen(row.comp_nro);
+  arcaLog('⏳ Iniciando comunicación con ARCA/AFIP...');
+
+  try {
+    const resp = await fetch('/billing_extractor_n_generator/registrar_arca', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ row })
+    });
+    const data = await resp.json();
+
+    // Volcar el log del server a la consola
+    (data.log || []).forEach(line => arcaLog(line));
+
+    if (data.status === 'ok') {
+      arcaLog('');
+      arcaLog('✅ ¡Factura registrada en AFIP!');
+      arcaLog(`   CAE:      ${data.cae}`);
+      arcaLog(`   Vto CAE:  ${data.cae_vto}`);
+      arcaLog(`   Cbte Nro: ${data.cbte_nro}`);
+      // Actualizar el row con el CAE para futuras generaciones
+      state.rows[idx].cae_number = data.cae;
+      state.rows[idx].vencimiento = data.cae_vto;
+    } else if (data.status === 'not_configured') {
+      arcaLog('⚠️  ARCA no configurado en este ambiente.');
+      arcaLog(`   ${data.error || ''}`);
+    } else {
+      arcaLog(`❌ Error: ${data.error || 'desconocido'}`);
+    }
+  } catch (err) {
+    arcaLog(`❌ Error de red: ${err.message}`);
+  }
+};
+
+// ─── Consola de debug ARCA ─────────────────────────────────────────────────────
+function arcaConsoleOpen(title) {
+  let panel = $('arcaConsolePanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'arcaConsolePanel';
+    panel.className = 'beg-arca-console';
+    panel.innerHTML = `
+      <div class="beg-arca-console-header">
+        <span id="arcaConsoleTitle">🔌 Consola ARCA</span>
+        <button onclick="document.getElementById('arcaConsolePanel').classList.add('beg-hidden')"
+                style="background:none;border:none;color:#8B949E;cursor:pointer;font-size:16px">✕</button>
+      </div>
+      <div id="arcaConsoleBody" class="beg-arca-console-body"></div>
+    `;
+    (document.querySelector('.beg-container') || document.querySelector('main') || document.body).appendChild(panel);
+  }
+  $('arcaConsoleTitle').textContent = `🔌 ARCA — ${title}`;
+  $('arcaConsoleBody').innerHTML = '';
+  panel.classList.remove('beg-hidden');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function arcaLog(line) {
+  const body = $('arcaConsoleBody');
+  if (!body) return;
+  const el = document.createElement('div');
+  el.className = 'beg-arca-line';
+  // Colorear según prefijo
+  if (line.startsWith('✅'))      el.style.color = '#3FB950';
+  else if (line.startsWith('❌')) el.style.color = '#F85149';
+  else if (line.startsWith('⚠️')) el.style.color = '#D29922';
+  else if (line.startsWith('──')) el.style.color = '#58A6FF';
+  else                             el.style.color = '#C9D1D9';
+  el.textContent = line;
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
 }

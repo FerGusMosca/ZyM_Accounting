@@ -45,6 +45,26 @@ class Settings(BaseSettings):
         default="RESP_MONOTR",
         validation_alias=AliasChoices("EMISOR_COND_IVA", "EMISOR_COND_IVA"))
 
+    # ── ARCA / AFIP ───────────────────────────────────────────────────────────
+    # CUIT titular del certificado (puede ser distinto al emisor comercial).
+    # Testing: tu CUIT. Producción: el CUIT que hizo la delegación en ARCA.
+    arca_cuit: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ARCA_CUIT", "ARCA_CUIT"))
+
+    arca_cert_path: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ARCA_CERT_PATH", "ARCA_CERT_PATH"))
+
+    arca_key_path: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ARCA_KEY_PATH", "ARCA_KEY_PATH"))
+
+    # "true" = homologación (testing)  |  "false" = producción
+    arca_homo: str | None = Field(
+        default="true",
+        validation_alias=AliasChoices("ARCA_HOMO", "ARCA_HOMO"))
+
 
 @lru_cache
 def get_settings() -> Settings:
