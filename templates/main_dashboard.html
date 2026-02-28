@@ -31,7 +31,10 @@
         <span class="dash-nav-icon">🧾</span>
         <span>Extractor de Facturas</span>
       </a>
-      <!-- future modules go here -->
+      <a href="/invoice_history" class="dash-nav-item">
+        <span class="dash-nav-icon">📋</span>
+        <span>Facturas Enviadas</span>
+      </a>
     </nav>
 
     <div class="dash-sidebar-footer">
@@ -101,11 +104,21 @@
 
     <!-- Cards -->
     <section class="dash-cards">
+
       <a href="/billing_extractor_n_generator" class="dash-card">
         <div class="dash-card-icon">🧾</div>
         <div class="dash-card-body">
           <h3>Extractor de Facturas</h3>
           <p>Importá tu Excel de facturación y generá facturas C en PDF listas para enviar.</p>
+        </div>
+        <div class="dash-card-arrow">→</div>
+      </a>
+
+      <a href="/invoice_history" class="dash-card">
+        <div class="dash-card-icon">📋</div>
+        <div class="dash-card-body">
+          <h3>Facturas Enviadas</h3>
+          <p>Consultá el historial completo de comprobantes registrados en AFIP, filtrando por fecha o número.</p>
         </div>
         <div class="dash-card-arrow">→</div>
       </a>
@@ -118,13 +131,6 @@
         </div>
       </div>
 
-      <div class="dash-card dash-card-soon">
-        <div class="dash-card-icon">🏛️</div>
-        <div class="dash-card-body">
-          <h3>Integración ARCA <span class="dash-chip">Próximamente</span></h3>
-          <p>Generación de CAE en tiempo real directamente desde AFIP.</p>
-        </div>
-      </div>
     </section>
 
   </main>

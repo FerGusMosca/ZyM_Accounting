@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facturas Enviadas — ZyM Accounting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/main.css">
+  <link rel="stylesheet" href="/static/css/main_dashboard.css">
+  <style>
+    /* ═══════════════════════════════════════════════
+       Page layout
+    ═══════════════════════════════════════════════ */
+    .ih-main {
+      flex: 1;
+      overflow-y: auto;
+      background: #0D1117;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ═══════════════════════════════════════════════
+       Page header
+    ═══════════════════════════════════════════════ */
+    .ih-header {
+      padding: 44px 48px 0;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+      position: relative;
+    }
+
+    /* Faint grid echo from dashboard hero */
+    .ih-header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(88,166,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(88,166,255,.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    .ih-header-left { position: relative; }
+
+    .ih-eyebrow {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: #58A6FF;
+      font-weight: 600;
+      font-family: 'DM Mono', monospace;
+      margin-bottom: 10px;
+    }
+
+    .ih-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 2.6rem;
+      color: #E6EDF3;
+      margin: 0 0 6px;
+      font-weight: 400;
+      line-height: 1.05;
+    }
+
+    .ih-title em { color: #58A6FF; font-style: italic; }
+
+    .ih-subtitle {
+      font-size: 13px;
+      color: #8B949E;
+      margin: 0;
+      font-weight: 300;
+    }
+
+    .ih-header-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      position: relative;
+    }
+
+    /* ═══════════════════════════════════════════════
+       Stats strip
+    ═══════════════════════════════════════════════ */
+    .ih-stats {
+      display: flex;
+      gap: 14px;
+      padding: 28px 48px;
+      flex-wrap: wrap;
+    }
+
+    .ih-stat {
+      background: #161B22;
+      border: 1px solid #21262D;
+      border-radius: 12px;
+      padding: 16px 22px;
+      flex: 1;
+      min-width: 150px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .2s, transform .2s;
+    }
+
+    .ih-stat::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--c, linear-gradient(90deg,#1F6FEB,#58A6FF));
+    }
+
+    .ih-stat:hover { border-color: #30363D; transform: translateY(-1px); }
+
+    .ih-stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: #484F58;
+      font-weight: 600;
+      font-family: 'DM Mono', monospace;
+      margin-bottom: 8px;
+    }
+
+    .ih-stat-val {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.55rem;
+      font-weight: 500;
+      line-height: 1;
+      color: #E6EDF3;
+    }
+
+    .ih-stat-val.blue   { color: #58A6FF; }
+    .ih-stat-val.green  { color: #3FB950; }
+    .ih-stat-val.gold   { color: #D29922; }
+    .ih-stat-val.purple { color: #8B5CF6; }
+
+    .ih-stat-sub { font-size: 11px; color: #8B949E; margin-top: 4px; font-weight: 300; }
+
+    /* ═══════════════════════════════════════════════
+       Filters
+    ═══════════════════════════════════════════════ */
+    .ih-filters {
+      display: flex;
+      gap: 12px;
+      padding: 0 48px 24px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .ih-fg { display: flex; flex-direction: column; gap: 5px; }
+
+    .ih-flabel {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #484F58;
+      font-weight: 600;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .ih-input {
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 8px;
+      padding: 9px 13px;
+      color: #E6EDF3;
+      font-size: 13px;
+      font-family: 'Outfit', sans-serif;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+      min-width: 160px;
+    }
+
+    .ih-input:focus {
+      border-color: #58A6FF;
+      box-shadow: 0 0 0 3px rgba(88,166,255,.1);
+    }
+
+    .ih-input::placeholder { color: #484F58; }
+
+    input[type="date"].ih-input::-webkit-calendar-picker-indicator {
+      filter: invert(.5); cursor: pointer;
+    }
+
+    .btn {
+      padding: 9px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Outfit', sans-serif;
+      cursor: pointer;
+      border: none;
+      transition: all .2s;
+      letter-spacing: .01em;
+      white-space: nowrap;
+    }
+
+    .btn-primary { background: #1F6FEB; color: white; }
+    .btn-primary:hover {
+      background: #388BFD;
+      box-shadow: 0 4px 16px rgba(31,111,235,.3);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: #8B949E;
+      border: 1px solid #30363D;
+    }
+
+    .btn-ghost:hover { background: #21262D; color: #E6EDF3; border-color: #8B949E; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+    /* ═══════════════════════════════════════════════
+       Table area
+    ═══════════════════════════════════════════════ */
+    .ih-table-wrap {
+      padding: 0 48px 48px;
+      flex: 1;
+    }
+
+    .ih-table-box {
+      background: #161B22;
+      border: 1px solid #21262D;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .ih-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 20px;
+      border-bottom: 1px solid #21262D;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .ih-count {
+      font-size: 12px;
+      color: #8B949E;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .ih-count strong { color: #58A6FF; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      padding: 11px 16px;
+      text-align: left;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #484F58;
+      font-weight: 600;
+      font-family: 'DM Mono', monospace;
+      background: #1C2128;
+      border-bottom: 1px solid #30363D;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      transition: color .15s;
+    }
+
+    thead th:hover { color: #8B949E; }
+    thead th.sorted { color: #58A6FF; }
+
+    .sort-ic { margin-left: 4px; opacity: .35; font-size: 9px; }
+    thead th.sorted .sort-ic { opacity: 1; }
+
+    tbody tr {
+      border-bottom: 1px solid #21262D;
+      transition: background .12s;
+      animation: rowIn .28s ease both;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #1C2128; cursor: pointer; }
+
+    @keyframes rowIn {
+      from { opacity: 0; transform: translateY(3px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    td {
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #C9D1D9;
+      vertical-align: middle;
+    }
+
+    .td-mono  { font-family: 'DM Mono', monospace; font-size: 12px; }
+    .td-right { text-align: right; }
+
+    .td-amount {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      color: #3FB950;
+      font-weight: 500;
+      text-align: right;
+    }
+
+    .td-cae { font-family: 'DM Mono', monospace; font-size: 11px; color: #484F58; }
+    .td-cae.has-cae { color: #58A6FF; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 600;
+      font-family: 'DM Mono', monospace;
+      white-space: nowrap;
+    }
+
+    .badge.ok      { background:#1A3421; color:#3FB950; border:1px solid #2EA043; }
+    .badge.pending { background:#2D2A1A; color:#D29922; border:1px solid #9E6A03; }
+
+    /* States */
+    .ih-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 72px 24px;
+      gap: 14px;
+      color: #484F58;
+    }
+
+    .ih-state-icon  { font-size: 42px; opacity: .45; }
+    .ih-state-title { font-size: 16px; color: #8B949E; font-weight: 500; }
+    .ih-state-sub   { font-size: 13px; color: #484F58; font-weight: 300; text-align: center; max-width: 340px; line-height: 1.65; }
+
+    .spinner {
+      width: 26px; height: 26px;
+      border: 2px solid #21262D;
+      border-top-color: #58A6FF;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Pagination */
+    .ih-pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 14px;
+      border-top: 1px solid #21262D;
+    }
+
+    .pg-btn {
+      width: 30px; height: 30px;
+      border-radius: 6px;
+      border: 1px solid #30363D;
+      background: transparent;
+      color: #8B949E;
+      font-size: 12px;
+      font-family: 'DM Mono', monospace;
+      cursor: pointer;
+      transition: all .15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pg-btn:hover  { background: #21262D; color: #E6EDF3; }
+    .pg-btn.active { background: #1F6FEB; border-color: #1F6FEB; color: white; }
+    .pg-btn:disabled { opacity: .3; cursor: default; }
+
+    /* ═══════════════════════════════════════════════
+       Detail drawer
+    ═══════════════════════════════════════════════ */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.65);
+      backdrop-filter: blur(5px);
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s;
+    }
+
+    .overlay.open { opacity: 1; pointer-events: all; }
+
+    .drawer {
+      position: fixed;
+      right: 0; top: 0; bottom: 0;
+      width: 400px;
+      max-width: 96vw;
+      background: #161B22;
+      border-left: 1px solid #30363D;
+      z-index: 101;
+      transform: translateX(100%);
+      transition: transform .3s cubic-bezier(.22,1,.36,1);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .drawer.open { transform: translateX(0); }
+
+    .drawer-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 22px 24px;
+      border-bottom: 1px solid #21262D;
+      position: sticky;
+      top: 0;
+      background: #161B22;
+      z-index: 1;
+    }
+
+    .drawer-ttl {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.25rem;
+      color: #E6EDF3;
+      font-weight: 400;
+    }
+
+    .drawer-close {
+      background: none;
+      border: 1px solid #30363D;
+      color: #8B949E;
+      width: 30px; height: 30px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+    }
+
+    .drawer-close:hover { background: #21262D; color: #E6EDF3; }
+
+    .drawer-body {
+      padding: 22px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .dsec {
+      background: #0D1117;
+      border: 1px solid #21262D;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .dsec-ttl {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: #484F58;
+      font-weight: 600;
+      font-family: 'DM Mono', monospace;
+      padding: 9px 13px;
+      background: #161B22;
+      border-bottom: 1px solid #21262D;
+    }
+
+    .drow {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 9px 13px;
+      border-bottom: 1px solid #21262D;
+      gap: 10px;
+    }
+
+    .drow:last-child { border-bottom: none; }
+    .dkey { font-size: 12px; color: #8B949E; flex-shrink: 0; }
+    .dval { font-size: 12px; color: #E6EDF3; font-family: 'DM Mono', monospace; text-align: right; word-break: break-all; }
+    .dval.green  { color: #3FB950; }
+    .dval.blue   { color: #58A6FF; }
+
+    /* ═══════════════════════════════════════════════
+       Toast
+    ═══════════════════════════════════════════════ */
+    .toasts {
+      position: fixed;
+      bottom: 22px; right: 22px;
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 200;
+    }
+
+    .toast {
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 10px;
+      padding: 11px 16px;
+      font-size: 13px;
+      color: #E6EDF3;
+      display: flex; align-items: center; gap: 10px;
+      min-width: 240px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.5);
+      animation: toastIn .3s ease both;
+    }
+
+    .toast.ok  { border-color: #2EA043; }
+    .toast.err { border-color: #9E1919; }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(16px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ═══════════════════════════════════════════════
+       Responsive
+    ═══════════════════════════════════════════════ */
+    @media (max-width: 900px) {
+      .ih-header, .ih-stats, .ih-filters, .ih-table-wrap { padding-left: 24px; padding-right: 24px; }
+    }
+
+    @media (max-width: 700px) {
+      .dash-sidebar { display: none; }
+      .ih-header, .ih-stats, .ih-filters, .ih-table-wrap { padding-left: 16px; padding-right: 16px; }
+      .ih-title { font-size: 2rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="dash-root">
+
+  <!-- ── Sidebar ── -->
+  <aside class="dash-sidebar">
+    <div class="dash-brand">
+      <div class="dash-brand-icon">Z</div>
+      <div class="dash-brand-text">
+        <span class="dash-brand-name">ZyM</span>
+        <span class="dash-brand-sub">Accounting</span>
+      </div>
+    </div>
+    <nav class="dash-nav">
+      <div class="dash-nav-section">Módulos</div>
+      <a href="/billing_extractor_n_generator" class="dash-nav-item">
+        <span class="dash-nav-icon">🧾</span>
+        <span>Extractor de Facturas</span>
+      </a>
+      <a href="/invoice_history" class="dash-nav-item active">
+        <span class="dash-nav-icon">📋</span>
+        <span>Facturas Enviadas</span>
+      </a>
+    </nav>
+    <div class="dash-sidebar-footer">
+      <div class="dash-version">v1.0.0</div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="ih-main">
+
+    <!-- Header -->
+    <div class="ih-header">
+      <div class="ih-header-left">
+        <div class="ih-eyebrow">ARCA / AFIP</div>
+        <h1 class="ih-title">Facturas <em>Enviadas</em></h1>
+        <p class="ih-subtitle">Historial de comprobantes tipo C registrados en AFIP</p>
+      </div>
+      <div class="ih-header-actions">
+        <button class="btn btn-ghost" onclick="exportCSV()">⬇ Exportar CSV</button>
+        <button class="btn btn-primary" onclick="load()">↺ Actualizar</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="ih-stats">
+      <div class="ih-stat" style="--c:linear-gradient(90deg,#1F6FEB,#58A6FF)">
+        <div class="ih-stat-label">Total facturas</div>
+        <div class="ih-stat-val blue" id="sTotal">—</div>
+        <div class="ih-stat-sub">en el período</div>
+      </div>
+      <div class="ih-stat" style="--c:linear-gradient(90deg,#2EA043,#3FB950)">
+        <div class="ih-stat-label">Monto total</div>
+        <div class="ih-stat-val green" id="sMonto">—</div>
+        <div class="ih-stat-sub">pesos argentinos</div>
+      </div>
+      <div class="ih-stat" style="--c:linear-gradient(90deg,#9E6A03,#D29922)">
+        <div class="ih-stat-label">Sin CAE</div>
+        <div class="ih-stat-val gold" id="sSinCAE">—</div>
+        <div class="ih-stat-sub">pendientes</div>
+      </div>
+      <div class="ih-stat" style="--c:linear-gradient(90deg,#6E40C9,#8B5CF6)">
+        <div class="ih-stat-label">Clientes únicos</div>
+        <div class="ih-stat-val purple" id="sClientes">—</div>
+        <div class="ih-stat-sub">por CUIT</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="ih-filters">
+      <div class="ih-fg">
+        <label class="ih-flabel">Desde</label>
+        <input type="date" class="ih-input" id="fFrom">
+      </div>
+      <div class="ih-fg">
+        <label class="ih-flabel">Hasta</label>
+        <input type="date" class="ih-input" id="fTo">
+      </div>
+      <div class="ih-fg">
+        <label class="ih-flabel">N° Comprobante</label>
+        <input type="text" class="ih-input" id="fComp" placeholder="C00002-…" style="min-width:190px">
+      </div>
+      <div class="ih-fg">
+        <label class="ih-flabel">CUIT Cliente</label>
+        <input type="text" class="ih-input" id="fCuit" placeholder="20-…" style="min-width:160px">
+      </div>
+      <div class="ih-fg">
+        <label class="ih-flabel">Estado</label>
+        <select class="ih-input" id="fEstado">
+          <option value="">Todos</option>
+          <option value="ok">Con CAE</option>
+          <option value="pending">Sin CAE</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="applyFilters()">Buscar</button>
+      <button class="btn btn-ghost"  onclick="clearFilters()">Limpiar</button>
+    </div>
+
+    <!-- Table -->
+    <div class="ih-table-wrap">
+      <div class="ih-table-box">
+
+        <div class="ih-toolbar">
+          <span class="ih-count" id="ihCount">Cargando…</span>
+          <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
+        </div>
+
+        <div id="ihTableBody">
+          <div class="ih-state">
+            <div class="spinner"></div>
+            <div class="ih-state-title">Consultando AFIP…</div>
+          </div>
+        </div>
+
+        <div class="ih-pagination" id="ihPag"></div>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Detail drawer -->
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-hdr">
+    <span class="drawer-ttl" id="drawerTitle">Detalle</span>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</div>
+
+<!-- Toasts -->
+<div class="toasts" id="toasts"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+let all       = [];
+let filtered  = [];
+let page      = 1;
+const PER     = 25;
+let sortKey   = 'fecha_emision';
+let sortDir   = -1;
+
+// ── Boot ──────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const now   = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth(), 1);
+  document.getElementById('fFrom').value = iso(first);
+  document.getElementById('fTo').value   = iso(now);
+  load();
+});
+
+// ── Data ───────────────────────────────────────────────────────────
+async function load() {
+  showLoading();
+  const from = document.getElementById('fFrom').value;
+  const to   = document.getElementById('fTo').value;
+  const qs   = new URLSearchParams();
+  if (from) qs.set('from', from);
+  if (to)   qs.set('to',   to);
+  try {
+    const res  = await fetch(`/invoice_history/list?${qs}`);
+    const data = await res.json();
+
+    if (data.status === 'not_configured') {
+      showMsg('⚙️', 'ARCA no configurado',
+        data.message || 'Revisá las variables ARCA_* en el .env');
+      document.getElementById('ihCount').textContent = 'Sin configuración';
+      return;
+    }
+    if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+
+    all = data.invoices || [];
+    applyFilters();
+    toast(`✅ ${all.length} facturas cargadas`, 'ok');
+  } catch (e) {
+    showMsg('⚠️', 'Error al cargar', e.message);
+    document.getElementById('ihCount').textContent = 'Error';
+    toast(`❌ ${e.message}`, 'err');
+  }
+}
+
+// ── Filters ────────────────────────────────────────────────────────
+function applyFilters() {
+  const comp   = document.getElementById('fComp').value.trim().toLowerCase();
+  const cuit   = document.getElementById('fCuit').value.trim().toLowerCase();
+  const estado = document.getElementById('fEstado').value;
+
+  filtered = all.filter(inv => {
+    if (comp   && !inv.comp_nro?.toLowerCase().includes(comp))     return false;
+    if (cuit   && !inv.cuit_cliente?.toLowerCase().includes(cuit)) return false;
+    if (estado === 'ok'      && !inv.cae_number) return false;
+    if (estado === 'pending' &&  inv.cae_number) return false;
+    return true;
+  });
+
+  filtered.sort((a, b) => {
+    let va = a[sortKey] ?? '', vb = b[sortKey] ?? '';
+    if (sortKey === 'amount') { va = +va||0; vb = +vb||0; }
+    return va < vb ? -sortDir : va > vb ? sortDir : 0;
+  });
+
+  page = 1;
+  renderStats();
+  renderTable();
+  renderPag();
+}
+
+function clearFilters() {
+  ['fComp','fCuit'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('fEstado').value = '';
+  applyFilters();
+}
+
+function setSort(key) {
+  sortDir = sortKey === key ? sortDir * -1 : -1;
+  sortKey = key;
+  applyFilters();
+}
+
+// ── Stats ──────────────────────────────────────────────────────────
+function renderStats() {
+  const total   = filtered.length;
+  const monto   = filtered.reduce((s,i) => s + (+i.amount||0), 0);
+  const sinCae  = filtered.filter(i => !i.cae_number).length;
+  const clients = new Set(filtered.map(i=>i.cuit_cliente).filter(Boolean)).size;
+
+  document.getElementById('sTotal').textContent   = total;
+  document.getElementById('sMonto').textContent   = '$ ' + ar(monto);
+  document.getElementById('sSinCAE').textContent  = sinCae;
+  document.getElementById('sClientes').textContent = clients;
+}
+
+// ── Table ──────────────────────────────────────────────────────────
+const COLS = [
+  { key:'fecha_emision', label:'Fecha' },
+  { key:'comp_nro',      label:'Comprobante' },
+  { key:'cuit_cliente',  label:'CUIT Cliente' },
+  { key:'amount',        label:'Importe' },
+  { key:'cae_number',    label:'CAE' },
+  { key:'vencimiento',   label:'Vto. CAE' },
+  { key:'_status',       label:'Estado' },
+];
+
+function renderTable() {
+  const start = (page-1)*PER;
+  const slice = filtered.slice(start, start+PER);
+
+  const n = filtered.length;
+  document.getElementById('ihCount').innerHTML =
+    n === 0
+      ? 'Sin resultados'
+      : `Mostrando <strong>${start+1}–${Math.min(start+PER,n)}</strong> de <strong>${n}</strong>`;
+
+  if (!n) {
+    document.getElementById('ihTableBody').innerHTML = `
+      <div class="ih-state">
+        <div class="ih-state-icon">🔍</div>
+        <div class="ih-state-title">Sin resultados</div>
+        <div class="ih-state-sub">No hay facturas con los filtros aplicados.</div>
+      </div>`;
+    return;
+  }
+
+  const th = COLS.map(c => `
+    <th onclick="setSort('${c.key}')" class="${sortKey===c.key?'sorted':''}">
+      ${c.label}
+      <span class="sort-ic">${sortKey===c.key?(sortDir>0?'▲':'▼'):'↕'}</span>
+    </th>`).join('') + '<th></th>';
+
+  const rows = slice.map((inv, i) => {
+    const hasCae = !!inv.cae_number;
+    const badge  = hasCae
+      ? `<span class="badge ok">✓ Con CAE</span>`
+      : `<span class="badge pending">⏳ Sin CAE</span>`;
+    const caeCell = hasCae
+      ? `<span class="td-cae has-cae">${inv.cae_number}</span>`
+      : `<span class="td-cae">—</span>`;
+
+    return `
+    <tr style="animation-delay:${i*.025}s" onclick="openDrawer(${JSON.stringify(inv).replace(/'/g,"&#39;")})">
+      <td class="td-mono">${inv.fecha_emision||'—'}</td>
+      <td class="td-mono">${inv.comp_nro||'—'}</td>
+      <td class="td-mono" style="color:#8B949E">${inv.cuit_cliente||'—'}</td>
+      <td class="td-amount">$ ${ar(+inv.amount||0)}</td>
+      <td>${caeCell}</td>
+      <td class="td-mono" style="color:#8B949E;font-size:11px">${inv.vencimiento||'—'}</td>
+      <td>${badge}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openDrawer(${JSON.stringify(inv).replace(/'/g,"&#39;")})">→</button></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ihTableBody').innerHTML =
+    `<table><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── Pagination ─────────────────────────────────────────────────────
+function renderPag() {
+  const total = Math.ceil(filtered.length / PER);
+  if (total <= 1) { document.getElementById('ihPag').innerHTML=''; return; }
+  let h = `<button class="pg-btn" onclick="goPage(${page-1})" ${page===1?'disabled':''}>‹</button>`;
+  for (let p=1; p<=total; p++) {
+    if (p===1||p===total||Math.abs(p-page)<=1)
+      h += `<button class="pg-btn ${p===page?'active':''}" onclick="goPage(${p})">${p}</button>`;
+    else if (Math.abs(p-page)===2)
+      h += `<span style="color:#484F58;padding:0 3px">…</span>`;
+  }
+  h += `<button class="pg-btn" onclick="goPage(${page+1})" ${page===total?'disabled':''}>›</button>`;
+  document.getElementById('ihPag').innerHTML = h;
+}
+
+function goPage(p) {
+  const total = Math.ceil(filtered.length / PER);
+  if (p<1||p>total) return;
+  page = p;
+  renderTable();
+  renderPag();
+  document.querySelector('.ih-table-box').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ── Drawer ─────────────────────────────────────────────────────────
+function openDrawer(inv) {
+  document.getElementById('drawerTitle').textContent = inv.comp_nro || 'Detalle';
+  const hasCae = !!inv.cae_number;
+  const badge  = hasCae
+    ? `<span class="badge ok">✓ Con CAE</span>`
+    : `<span class="badge pending">⏳ Sin CAE</span>`;
+
+  document.getElementById('drawerBody').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <span class="td-mono" style="font-size:1rem;color:#E6EDF3">${inv.comp_nro||'—'}</span>
+      ${badge}
+    </div>
+
+    <div class="dsec">
+      <div class="dsec-ttl">Comprobante</div>
+      <div class="drow"><span class="dkey">Punto de venta</span><span class="dval">${inv.punto_venta||'—'}</span></div>
+      <div class="drow"><span class="dkey">Nro. factura</span><span class="dval">${inv.invoice_number||'—'}</span></div>
+      <div class="drow"><span class="dkey">Fecha emisión</span><span class="dval">${inv.fecha_emision||'—'}</span></div>
+      <div class="drow"><span class="dkey">Importe</span><span class="dval green">$ ${ar(+inv.amount||0)}</span></div>
+    </div>
+
+    <div class="dsec">
+      <div class="dsec-ttl">Cliente</div>
+      <div class="drow"><span class="dkey">CUIT</span><span class="dval">${inv.cuit_cliente||'—'}</span></div>
+      ${inv.razon_social_cliente
+        ? `<div class="drow"><span class="dkey">Razón social</span><span class="dval" style="font-family:'Outfit',sans-serif">${inv.razon_social_cliente}</span></div>`
+        : `<div class="drow"><span class="dkey">Razón social</span><span class="dval" style="color:#484F58;font-family:'Outfit',sans-serif">No disponible en AFIP</span></div>`}
+    </div>
+
+    <div class="dsec">
+      <div class="dsec-ttl">AFIP / ARCA</div>
+      <div class="drow"><span class="dkey">CAE</span><span class="dval blue">${inv.cae_number||'—'}</span></div>
+      <div class="drow"><span class="dkey">Vto. CAE</span><span class="dval">${inv.vencimiento||'—'}</span></div>
+      <div class="drow"><span class="dkey">Resultado</span><span class="dval">${inv.resultado||'—'}</span></div>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeDrawer(); });
+
+// ── CSV Export ─────────────────────────────────────────────────────
+function exportCSV() {
+  if (!filtered.length) { toast('Sin datos para exportar','err'); return; }
+  const cols = ['fecha_emision','comp_nro','cuit_cliente','amount','cae_number','vencimiento','resultado'];
+  const hdr  = cols.join(',');
+  const rows = filtered.map(inv =>
+    cols.map(c=>`"${(inv[c]??'').toString().replace(/"/g,'""')}"`).join(',')
+  );
+  const blob = new Blob([hdr+'\n'+rows.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `facturas_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('✅ CSV exportado','ok');
+}
+
+// ── UI helpers ─────────────────────────────────────────────────────
+function showLoading() {
+  document.getElementById('ihTableBody').innerHTML = `
+    <div class="ih-state">
+      <div class="spinner"></div>
+      <div class="ih-state-title">Consultando AFIP…</div>
+      <div class="ih-state-sub">Puede tomar unos segundos dependiendo del volumen.</div>
+    </div>`;
+  document.getElementById('ihCount').textContent = 'Cargando…';
+  document.getElementById('ihPag').innerHTML = '';
+}
+
+function showMsg(icon, title, sub) {
+  document.getElementById('ihTableBody').innerHTML = `
+    <div class="ih-state">
+      <div class="ih-state-icon">${icon}</div>
+      <div class="ih-state-title">${title}</div>
+      <div class="ih-state-sub">${sub}</div>
+    </div>`;
+}
+
+function ar(v) {
+  return v.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function iso(d) { return d.toISOString().slice(0,10); }
+
+function toast(msg, type='ok') {
+  const c  = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(()=>el.remove(), 4200);
+}
+</script>
+</body>
+</html>

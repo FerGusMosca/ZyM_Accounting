@@ -8,6 +8,7 @@ from common.config.settings import get_settings
 from controllers.billing_extractor_n_generator_controller import BillingExtractorNGeneratorController
 from starlette.middleware.sessions import SessionMiddleware
 
+from controllers.invoice_history_controller import InvoiceHistoryController
 
 settings = get_settings()
 app = FastAPI()
@@ -32,6 +33,10 @@ async def main_page(request: Request):
 # ===========================
 billing_extractor_n_generator= BillingExtractorNGeneratorController()
 app.include_router(billing_extractor_n_generator.router)
+
+
+bills_history= InvoiceHistoryController()
+app.include_router(bills_history.router)
 
 
 
