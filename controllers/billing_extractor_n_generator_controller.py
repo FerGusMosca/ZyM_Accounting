@@ -152,14 +152,11 @@ def _build_invoice_html(row: dict, emisor: dict, copy_label: str = "ORIGINAL") -
         if dni else ""
     )
 
-    cae_row = (
-        f'<div class="inv-footer-row"><strong>CAE N°:</strong> {row["cae_number"]}</div>'
-        if row.get("cae_number") else ""
-    )
+    cae_row = row["cae_number"] if row.get("cae_number") else "Sin CAE registrado"
 
     tokens = {
         "{{COPY_LABEL}}":            copy_label,
-        "{{LOGO_TAG}}":              logo_tag,
+        "{{LOGO_TAG}}":              logo_tag,   # no-op si template ya tiene logo embebido
         "{{EMISOR_RAZON_SOCIAL}}":   emisor["razon_social"],
         "{{EMISOR_DOMICILIO}}":      emisor["domicilio"],
         "{{EMISOR_COND_IVA}}":       emisor["cond_iva"],
