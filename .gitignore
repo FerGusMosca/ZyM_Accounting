@@ -45,6 +45,9 @@ config/deploy_config/
 *.xlsx
 *.parquet
 
+# Excepción: archivos estáticos que SÍ deben subirse al repo
+!static/downloads/modelo_facturacion.xlsx
+
 # Archivos de debugging
 debug/
 logs/
