@@ -8,6 +8,7 @@ from common.config.settings import get_settings
 from controllers.billing_extractor_n_generator_controller import BillingExtractorNGeneratorController
 from starlette.middleware.sessions import SessionMiddleware
 
+from controllers.dashboard_controller import DashboardController
 from controllers.invoice_history_controller import InvoiceHistoryController
 
 settings = get_settings()
@@ -31,6 +32,10 @@ async def main_page(request: Request):
 # ===========================
 #       CONTROLLERS
 # ===========================
+
+main_dashboard= DashboardController()
+app.include_router(main_dashboard.router)
+
 billing_extractor_n_generator= BillingExtractorNGeneratorController()
 app.include_router(billing_extractor_n_generator.router)
 

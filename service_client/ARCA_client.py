@@ -529,6 +529,35 @@ class ARCAClient:
         t = self._get_token()
         return wsfe_get_last_invoice_number(t["token"], t["sign"], self.cuit, punto_venta, self.homo)
 
+    def get_recent_invoices(self, limit: int = 10, sales_points: Optional[list[int]] = None) -> list[dict]:
+        """
+        Fetch the last `limit` invoices across all sales points by number,
+        without any date filtering. Used for the dashboard widget.
+        """
+        pvs = sales_points or [1, 2]
+        t = self._get_token()
+        candidates: list[dict] = []
+
+        for pv in pvs:
+            try:
+                last = wsfe_get_last_invoice_number(t["token"], t["sign"], self.cuit, pv, self.homo)
+                if last == 0:
+                    continue
+                # Solo fetchear los últimos `limit` de cada PV
+                from_n = max(1, last - limit + 1)
+                invs = wsfe_query_invoices_range(
+                    t["token"], t["sign"], self.cuit, pv, from_n, last, self.homo
+                )
+                candidates.extend(invs)
+            except Exception as exc:
+                logger.warning("WSFE: get_recent_invoices PV=%s error: %s", pv, exc)
+
+        candidates.sort(
+            key=lambda x: (x.get("fecha_emision", ""), x.get("invoice_number", 0)),
+            reverse=True,
+        )
+        return candidates[:limit]
+
     def get_invoices(
         self,
         from_date: Optional[str] = None,        # "YYYY-MM-DD", defaults to 30 days ago

@@ -9,6 +9,109 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/main.css">
   <link rel="stylesheet" href="/static/css/main_dashboard.css">
+  <style>
+    /* ── Ledger widget ── */
+    .dash-ledger {
+      background: #161B22;
+      border: 1px solid #21262D;
+      border-radius: 14px;
+      overflow: hidden;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .dash-ledger-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr auto;
+      padding: 9px 16px;
+      background: #1C2128;
+      border-bottom: 1px solid #30363D;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: #484F58;
+      font-weight: 600;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .dash-ledger-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr auto;
+      padding: 9px 16px;
+      border-bottom: 1px solid #21262D;
+      font-size: 12px;
+      align-items: center;
+      animation: rowIn .3s ease both;
+      transition: background .12s;
+    }
+
+    .dash-ledger-row:last-child { border-bottom: none; }
+    .dash-ledger-row:hover { background: #1C2128; }
+
+    @keyframes rowIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .dash-ledger-total {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr auto;
+      padding: 10px 16px;
+      border-top: 1px solid #30363D;
+      background: #1C2128;
+      font-size: 12px;
+      align-items: center;
+    }
+
+    .dash-ledger-loading {
+      padding: 32px 16px;
+      text-align: center;
+      color: #484F58;
+      font-size: 12px;
+      font-family: 'DM Mono', monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .dash-ledger-err {
+      padding: 24px 16px;
+      text-align: center;
+      color: #484F58;
+      font-size: 12px;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .mono  { font-family: 'DM Mono', monospace; }
+    .green { color: #3FB950; }
+    .bold  { font-weight: 600; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 9px;
+      font-weight: 600;
+      font-family: 'DM Mono', monospace;
+      white-space: nowrap;
+    }
+    .badge.ok      { background:#1A3421; color:#3FB950; border:1px solid #2EA043; }
+    .badge.pending { background:#2D2A1A; color:#D29922; border:1px solid #9E6A03; }
+    .badge.homo    { background:#1E1535; color:#8B5CF6; border:1px solid #6E40C9; }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid #21262D;
+      border-top-color: #58A6FF;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
 
@@ -16,7 +119,6 @@
 
   <!-- ── LEFT SIDEBAR ── -->
   <aside class="dash-sidebar">
-
     <div class="dash-brand">
       <div class="dash-brand-icon">Z</div>
       <div class="dash-brand-text">
@@ -24,7 +126,6 @@
         <span class="dash-brand-sub">Accounting</span>
       </div>
     </div>
-
     <nav class="dash-nav">
       <div class="dash-nav-section">Módulos</div>
       <a href="/billing_extractor_n_generator" class="dash-nav-item">
@@ -36,11 +137,9 @@
         <span>Facturas Enviadas</span>
       </a>
     </nav>
-
     <div class="dash-sidebar-footer">
       <div class="dash-version">v1.0.0</div>
     </div>
-
   </aside>
 
   <!-- ── MAIN CONTENT ── -->
@@ -57,45 +156,25 @@
         </a>
       </div>
 
-      <!-- Decorative accounting grid -->
-      <div class="dash-hero-visual" aria-hidden="true">
+      <!-- Live invoices ledger -->
+      <div class="dash-hero-visual" aria-hidden="false">
         <div class="dash-ledger">
           <div class="dash-ledger-header">
-            <span>Comprobante</span><span>Cliente</span><span>Importe</span><span>Estado</span>
+            <span>Comprobante</span>
+            <span>CUIT</span>
+            <span>Importe</span>
+            <span>Estado</span>
           </div>
-          <div class="dash-ledger-row" style="animation-delay:0.1s">
-            <span class="mono">C00002-00000149</span>
-            <span>MORVILLO F.</span>
-            <span class="green mono">$ 2.000.000</span>
-            <span class="badge ok">✓</span>
+          <div id="ledgerBody">
+            <div class="dash-ledger-loading">
+              <div class="spinner"></div>
+              Consultando AFIP…
+            </div>
           </div>
-          <div class="dash-ledger-row" style="animation-delay:0.2s">
-            <span class="mono">C00002-00000148</span>
-            <span>MONICA</span>
-            <span class="green mono">$ 160.000</span>
-            <span class="badge ok">✓</span>
-          </div>
-          <div class="dash-ledger-row" style="animation-delay:0.3s">
-            <span class="mono">C00001-00000496</span>
-            <span>BERTOL A.</span>
-            <span class="green mono">$ 602.000</span>
-            <span class="badge ok">✓</span>
-          </div>
-          <div class="dash-ledger-row" style="animation-delay:0.4s">
-            <span class="mono">C00001-00000495</span>
-            <span>M. REISSIAN</span>
-            <span class="green mono">$ 646.177</span>
-            <span class="badge ok">✓</span>
-          </div>
-          <div class="dash-ledger-row" style="animation-delay:0.5s">
-            <span class="mono">C00002-00000147</span>
-            <span>MONICA</span>
-            <span class="green mono">$ 137.520</span>
-            <span class="badge pending">⏳</span>
-          </div>
-          <div class="dash-ledger-total">
-            <span colspan="2">Total</span>
-            <span class="green mono bold">$ 3.545.697</span>
+          <div class="dash-ledger-total" id="ledgerTotal" style="display:none">
+            <span class="mono" style="color:#8B949E;font-size:11px" colspan="2">Total (últimas 10)</span>
+            <span></span>
+            <span class="green mono bold" id="ledgerTotalVal">—</span>
             <span></span>
           </div>
         </div>
@@ -135,6 +214,63 @@
 
   </main>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', loadRecentInvoices);
+
+async function loadRecentInvoices() {
+  try {
+    const res  = await fetch('/dashboard/recent_invoices?limit=10');
+    const data = await res.json();
+
+    if (data.status !== 'ok' || !data.invoices?.length) {
+      document.getElementById('ledgerBody').innerHTML =
+        `<div class="dash-ledger-err">Sin facturas recientes</div>`;
+      return;
+    }
+
+    const invoices = data.invoices;
+    const total    = invoices.reduce((s, i) => s + (+i.amount || 0), 0);
+
+    const rows = invoices.map((inv, idx) => {
+      const badge = inv.cae_number
+        ? `<span class="badge ok">✓</span>`
+        : inv.homo_no_cae
+          ? `<span class="badge homo">🧪</span>`
+          : `<span class="badge pending">⏳</span>`;
+
+      // Mostrar solo los últimos 9 dígitos del CUIT para que entre
+      const cuitShort = inv.cuit_cliente
+        ? inv.cuit_cliente.replace(/-/g, '').slice(-9)
+        : '—';
+
+      const amount = (+inv.amount || 0).toLocaleString('es-AR', {
+        minimumFractionDigits: 0, maximumFractionDigits: 0
+      });
+
+      return `
+        <div class="dash-ledger-row" style="animation-delay:${idx * .04}s">
+          <span class="mono" style="font-size:11px;color:#C9D1D9">${inv.comp_nro || '—'}</span>
+          <span class="mono" style="font-size:11px;color:#8B949E">${cuitShort}</span>
+          <span class="green mono">$ ${amount}</span>
+          ${badge}
+        </div>`;
+    }).join('');
+
+    document.getElementById('ledgerBody').innerHTML = rows;
+
+    const totalFmt = total.toLocaleString('es-AR', {
+      minimumFractionDigits: 0, maximumFractionDigits: 0
+    });
+    document.getElementById('ledgerTotalVal').textContent = `$ ${totalFmt}`;
+    document.getElementById('ledgerTotal').style.display  = 'grid';
+
+  } catch (e) {
+    document.getElementById('ledgerBody').innerHTML =
+      `<div class="dash-ledger-err">Error al cargar: ${e.message}</div>`;
+  }
+}
+</script>
 
 </body>
 </html>
