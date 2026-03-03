@@ -17,7 +17,8 @@
 
 <nav class="navbar">
   <ul>
-    <li><a href="/">🏠 Inicio</a></li>
+    <!-- FIX #2: ZyM Accounting lleva a la landing -->
+    <li><a href="/">🏠 ZyM Accounting</a></li>
   </ul>
 </nav>
 
@@ -67,7 +68,6 @@
       </div>
       <div class="beg-control-group">
         <label>Condición IVA Emisor</label>
-        <!-- Bloqueado: el valor viene del .env (emisor_cond_iva) -->
         <select id="inputCondIVA" class="beg-input beg-input-locked" disabled>
           <option value="Responsable Monotributo">Responsable Monotributo</option>
           <option value="Responsable Inscripto">Responsable Inscripto</option>
@@ -108,6 +108,8 @@
               <th>Descripción</th>
               <th>Importe</th>
               <th>Vencimiento</th>
+              <th style="text-align:center;width:36px">PDF</th>
+              <th style="text-align:center;width:36px">ARCA</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -128,7 +130,7 @@
   </div>
 </div>
 
-<!-- Modal de factura (Vista previa PDF) -->
+<!-- Modal de factura (Vista previa PDF — solo desde botón 👁) -->
 <div id="invoiceModal" class="beg-modal beg-hidden">
   <div class="beg-modal-content beg-modal-large">
     <div class="beg-modal-header">

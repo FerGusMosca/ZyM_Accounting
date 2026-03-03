@@ -537,3 +537,21 @@
   background: #1f4878;
   border-color: #58A6FF;
 }
+
+/* ── Status dots ── */
+.row-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #30363D;
+  vertical-align: middle;
+}
+.row-status-ok    { background: #3FB950; box-shadow: 0 0 4px #3FB95066; }
+.row-status-error { background: #F85149; box-shadow: 0 0 4px #F8514966; }
+.row-status-loading {
+  background: transparent;
+  border: 2px solid #58A6FF;
+  border-top-color: transparent;
+  animation: spin .7s linear infinite;
+}
