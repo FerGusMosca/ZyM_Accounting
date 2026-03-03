@@ -305,6 +305,8 @@ def wsfe_query_invoice(
 </FECompConsultar>
 """
     raw  = _soap_call(host, path, f"{_WSFE_ACT}FECompConsultar", body)
+    logger.info("WSFE: PV=%s NRO=%s — homo: Resultado=A pero sin CAE (esperado)", punto_venta, invoice_number)
+
     root = ET.fromstring(raw)
     _xml_raise_fault(root)
 
@@ -320,8 +322,13 @@ def wsfe_query_invoice(
     if doc_nro and len(doc_nro) == 11:
         cuit_fmt = f"{doc_nro[0:2]}-{doc_nro[2:10]}-{doc_nro[10]}"
 
+    homo_no_cae = homo and resultado == "A" and not cae
+    if homo_no_cae:
+        logger.info("WSFE: PV=%s NRO=%s — homo: Resultado=A pero sin CAE (esperado)", ...)
+
     return {
         "comp_nro":             f"C{punto_venta:05d}-{invoice_number:08d}",
+        "homo_no_cae": homo_no_cae,
         "punto_venta":          punto_venta,
         "invoice_number":       invoice_number,
         "fecha_emision":        _fmt_date_afip(fecha_raw),
