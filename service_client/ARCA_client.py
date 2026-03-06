@@ -513,7 +513,7 @@ class ARCAClient:
                 _delete_token_from_disk(self.cuit, self.homo)
                 self._mem_cache = None
                 raise RuntimeError(
-                    "AFIP reports an active token that is not available in local cache "
+                    "ARCA reports an active token that is not available in local cache "
                     "(the process likely restarted before the previous token expired). "
                     "This resolves automatically when the token expires (~12h after last "
                     "authentication). If you need to operate now, wait a few minutes and retry."

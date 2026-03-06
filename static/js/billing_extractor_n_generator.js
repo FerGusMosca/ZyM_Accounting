@@ -585,7 +585,7 @@ function loadJSZip() {
 window.registrarEnArca = async function(idx) {
   const row = state.rows[idx];
   arcaConsoleOpen(row.comp_nro);
-  arcaLog('⏳ Iniciando comunicación con ARCA/AFIP...');
+  arcaLog('⏳ Iniciando comunicación con ARCA...');
 
   try {
     const resp = await fetch('/billing_extractor_n_generator/registrar_arca', {

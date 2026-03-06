@@ -218,7 +218,7 @@ function openDrawer(inv) {
          <span class="dkey" style="color:#D29922">ℹ️ Nota</span>
          <span class="dval" style="color:#D29922;font-family:'Outfit',sans-serif;font-size:11px;line-height:1.5">
            Esta factura fue registrada en ARCA pero el CAE no fue almacenado localmente.
-           El CAE real puede consultarse directamente en el portal de AFIP.
+           El CAE real puede consultarse directamente en el portal de ARCA.
          </span>
        </div>`
     : '';
@@ -242,11 +242,11 @@ function openDrawer(inv) {
       <div class="drow"><span class="dkey">CUIT</span><span class="dval">${inv.cuit_cliente||'—'}</span></div>
       ${inv.razon_social_cliente
         ? `<div class="drow"><span class="dkey">Razón social</span><span class="dval" style="font-family:'Outfit',sans-serif">${inv.razon_social_cliente}</span></div>`
-        : `<div class="drow"><span class="dkey">Razón social</span><span class="dval" style="color:#484F58;font-family:'Outfit',sans-serif">No disponible en AFIP</span></div>`}
+        : `<div class="drow"><span class="dkey">Razón social</span><span class="dval" style="color:#484F58;font-family:'Outfit',sans-serif">No disponible en ARCA</span></div>`}
     </div>
 
     <div class="dsec">
-      <div class="dsec-ttl">AFIP / ARCA</div>
+      <div class="dsec-ttl">ARCA</div>
       <div class="drow"><span class="dkey">CAE</span><span class="dval blue">${inv.cae_number||'—'}</span></div>
       <div class="drow"><span class="dkey">Vto. CAE</span><span class="dval">${inv.vencimiento||'—'}</span></div>
       <div class="drow"><span class="dkey">Resultado</span><span class="dval">${inv.resultado||'—'}</span></div>
@@ -293,7 +293,7 @@ function showLoading() {
   document.getElementById('ihTableBody').innerHTML = `
     <div class="ih-state">
       <div class="spinner"></div>
-      <div class="ih-state-title">Consultando AFIP…</div>
+      <div class="ih-state-title">Consultando ARCA…</div>
       <div class="ih-state-sub">Puede tomar unos segundos dependiendo del volumen.</div>
     </div>`;
   document.getElementById('ihCount').textContent = 'Cargando…';

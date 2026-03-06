@@ -10,107 +10,235 @@
   <link rel="stylesheet" href="/static/css/main.css">
   <link rel="stylesheet" href="/static/css/main_dashboard.css">
   <style>
-    /* ── Ledger widget ── */
-    .dash-ledger {
+    /* ── KPI Strip ── */
+    .dash-kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: #21262D;
+      border-bottom: 1px solid #21262D;
+    }
+
+    .dash-kpi {
+      background: #0D1117;
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .dash-kpi::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 32px; right: 32px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #1F6FEB44, transparent);
+    }
+
+    .dash-kpi-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #484F58;
+      font-family: 'DM Mono', monospace;
+      font-weight: 600;
+    }
+
+    .dash-kpi-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 26px;
+      color: #E6EDF3;
+      font-weight: 500;
+      line-height: 1;
+      min-height: 32px;
+    }
+
+    .dash-kpi-value.loading {
+      background: #21262D;
+      border-radius: 4px;
+      color: transparent;
+      width: 80px;
+      animation: pulse 1.4s ease infinite;
+    }
+
+    .dash-kpi-sub {
+      font-size: 11px;
+      color: #484F58;
+      font-family: 'DM Mono', monospace;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50%       { opacity: 0.8; }
+    }
+
+    /* ── ARCA Status panel ── */
+    .dash-bottom {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      min-height: 320px;
+    }
+
+    .dash-panel {
+      padding: 36px 48px;
+      border-right: 1px solid #21262D;
+    }
+
+    .dash-panel:last-child {
+      border-right: none;
+    }
+
+    .dash-panel-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #484F58;
+      font-family: 'DM Mono', monospace;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dash-panel-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #21262D;
+    }
+
+    /* ARCA status indicator */
+    .arca-status-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 0;
+      border-bottom: 1px solid #161B22;
+    }
+
+    .arca-status-row:last-child {
+      border-bottom: none;
+    }
+
+    .arca-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .arca-dot.green  { background: #3FB950; box-shadow: 0 0 6px #3FB95088; }
+    .arca-dot.yellow { background: #D29922; box-shadow: 0 0 6px #D2992288; }
+    .arca-dot.red    { background: #F85149; box-shadow: 0 0 6px #F8514988; }
+    .arca-dot.gray   { background: #484F58; }
+    .arca-dot.pulse  { animation: dotPulse 1.5s ease infinite; }
+
+    @keyframes dotPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .arca-status-label {
+      font-size: 13px;
+      color: #C9D1D9;
+      font-weight: 500;
+      flex: 1;
+    }
+
+    .arca-status-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: #484F58;
+    }
+
+    .arca-status-value.ok     { color: #3FB950; }
+    .arca-status-value.warn   { color: #D29922; }
+    .arca-status-value.error  { color: #F85149; }
+
+    /* Noticias / actividad reciente */
+    .dash-activity-item {
+      display: flex;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid #161B22;
+      align-items: flex-start;
+    }
+
+    .dash-activity-item:last-child {
+      border-bottom: none;
+    }
+
+    .dash-activity-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
       background: #161B22;
       border: 1px solid #21262D;
-      border-radius: 14px;
-      overflow: hidden;
-      width: 100%;
-      max-width: 520px;
-    }
-
-    .dash-ledger-header {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr auto;
-      padding: 9px 16px;
-      background: #1C2128;
-      border-bottom: 1px solid #30363D;
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: #484F58;
-      font-weight: 600;
-      font-family: 'DM Mono', monospace;
-    }
-
-    .dash-ledger-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr auto;
-      padding: 9px 16px;
-      border-bottom: 1px solid #21262D;
-      font-size: 12px;
-      align-items: center;
-      animation: rowIn .3s ease both;
-      transition: background .12s;
-    }
-
-    .dash-ledger-row:last-child { border-bottom: none; }
-    .dash-ledger-row:hover { background: #1C2128; }
-
-    @keyframes rowIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .dash-ledger-total {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr auto;
-      padding: 10px 16px;
-      border-top: 1px solid #30363D;
-      background: #1C2128;
-      font-size: 12px;
-      align-items: center;
-    }
-
-    .dash-ledger-loading {
-      padding: 32px 16px;
-      text-align: center;
-      color: #484F58;
-      font-size: 12px;
-      font-family: 'DM Mono', monospace;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
+      font-size: 13px;
+      flex-shrink: 0;
+      margin-top: 1px;
     }
 
-    .dash-ledger-err {
-      padding: 24px 16px;
-      text-align: center;
+    .dash-activity-body {
+      flex: 1;
+    }
+
+    .dash-activity-text {
+      font-size: 12.5px;
+      color: #C9D1D9;
+      line-height: 1.5;
+      margin-bottom: 3px;
+    }
+
+    .dash-activity-meta {
+      font-size: 10.5px;
       color: #484F58;
-      font-size: 12px;
       font-family: 'DM Mono', monospace;
     }
 
-    .mono  { font-family: 'DM Mono', monospace; }
-    .green { color: #3FB950; }
-    .bold  { font-weight: 600; }
+    /* Hero sin widget de la derecha — full width content */
+    .dash-hero {
+      grid-template-columns: 1fr !important;
+    }
 
-    .badge {
+    .dash-hero-content {
+      max-width: 600px;
+    }
+
+    .dash-hero-visual {
+      display: none !important;
+    }
+
+    /* Ambiente badge */
+    .env-badge {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      padding: 2px 8px;
+      gap: 6px;
+      padding: 3px 10px;
       border-radius: 20px;
-      font-size: 9px;
-      font-weight: 600;
+      font-size: 10px;
       font-family: 'DM Mono', monospace;
-      white-space: nowrap;
+      font-weight: 600;
     }
-    .badge.ok      { background:#1A3421; color:#3FB950; border:1px solid #2EA043; }
-    .badge.pending { background:#2D2A1A; color:#D29922; border:1px solid #9E6A03; }
-    .badge.homo    { background:#1E1535; color:#8B5CF6; border:1px solid #6E40C9; }
 
-    .spinner {
-      width: 16px; height: 16px;
-      border: 2px solid #21262D;
-      border-top-color: #58A6FF;
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      flex-shrink: 0;
+    .env-badge.homo {
+      background: #1E1535;
+      color: #8B5CF6;
+      border: 1px solid #6E40C944;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .env-badge.prod {
+      background: #1A3421;
+      color: #3FB950;
+      border: 1px solid #2EA04344;
+    }
   </style>
 </head>
 <body>
@@ -145,130 +273,253 @@
   <!-- ── MAIN CONTENT ── -->
   <main class="dash-main">
 
-    <!-- Hero section -->
+    <!-- Hero — full width, sin widget -->
     <section class="dash-hero">
       <div class="dash-hero-content">
         <div class="dash-hero-eyebrow">Sistema Contable</div>
         <h1 class="dash-hero-title">ZyM <em>Accounting</em></h1>
         <p class="dash-hero-subtitle">Gestión de facturación, generación de comprobantes y trazabilidad contable para SERVICONS.</p>
-        <a href="/billing_extractor_n_generator" class="dash-hero-cta">
-          Ir al Extractor de Facturas →
-        </a>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <a href="/billing_extractor_n_generator" class="dash-hero-cta">
+            Ir al Extractor de Facturas →
+          </a>
+          <span id="envBadge" class="env-badge homo">⏳ consultando…</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI strip -->
+    <div class="dash-kpi-strip">
+      <div class="dash-kpi">
+        <div class="dash-kpi-label">Último comprobante</div>
+        <div class="dash-kpi-value loading" id="kpiLastComp">—</div>
+        <div class="dash-kpi-sub" id="kpiLastSub">—</div>
+      </div>
+      <div class="dash-kpi">
+        <div class="dash-kpi-label">Total últimas 10 facturas</div>
+        <div class="dash-kpi-value loading" id="kpiTotal">—</div>
+        <div class="dash-kpi-sub" id="kpiTotalSub">—</div>
+      </div>
+      <div class="dash-kpi">
+        <div class="dash-kpi-label">Estado conexión ARCA</div>
+        <div class="dash-kpi-value loading" id="kpiArcaStatus">—</div>
+        <div class="dash-kpi-sub" id="kpiArcaSub">—</div>
+      </div>
+    </div>
+
+    <!-- Bottom panels -->
+    <div class="dash-bottom">
+
+      <!-- Panel izquierdo: Estado de servicios ARCA/AFIP -->
+      <div class="dash-panel">
+        <div class="dash-panel-title">Estado de servicios ARCA</div>
+
+        <div class="arca-status-row">
+          <div class="arca-dot gray pulse" id="dotWsaa"></div>
+          <div class="arca-status-label">WSAA — Autenticación</div>
+          <div class="arca-status-value" id="valWsaa">consultando…</div>
+        </div>
+
+        <div class="arca-status-row">
+          <div class="arca-dot gray pulse" id="dotWsfe"></div>
+          <div class="arca-status-label">WSFE — Factura Electrónica</div>
+          <div class="arca-status-value" id="valWsfe">consultando…</div>
+        </div>
+
+        <div class="arca-status-row">
+          <div class="arca-dot gray" id="dotToken"></div>
+          <div class="arca-status-label">Token WSAA</div>
+          <div class="arca-status-value" id="valToken">—</div>
+        </div>
+
+        <div class="arca-status-row">
+          <div class="arca-dot gray" id="dotCuit"></div>
+          <div class="arca-status-label">CUIT autenticante</div>
+          <div class="arca-status-value" id="valCuit">—</div>
+        </div>
+
+        <div class="arca-status-row">
+          <div class="arca-dot gray" id="dotAmb"></div>
+          <div class="arca-status-label">Ambiente</div>
+          <div class="arca-status-value" id="valAmb">—</div>
+        </div>
       </div>
 
-      <!-- Live invoices ledger -->
-      <div class="dash-hero-visual" aria-hidden="false">
-        <div class="dash-ledger">
-          <div class="dash-ledger-header">
-            <span>Comprobante</span>
-            <span>CUIT</span>
-            <span>Importe</span>
-            <span>Estado</span>
-          </div>
-          <div id="ledgerBody">
-            <div class="dash-ledger-loading">
-              <div class="spinner"></div>
-              Consultando AFIP…
+      <!-- Panel derecho: Actividad reciente -->
+      <div class="dash-panel">
+        <div class="dash-panel-title">Últimas facturas emitidas</div>
+        <div id="activityFeed">
+          <div style="color:#484F58;font-size:12px;font-family:'DM Mono',monospace;padding:20px 0">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:12px;height:12px;border:2px solid #21262D;border-top-color:#58A6FF;border-radius:50%;animation:spin .7s linear infinite"></div>
+              Consultando ARCA…
             </div>
           </div>
-          <div class="dash-ledger-total" id="ledgerTotal" style="display:none">
-            <span class="mono" style="color:#8B949E;font-size:11px" colspan="2">Total (últimas 10)</span>
-            <span></span>
-            <span class="green mono bold" id="ledgerTotalVal">—</span>
-            <span></span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Cards -->
-    <section class="dash-cards">
-
-      <a href="/billing_extractor_n_generator" class="dash-card">
-        <div class="dash-card-icon">🧾</div>
-        <div class="dash-card-body">
-          <h3>Extractor de Facturas</h3>
-          <p>Importá tu Excel de facturación y generá facturas C en PDF listas para enviar.</p>
-        </div>
-        <div class="dash-card-arrow">→</div>
-      </a>
-
-      <a href="/invoice_history" class="dash-card">
-        <div class="dash-card-icon">📋</div>
-        <div class="dash-card-body">
-          <h3>Facturas Enviadas</h3>
-          <p>Consultá el historial completo de comprobantes registrados en AFIP, filtrando por fecha o número.</p>
-        </div>
-        <div class="dash-card-arrow">→</div>
-      </a>
-
-      <div class="dash-card dash-card-soon">
-        <div class="dash-card-icon">📊</div>
-        <div class="dash-card-body">
-          <h3>Reportes <span class="dash-chip">Próximamente</span></h3>
-          <p>Resúmenes mensuales, totales por cliente y exportación a Excel.</p>
         </div>
       </div>
 
-    </section>
+    </div>
 
   </main>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', loadRecentInvoices);
+document.addEventListener('DOMContentLoaded', () => {
+  loadDashboard();
+});
 
-async function loadRecentInvoices() {
+async function loadDashboard() {
   try {
     const res  = await fetch('/dashboard/recent_invoices?limit=10');
     const data = await res.json();
 
-    if (data.status !== 'ok' || !data.invoices?.length) {
-      document.getElementById('ledgerBody').innerHTML =
-        `<div class="dash-ledger-err">Sin facturas recientes</div>`;
+    const configured = data.status === 'ok' || data.status === 'error';
+    const notConfigured = data.status === 'not_configured';
+
+    // ── Env badge ──
+    if (notConfigured) {
+      setEnvBadge('no-conf', '⚠ No configurado');
+    } else {
+      // Detectar ambiente desde primera factura o mensaje
+      const isHomo = data.invoices?.length
+        ? data.invoices[0].homo_no_cae !== undefined
+        : true; // asumir homo si no hay datos
+      setEnvBadge(isHomo ? 'homo' : 'prod', isHomo ? '🧪 Homologación' : '✓ Producción');
+    }
+
+    // ── KPI: conexión ARCA ──
+    if (notConfigured) {
+      setKpi('kpiArcaStatus', 'kpiArcaSub', '—', 'No configurado', false);
+      setServiceStatus('dotWsaa', 'valWsaa', false, 'no conf.');
+      setServiceStatus('dotWsfe', 'valWsfe', false, 'no conf.');
+      setServiceStatus('dotToken', 'valToken', null, '—');
+      setServiceStatus('dotCuit',  'valCuit',  null, '—');
+      setServiceStatus('dotAmb',   'valAmb',   null, '—');
+      document.getElementById('activityFeed').innerHTML =
+        `<div style="color:#484F58;font-size:12px;font-family:'DM Mono',monospace;padding:20px 0">
+          ARCA no está configurado en este ambiente.
+        </div>`;
       return;
     }
 
-    const invoices = data.invoices;
-    const total    = invoices.reduce((s, i) => s + (+i.amount || 0), 0);
+    if (data.status === 'error') {
+      setKpi('kpiArcaStatus', 'kpiArcaSub', 'ERROR', data.message?.slice(0, 30) || '', false);
+      setServiceStatus('dotWsaa', 'valWsaa', false, 'error');
+      setServiceStatus('dotWsfe', 'valWsfe', false, 'error');
+      return;
+    }
 
-    const rows = invoices.map((inv, idx) => {
-      const badge = inv.cae_number
-        ? `<span class="badge ok">✓</span>`
+    // ── status ok ──
+    const invoices = data.invoices || [];
+
+    // KPI: último comprobante
+    if (invoices.length) {
+      const last = invoices[0];
+      setKpi('kpiLastComp', 'kpiLastSub',
+        last.comp_nro || '—',
+        `${last.fecha_emision || ''}  ·  $ ${fmtNum(last.amount)}`,
+        true
+      );
+    } else {
+      setKpi('kpiLastComp', 'kpiLastSub', '—', 'Sin facturas recientes', null);
+    }
+
+    // KPI: total
+    const total = invoices.reduce((s, i) => s + (+i.amount || 0), 0);
+    setKpi('kpiTotal', 'kpiTotalSub',
+      `$ ${fmtNum(total)}`,
+      `${invoices.length} comprobante${invoices.length !== 1 ? 's' : ''}`,
+      true
+    );
+
+    // KPI: ARCA ok
+    setKpi('kpiArcaStatus', 'kpiArcaSub', 'ONLINE', 'token activo', true);
+
+    // Servicios
+    setServiceStatus('dotWsaa', 'valWsaa', true, 'OK');
+    setServiceStatus('dotWsfe', 'valWsfe', true, 'OK');
+    setServiceStatus('dotToken', 'valToken', true, 'vigente');
+    setServiceStatus('dotCuit',  'valCuit',  null, data.cuit || '—');
+    // Ambiente
+    const homo = invoices[0]?.homo_no_cae !== undefined;
+    setServiceStatus('dotAmb', 'valAmb', null,
+      homo ? 'Homologación' : 'Producción',
+      homo ? 'warn' : 'ok'
+    );
+
+    // ── Actividad reciente ──
+    if (!invoices.length) {
+      document.getElementById('activityFeed').innerHTML =
+        `<div style="color:#484F58;font-size:12px;font-family:'DM Mono',monospace;padding:20px 0">Sin facturas recientes.</div>`;
+      return;
+    }
+
+    document.getElementById('activityFeed').innerHTML = invoices.map((inv, i) => {
+      const badgeHtml = inv.cae_number
+        ? `<span style="color:#3FB950;font-size:10px;font-family:'DM Mono',monospace">✓ CAE</span>`
         : inv.homo_no_cae
-          ? `<span class="badge homo">🧪</span>`
-          : `<span class="badge pending">⏳</span>`;
-
-      // Mostrar solo los últimos 9 dígitos del CUIT para que entre
-      const cuitShort = inv.cuit_cliente
-        ? inv.cuit_cliente.replace(/-/g, '').slice(-9)
-        : '—';
-
-      const amount = (+inv.amount || 0).toLocaleString('es-AR', {
-        minimumFractionDigits: 0, maximumFractionDigits: 0
-      });
+          ? `<span style="color:#8B5CF6;font-size:10px;font-family:'DM Mono',monospace">🧪 homo</span>`
+          : `<span style="color:#D29922;font-size:10px;font-family:'DM Mono',monospace">⏳ sin CAE</span>`;
 
       return `
-        <div class="dash-ledger-row" style="animation-delay:${idx * .04}s">
-          <span class="mono" style="font-size:11px;color:#C9D1D9">${inv.comp_nro || '—'}</span>
-          <span class="mono" style="font-size:11px;color:#8B949E">${cuitShort}</span>
-          <span class="green mono">$ ${amount}</span>
-          ${badge}
+        <div class="dash-activity-item" style="animation-delay:${i * 0.04}s">
+          <div class="dash-activity-icon">🧾</div>
+          <div class="dash-activity-body">
+            <div class="dash-activity-text">
+              <span style="color:#58A6FF;font-family:'DM Mono',monospace;font-size:12px">${inv.comp_nro || '—'}</span>
+              &nbsp;·&nbsp;
+              <span style="color:#8B949E">${inv.razon_social_cliente || inv.cuit_cliente || '—'}</span>
+            </div>
+            <div class="dash-activity-meta">
+              $ ${fmtNum(inv.amount)} &nbsp;·&nbsp; ${inv.fecha_emision || '—'} &nbsp;·&nbsp; ${badgeHtml}
+            </div>
+          </div>
         </div>`;
     }).join('');
 
-    document.getElementById('ledgerBody').innerHTML = rows;
-
-    const totalFmt = total.toLocaleString('es-AR', {
-      minimumFractionDigits: 0, maximumFractionDigits: 0
-    });
-    document.getElementById('ledgerTotalVal').textContent = `$ ${totalFmt}`;
-    document.getElementById('ledgerTotal').style.display  = 'grid';
-
   } catch (e) {
-    document.getElementById('ledgerBody').innerHTML =
-      `<div class="dash-ledger-err">Error al cargar: ${e.message}</div>`;
+    setKpi('kpiArcaStatus', 'kpiArcaSub', 'ERROR', e.message?.slice(0,30) || '', false);
+    setServiceStatus('dotWsaa', 'valWsaa', false, 'sin respuesta');
+    setServiceStatus('dotWsfe', 'valWsfe', false, 'sin respuesta');
+    document.getElementById('activityFeed').innerHTML =
+      `<div style="color:#F85149;font-size:12px;font-family:'DM Mono',monospace;padding:20px 0">Error: ${e.message}</div>`;
   }
+}
+
+function setKpi(valId, subId, val, sub, ok) {
+  const el = document.getElementById(valId);
+  el.textContent = val;
+  el.classList.remove('loading');
+  if (ok === true)  el.style.color = '#3FB950';
+  if (ok === false) el.style.color = '#F85149';
+  document.getElementById(subId).textContent = sub;
+}
+
+function setServiceStatus(dotId, valId, ok, label, colorClass) {
+  const dot = document.getElementById(dotId);
+  const val = document.getElementById(valId);
+  dot.classList.remove('pulse');
+  if (ok === true) {
+    dot.className = 'arca-dot green';
+    val.className = 'arca-status-value ok';
+  } else if (ok === false) {
+    dot.className = 'arca-dot red';
+    val.className = 'arca-status-value error';
+  } else {
+    dot.className = 'arca-dot gray';
+    val.className = colorClass ? `arca-status-value ${colorClass}` : 'arca-status-value';
+  }
+  val.textContent = label;
+}
+
+function setEnvBadge(type, label) {
+  const el = document.getElementById('envBadge');
+  el.textContent = label;
+  el.className = `env-badge ${type === 'homo' ? 'homo' : type === 'prod' ? 'prod' : ''}`;
+}
+
+function fmtNum(val) {
+  return (+val || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 </script>
 

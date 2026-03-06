@@ -591,7 +591,7 @@ class BillingExtractorNGeneratorController:
                     log(f"   Cbte Nro: {result['invoice_number']}")
                     if result.get("obs"):
                         log("")
-                        log("⚠️  Observaciones AFIP:")
+                        log("⚠️  Observaciones ARCA:")
                         for obs in result["obs"]:
                             log(f"   {obs}")
                     log("")
