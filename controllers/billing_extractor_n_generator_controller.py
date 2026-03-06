@@ -172,26 +172,57 @@ def _fmt_date(val) -> str:
     return s.split(" ")[0]
 
 
+# ── Helper: determines if a CUIT belongs to a human person ────────────────────
+# Argentine CUIT structure: XX-XXXXXXXX-X
+# Prefixes 20, 23, 24, 27 → human male/female
+# Prefixes 30, 33, 34     → legal entities (companies, consortiums, etc.)
+
+def _is_human_cuit(cuit: str) -> bool:
+    """Return True if the CUIT prefix corresponds to a human person."""
+    clean = re.sub(r"[^0-9]", "", cuit)
+    if len(clean) < 2:
+        return False
+    prefix = int(clean[:2])
+    return prefix in (20, 23, 24, 27)
+
+
 # ── Invoice HTML builder ───────────────────────────────────────────────────────
 
 def _build_invoice_html(row: dict, emisor: dict, copy_label: str = "ORIGINAL") -> str:
     """
     Load invoice_template.html and substitute all {{TOKEN}} placeholders.
     The logo is embedded as base64 so it works in both browsers and wkhtmltopdf.
+
+    TODO #2: {{CUIT_OR_DNI_CELL}} logic:
+      - Human person (CUIT prefix 20/23/24/27) + Consumidor Final → show DNI
+      - Legal entity (CUIT prefix 30/33/34) → show CUIT
     """
     template   = _load_template()
     logo_tag   = _load_logo_tag()
     pv, comp   = _extract_pv_comp(row["comp_nro"])
-    dni        = _extract_dni(row["cuit_cliente"])
     amount_str = _fmt_ar(row["amount"])
     fecha      = row["fecha_emision"]
     vto        = row.get("vencimiento") or fecha
+    cuit       = row["cuit_cliente"]
 
-    dni_row = (
-        f'<span class="f-label">DNI</span>'
-        f'<span class="f-value">{dni}</span>'
-        if dni else ""
-    )
+    # TODO #2: CUIT always shown; DNI added below only for human persons (Consumidor Final)
+    if _is_human_cuit(cuit):
+        dni = _extract_dni(cuit)
+        dni_extra = (
+            f'<span class="f-label">DNI</span>'
+            f'<span class="f-value">{dni}</span>'
+        ) if dni else ""
+        cuit_or_dni_cell = (
+            f'<span class="f-label">CUIT</span>'
+            f'<span class="f-value">{cuit}</span>'
+            f'{dni_extra}'
+        )
+    else:
+        # Legal entity: CUIT only
+        cuit_or_dni_cell = (
+            f'<span class="f-label">CUIT</span>'
+            f'<span class="f-value">{cuit}</span>'
+        )
 
     cae_row = row["cae_number"] if row.get("cae_number") else "Sin CAE registrado"
 
@@ -209,9 +240,9 @@ def _build_invoice_html(row: dict, emisor: dict, copy_label: str = "ORIGINAL") -
         "{{FECHA_EMISION}}":         fecha,
         "{{VENCIMIENTO}}":           vto,
         "{{CLIENTE_RAZON_SOCIAL}}":  row["razon_social_cliente"],
-        "{{CLIENTE_CUIT}}":          row["cuit_cliente"],
+        "{{CLIENTE_CUIT}}":          cuit,
         "{{CLIENTE_DOMICILIO}}":     row["domicilio_cliente"],
-        "{{DNI_ROW}}":               dni_row,
+        "{{CUIT_OR_DNI_CELL}}":      cuit_or_dni_cell,   # TODO #2
         "{{DESCRIPCION}}":           row["descripcion"],
         "{{IMPORTE}}":               amount_str,
         "{{CAE_ROW}}":               cae_row,

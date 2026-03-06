@@ -519,7 +519,7 @@ function addToPDFGallery(row, url, filename) {
     <div class="beg-pdf-card-actions">
       <button class="beg-btn beg-btn-icon" onclick="window.open('${url}','_blank')">👁 Ver</button>
       <a href="${url}" download="${filename}" class="beg-btn beg-btn-icon">⬇️ PDF</a>
-      <button class="beg-btn beg-btn-arca" onclick="registrarEnArca(${row.idx})">🏛 ARCA</button>
+      <button class="beg-btn beg-btn-arca" onclick="registrarEnArca(${row.idx})" title="Registrar en ARCA">🏛 ARCA</button>
     </div>
   `;
   pdfGallery.appendChild(card);
@@ -537,7 +537,7 @@ function addToPDFGalleryPrintOnly(row, url) {
     <div class="beg-pdf-card-actions">
       <button class="beg-btn beg-btn-icon" onclick="window.open('${url}','_blank')">👁 Ver</button>
       <button class="beg-btn beg-btn-icon" onclick="previewSingle(${row.idx})">🖨 Imprimir</button>
-      <button class="beg-btn beg-btn-arca" onclick="registrarEnArca(${row.idx})">🏛 ARCA</button>
+      <button class="beg-btn beg-btn-arca" onclick="registrarEnArca(${row.idx})"  title="Registrar en ARCA">🏛 ARCA</button>
     </div>
   `;
   pdfGallery.appendChild(card);
