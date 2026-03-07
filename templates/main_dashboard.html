@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ZyM Accounting</title>
+  <title>—</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -111,7 +111,6 @@
       background: #21262D;
     }
 
-    /* ARCA status indicator */
     .arca-status-row {
       display: flex;
       align-items: center;
@@ -120,9 +119,7 @@
       border-bottom: 1px solid #161B22;
     }
 
-    .arca-status-row:last-child {
-      border-bottom: none;
-    }
+    .arca-status-row:last-child { border-bottom: none; }
 
     .arca-dot {
       width: 8px;
@@ -159,7 +156,6 @@
     .arca-status-value.warn   { color: #D29922; }
     .arca-status-value.error  { color: #F85149; }
 
-    /* Noticias / actividad reciente */
     .dash-activity-item {
       display: flex;
       gap: 14px;
@@ -168,9 +164,7 @@
       align-items: flex-start;
     }
 
-    .dash-activity-item:last-child {
-      border-bottom: none;
-    }
+    .dash-activity-item:last-child { border-bottom: none; }
 
     .dash-activity-icon {
       width: 28px;
@@ -186,9 +180,7 @@
       margin-top: 1px;
     }
 
-    .dash-activity-body {
-      flex: 1;
-    }
+    .dash-activity-body { flex: 1; }
 
     .dash-activity-text {
       font-size: 12.5px;
@@ -203,20 +195,14 @@
       font-family: 'DM Mono', monospace;
     }
 
-    /* Hero sin widget de la derecha — full width content */
-    .dash-hero {
-      grid-template-columns: 1fr !important;
-    }
+    /* brand subtitle hidden */
+    .dash-brand-sub { display: none; }
 
-    .dash-hero-content {
-      max-width: 600px;
-    }
+    /* Hero full width */
+    .dash-hero { grid-template-columns: 1fr !important; }
+    .dash-hero-content { max-width: 600px; }
+    .dash-hero-visual { display: none !important; }
 
-    .dash-hero-visual {
-      display: none !important;
-    }
-
-    /* Ambiente badge */
     .env-badge {
       display: inline-flex;
       align-items: center;
@@ -250,15 +236,17 @@
     <div class="dash-brand">
       <div class="dash-brand-icon">Z</div>
       <div class="dash-brand-text">
-        <span class="dash-brand-name">ZyM</span>
-        <span class="dash-brand-sub">Accounting</span>
+
+        <span class="dash-brand-name" id="brandName">—</span>
+
       </div>
     </div>
     <nav class="dash-nav">
       <div class="dash-nav-section">Módulos</div>
+      <!-- #3: renamed from "Extractor de Facturas" to "Generador de Facturas" -->
       <a href="/billing_extractor_n_generator" class="dash-nav-item">
         <span class="dash-nav-icon">🧾</span>
-        <span>Extractor de Facturas</span>
+        <span>Generador de Facturas</span>
       </a>
       <a href="/invoice_history" class="dash-nav-item">
         <span class="dash-nav-icon">📋</span>
@@ -273,16 +261,14 @@
   <!-- ── MAIN CONTENT ── -->
   <main class="dash-main">
 
-    <!-- Hero — full width, sin widget -->
+    <!-- Hero — #2: no CTA button, only env badge -->
     <section class="dash-hero">
       <div class="dash-hero-content">
         <div class="dash-hero-eyebrow">Sistema Contable</div>
-        <h1 class="dash-hero-title">ZyM <em>Accounting</em></h1>
-        <p class="dash-hero-subtitle">Gestión de facturación, generación de comprobantes y trazabilidad contable para SERVICONS.</p>
+        <h1 class="dash-hero-title" id="heroTitle">—</h1>
+        <p class="dash-hero-subtitle" id="heroSubtitle">Gestión de facturación, generación de comprobantes y trazabilidad contable.</p>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <a href="/billing_extractor_n_generator" class="dash-hero-cta">
-            Ir al Extractor de Facturas →
-          </a>
+          <!-- #2: CTA button removed — navigation only via sidebar -->
           <span id="envBadge" class="env-badge homo">⏳ consultando…</span>
         </div>
       </div>
@@ -310,7 +296,7 @@
     <!-- Bottom panels -->
     <div class="dash-bottom">
 
-      <!-- Panel izquierdo: Estado de servicios ARCA/AFIP -->
+      <!-- Left panel: ARCA service status -->
       <div class="dash-panel">
         <div class="dash-panel-title">Estado de servicios ARCA</div>
 
@@ -345,7 +331,7 @@
         </div>
       </div>
 
-      <!-- Panel derecho: Actividad reciente -->
+      <!-- Right panel: recent invoices -->
       <div class="dash-panel">
         <div class="dash-panel-title">Últimas facturas emitidas</div>
         <div id="activityFeed">
@@ -373,21 +359,29 @@ async function loadDashboard() {
     const res  = await fetch('/dashboard/recent_invoices?limit=10');
     const data = await res.json();
 
-    const configured = data.status === 'ok' || data.status === 'error';
+    // product_name → title, sidebar brand, hero title (PRODUCT_NAME in .env)
+    const productName = data.product_name || 'MOSCA';
+    document.title = productName;
+    document.getElementById('heroTitle').textContent  = productName;
+    document.getElementById('brandName').textContent  = productName;
+
+    // customer_name → hero subtitle (CUSTOMER_NAME in .env)
+    if (data.customer_name) {
+      document.getElementById('heroSubtitle').textContent =
+        `Gestión de facturación, generación de comprobantes y trazabilidad contable para ${data.customer_name}.`;
+    }
+
     const notConfigured = data.status === 'not_configured';
 
-    // ── Env badge ──
+    // Env badge
     if (notConfigured) {
       setEnvBadge('no-conf', '⚠ No configurado');
     } else {
-      // Detectar ambiente desde primera factura o mensaje
-      const isHomo = data.invoices?.length
-        ? data.invoices[0].homo_no_cae !== undefined
-        : true; // asumir homo si no hay datos
+      const isHomo = data.invoices?.length ? data.invoices[0].homo_no_cae !== undefined : true;
       setEnvBadge(isHomo ? 'homo' : 'prod', isHomo ? '🧪 Homologación' : '✓ Producción');
     }
 
-    // ── KPI: conexión ARCA ──
+    // ARCA not configured
     if (notConfigured) {
       setKpi('kpiArcaStatus', 'kpiArcaSub', '—', 'No configurado', false);
       setServiceStatus('dotWsaa', 'valWsaa', false, 'no conf.');
@@ -409,10 +403,9 @@ async function loadDashboard() {
       return;
     }
 
-    // ── status ok ──
+    // Status ok
     const invoices = data.invoices || [];
 
-    // KPI: último comprobante
     if (invoices.length) {
       const last = invoices[0];
       setKpi('kpiLastComp', 'kpiLastSub',
@@ -424,7 +417,6 @@ async function loadDashboard() {
       setKpi('kpiLastComp', 'kpiLastSub', '—', 'Sin facturas recientes', null);
     }
 
-    // KPI: total
     const total = invoices.reduce((s, i) => s + (+i.amount || 0), 0);
     setKpi('kpiTotal', 'kpiTotalSub',
       `$ ${fmtNum(total)}`,
@@ -432,22 +424,19 @@ async function loadDashboard() {
       true
     );
 
-    // KPI: ARCA ok
     setKpi('kpiArcaStatus', 'kpiArcaSub', 'ONLINE', 'token activo', true);
-
-    // Servicios
     setServiceStatus('dotWsaa', 'valWsaa', true, 'OK');
     setServiceStatus('dotWsfe', 'valWsfe', true, 'OK');
     setServiceStatus('dotToken', 'valToken', true, 'vigente');
     setServiceStatus('dotCuit',  'valCuit',  null, data.cuit || '—');
-    // Ambiente
+
     const homo = invoices[0]?.homo_no_cae !== undefined;
     setServiceStatus('dotAmb', 'valAmb', null,
       homo ? 'Homologación' : 'Producción',
       homo ? 'warn' : 'ok'
     );
 
-    // ── Actividad reciente ──
+    // Activity feed
     if (!invoices.length) {
       document.getElementById('activityFeed').innerHTML =
         `<div style="color:#484F58;font-size:12px;font-family:'DM Mono',monospace;padding:20px 0">Sin facturas recientes.</div>`;

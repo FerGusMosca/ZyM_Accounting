@@ -6,14 +6,13 @@ Serves the main landing page and provides lightweight API endpoints
 used by the dashboard widgets.
 
 Routes:
-    GET  /           → HTML landing page
-    GET  /dashboard/recent_invoices   → JSON last N invoices from AFIP
+    GET  /                          → HTML landing page
+    GET  /dashboard/recent_invoices → JSON last N invoices from AFIP
 """
 
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -55,6 +54,19 @@ def _get_arca_client():
         return None, str(exc)
 
 
+def _app_meta() -> dict:
+    """Return product_name and customer_name from settings (.env)."""
+    try:
+        from common.config.settings import get_settings
+        s = get_settings()
+        return {
+            "product_name":  getattr(s, "product_name",  "") or "",
+            "customer_name": getattr(s, "customer_name", "") or "",
+        }
+    except Exception:
+        return {"product_name": "", "customer_name": ""}
+
+
 class DashboardController:
 
     def __init__(self):
@@ -74,25 +86,35 @@ class DashboardController:
         async def recent_invoices(limit: int = 10):
             """
             Returns the last `limit` invoices across all sales points.
-            Calls ARCAClient.get_recent_invoices() which fetches by number
-            (no date filter) so it always returns the most recent ones.
+            Always includes product_name and customer_name from .env.
             """
+            meta = _app_meta()
+
             client, err = _get_arca_client()
             if err:
-                return JSONResponse(
-                    {"status": "not_configured", "message": err, "invoices": []},
-                    status_code=200,
-                )
+                return JSONResponse({
+                    "status":   "not_configured",
+                    "message":  err,
+                    "invoices": [],
+                    **meta,
+                }, status_code=200)
+
             try:
                 invoices = client.get_recent_invoices(limit=limit)
+                from common.config.settings import get_settings
+                s = get_settings()
                 return JSONResponse({
                     "status":   "ok",
                     "count":    len(invoices),
                     "invoices": invoices,
+                    "cuit":     getattr(s, "arca_cuit", "") or "",
+                    **meta,
                 })
             except Exception as exc:
                 logger.exception("Error fetching recent invoices for dashboard")
-                return JSONResponse(
-                    {"status": "error", "message": str(exc), "invoices": []},
-                    status_code=500,
-                )
+                return JSONResponse({
+                    "status":   "error",
+                    "message":  str(exc),
+                    "invoices": [],
+                    **meta,
+                }, status_code=500)

@@ -6,64 +6,74 @@ from pydantic import Field, AliasChoices
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    # SESSION_KEY
+    # ── App ───────────────────────────────────────────────────────────────────
     port: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("PORT", "PORT"))
+        validation_alias=AliasChoices("PORT"))
 
     connection_string: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("CONNECTION_STRING", "CONNECTION_STRING"))
+        validation_alias=AliasChoices("CONNECTION_STRING"))
 
     session_key: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("SESSION_KEY", "SESSION_KEY"))
+        validation_alias=AliasChoices("SESSION_KEY"))
+
+    # Customer name shown in the dashboard subtitle (CUSTOMER_NAME in .env)
+    customer_name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("CUSTOMER_NAME"))
+
+    # Product name shown in the title, sidebar and browser tab (PRODUCT_NAME in .env)
+    product_name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PRODUCT_NAME"))
 
     # ── Emisor (facturación) ──────────────────────────────────────────────────
     emisor_razon_social: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("EMISOR_RAZON_SOCIAL", "EMISOR_RAZON_SOCIAL"))
+        validation_alias=AliasChoices("EMISOR_RAZON_SOCIAL"))
 
     emisor_cuit: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("EMISOR_CUIT", "EMISOR_CUIT"))
+        validation_alias=AliasChoices("EMISOR_CUIT"))
 
     emisor_domicilio: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("EMISOR_DOMICILIO", "EMISOR_DOMICILIO"))
+        validation_alias=AliasChoices("EMISOR_DOMICILIO"))
 
     emisor_ib: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("EMISOR_IB", "EMISOR_IB"))
+        validation_alias=AliasChoices("EMISOR_IB"))
 
     emisor_inicio_act: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("EMISOR_INICIO_ACT", "EMISOR_INICIO_ACT"))
+        validation_alias=AliasChoices("EMISOR_INICIO_ACT"))
 
-    # Valores válidos: RESP_MONOTR | RESP_INSCR
+    # Valid values: RESP_MONOTR | RESP_INSCR
     emisor_cond_iva: str | None = Field(
         default="RESP_MONOTR",
-        validation_alias=AliasChoices("EMISOR_COND_IVA", "EMISOR_COND_IVA"))
+        validation_alias=AliasChoices("EMISOR_COND_IVA"))
 
     # ── ARCA / AFIP ───────────────────────────────────────────────────────────
-    # CUIT titular del certificado (puede ser distinto al emisor comercial).
-    # Testing: tu CUIT. Producción: el CUIT que hizo la delegación en ARCA.
+    # CUIT of the certificate holder (may differ from the commercial issuer).
+    # Testing: your CUIT. Production: the CUIT that delegated in ARCA.
     arca_cuit: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("ARCA_CUIT", "ARCA_CUIT"))
+        validation_alias=AliasChoices("ARCA_CUIT"))
 
     arca_cert_path: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("ARCA_CERT_PATH", "ARCA_CERT_PATH"))
+        validation_alias=AliasChoices("ARCA_CERT_PATH"))
 
     arca_key_path: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("ARCA_KEY_PATH", "ARCA_KEY_PATH"))
+        validation_alias=AliasChoices("ARCA_KEY_PATH"))
 
     # "true" = homologación (testing)  |  "false" = producción
     arca_homo: str | None = Field(
         default="true",
-        validation_alias=AliasChoices("ARCA_HOMO", "ARCA_HOMO"))
+        validation_alias=AliasChoices("ARCA_HOMO"))
 
 
 @lru_cache

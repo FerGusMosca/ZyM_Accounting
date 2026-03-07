@@ -215,10 +215,10 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #555;
-    background: #f5f5f5;
+    color: #fff;
+    background: #3BAEEC;
     padding: 5px 12px;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid #2a90cc;
   }
 
   .inv-receptor-body { padding: 8px 12px 10px 12px; }
@@ -249,10 +249,9 @@
   }
 
   .inv-items th {
-    background: #f0f0f0;
-    /* No border between thead columns */
-    border-top: 1px solid #888;
-    border-bottom: 1px solid #888;
+    background: #3BAEEC;
+    border-top: 1px solid #2a90cc;
+    border-bottom: 1px solid #2a90cc;
     border-left: none;
     border-right: none;
     padding: 6px 10px;
@@ -260,7 +259,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #333;
+    color: #fff;
     text-align: center;
   }
 
@@ -305,8 +304,9 @@
 
   .inv-totals tr:last-child td {
     border-bottom: none;
-    background: #f5f5f5;
+    background: #3BAEEC;
     padding: 8px 12px;
+    color: #fff;
   }
 
   .td-total-label {
@@ -318,7 +318,7 @@
     border-right: 1px solid #ccc;
   }
 
-  .inv-totals tr:last-child .td-total-label { font-size: 13px; }
+  .inv-totals tr:last-child .td-total-label { font-size: 13px; color: #fff; }
 
   .td-total-value {
     width: 200px;
@@ -328,7 +328,7 @@
     color: #111;
   }
 
-  .inv-totals tr:last-child .td-total-value { font-size: 13px; }
+  .inv-totals tr:last-child .td-total-value { font-size: 13px; color: #fff; }
 
   /* ════════════════════════════════════
      FOOTER — CAE + issuer name/CUIT
@@ -359,7 +359,6 @@
     <tr>
       <!-- Left column: name, logo, address, IVA condition only -->
       <td class="td-emisor">
-        <div class="inv-emisor-name">{{EMISOR_RAZON_SOCIAL}}</div>
         {{LOGO_TAG}}
         <div class="inv-emisor-row"><span class="lbl">Domicilio Comercial:</span> {{EMISOR_DOMICILIO}}</div>
         <div class="inv-emisor-row"><span class="lbl">Condición frente al IVA:</span> {{EMISOR_COND_IVA}}</div>
