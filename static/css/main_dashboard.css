@@ -453,3 +453,44 @@ body {
     font-size: 2.6rem;
   }
 }
+/* ════════════════════════════════════════════════
+   OVERRIDES — applied across all pages
+════════════════════════════════════════════════ */
+
+/* Sidebar → #FFB7FF */
+.dash-sidebar {
+  background: #FFB7FF !important;
+  border-right: 1px solid #e89ee8 !important;
+}
+.dash-brand          { border-bottom-color: #e89ee8 !important; }
+.dash-brand-name     { color: #2d0a2d !important; }
+.dash-nav-section    { color: #7a007a !important; }
+.dash-nav-item       { color: #3d003d !important; }
+.dash-nav-item:hover { background: #f5c8f5 !important; color: #1a001a !important; }
+.dash-nav-item.active {
+  background: #f0a8f0 !important;
+  color: #3d003d !important;
+  border-color: #cc66cc !important;
+}
+.dash-sidebar-footer { border-top-color: #e89ee8 !important; }
+.dash-version        { color: #9944aa !important; }
+
+/* Nav icons → blue circles */
+.dash-nav-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 50% !important;
+  background: #1F6FEB !important;
+  color: transparent !important;
+  font-size: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+/* Main content bg → creamy white */
+.dash-main,
+.ih-main { background: #FAF7F2 !important; }
+
+body { background: #FAF7F2 !important; }

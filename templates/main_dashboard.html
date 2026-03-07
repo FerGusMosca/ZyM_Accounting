@@ -445,22 +445,22 @@ async function loadDashboard() {
 
     document.getElementById('activityFeed').innerHTML = invoices.map((inv, i) => {
       const badgeHtml = inv.cae_number
-        ? `<span style="color:#3FB950;font-size:10px;font-family:'DM Mono',monospace">✓ CAE</span>`
+        ? `<span style="color:#166534;font-size:10px;font-family:'DM Mono',monospace;font-weight:600">✓ CAE</span>`
         : inv.homo_no_cae
-          ? `<span style="color:#8B5CF6;font-size:10px;font-family:'DM Mono',monospace">🧪 homo</span>`
-          : `<span style="color:#D29922;font-size:10px;font-family:'DM Mono',monospace">⏳ sin CAE</span>`;
+          ? `<span style="color:#6D28D9;font-size:10px;font-family:'DM Mono',monospace;font-weight:600">🧪 homo</span>`
+          : `<span style="color:#92400e;font-size:10px;font-family:'DM Mono',monospace;font-weight:600">⏳ sin CAE</span>`;
 
       return `
         <div class="dash-activity-item" style="animation-delay:${i * 0.04}s">
           <div class="dash-activity-icon">🧾</div>
           <div class="dash-activity-body">
             <div class="dash-activity-text">
-              <span style="color:#58A6FF;font-family:'DM Mono',monospace;font-size:12px">${inv.comp_nro || '—'}</span>
+              <span style="color:#7C3AED;font-family:'DM Mono',monospace;font-size:14px;font-weight:800">${inv.comp_nro || '—'}</span>
               &nbsp;·&nbsp;
-              <span style="color:#8B949E">${inv.razon_social_cliente || inv.cuit_cliente || '—'}</span>
+              <span style="color:#111;font-weight:600">${inv.razon_social_cliente || inv.cuit_cliente || '—'}</span>
             </div>
             <div class="dash-activity-meta">
-              $ ${fmtNum(inv.amount)} &nbsp;·&nbsp; ${inv.fecha_emision || '—'} &nbsp;·&nbsp; ${badgeHtml}
+              <span style="color:#166534;font-weight:700">$ ${fmtNum(inv.amount)}</span> &nbsp;·&nbsp; <span style="color:#555;font-weight:600">${inv.fecha_emision || '—'}</span> &nbsp;·&nbsp; ${badgeHtml}
             </div>
           </div>
         </div>`;
@@ -479,8 +479,8 @@ function setKpi(valId, subId, val, sub, ok) {
   const el = document.getElementById(valId);
   el.textContent = val;
   el.classList.remove('loading');
-  if (ok === true)  el.style.color = '#3FB950';
-  if (ok === false) el.style.color = '#F85149';
+  if (ok === true)  el.style.color = '#166534';
+  if (ok === false) el.style.color = '#991b1b';
   document.getElementById(subId).textContent = sub;
 }
 
@@ -512,5 +512,267 @@ function fmtNum(val) {
 }
 </script>
 
+
+  <style>
+    /* ── Hero: left-aligned (title + subtitle stay left) ── */
+    .dash-hero-content {
+      align-items: flex-start !important;
+      text-align: left !important;
+    }
+
+    /* ── KPI strip: center each KPI cell ── */
+    .dash-kpi {
+      align-items: center !important;
+      text-align: center !important;
+    }
+    .dash-kpi-value, .dash-kpi-label, .dash-kpi-sub {
+      text-align: center !important;
+    }
+
+    /* ── Green labels → violet ── */
+    .dash-hero-eyebrow,
+    .dash-kpi-label,
+    .dash-panel-title,
+    .dash-nav-section {
+      color: #6D28D9 !important;
+    }
+
+    /* ── Hero title + subtitle: strong dark contrast ── */
+    .dash-hero-title {
+      color: #1a0a2e !important;
+    }
+    .dash-hero-subtitle {
+      color: #3a2a50 !important;
+      font-weight: 400 !important;
+    }
+
+    /* ── Sidebar → #FFB7FF ── */
+    .dash-sidebar {
+      background: #FFB7FF !important;
+      border-right: 1px solid #e89ee8 !important;
+    }
+    .dash-brand          { border-bottom: 1px solid #e89ee8 !important; }
+    .dash-brand-name     { color: #1a001a !important; font-weight: 700 !important; }
+    .dash-nav-section    { color: #6D28D9 !important; }
+    .dash-nav-item       { color: #2d002d !important; font-weight: 600 !important; }
+    .dash-nav-item:hover { background: #f5c8f5 !important; color: #0d000d !important; }
+    .dash-nav-item.active {
+      background: #f0a8f0 !important;
+      color: #1a001a !important;
+      border-color: #cc66cc !important;
+    }
+    .dash-sidebar-footer { border-top: 1px solid #e89ee8 !important; }
+    .dash-version        { color: #6D28D9 !important; }
+
+    /* ── Nav icons → blue circles ── */
+    .dash-nav-icon {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 20px !important;
+      height: 20px !important;
+      border-radius: 50% !important;
+      background: #1F6FEB !important;
+      color: transparent !important;
+      font-size: 0 !important;
+      flex-shrink: 0 !important;
+    }
+
+    /* ── Main bg → creamy white ── */
+    .dash-main, body { background: #FAF7F2 !important; }
+    .dash-hero        { background: #FAF7F2 !important; border-bottom-color: #d8d0c8 !important; }
+    .dash-kpi-strip   { background: #ede8e1 !important; gap: 1px; }
+    .dash-kpi         { background: #FAF7F2 !important; }
+    .dash-bottom      { background: #FAF7F2 !important; }
+    .dash-panel       { background: #FAF7F2 !important; border-right-color: #d8d0c8 !important; }
+
+    /* ── KPI values: dark + readable ── */
+    .dash-kpi-value  { color: #111 !important; }
+    .dash-kpi-sub    { color: #555 !important; }
+    .dash-kpi-label  { color: #6D28D9 !important; }
+
+    /* ── Panel + status rows: dark text ── */
+    .dash-panel-title       { color: #6D28D9 !important; }
+    .dash-panel-title::after { background: #d8d0c8 !important; }
+    .arca-status-row        { border-bottom-color: #e8e0d8 !important; }
+    .arca-status-label      { color: #222 !important; font-weight: 600 !important; }
+    .arca-status-value      { color: #555 !important; }
+    .arca-status-value.ok   { color: #166534 !important; }
+    .arca-status-value.warn { color: #92400e !important; }
+    .arca-status-value.error{ color: #991b1b !important; }
+
+    /* ── Activity feed: dark text ── */
+    .dash-activity-item     { border-bottom-color: #e8e0d8 !important; }
+    .dash-activity-icon     { background: #ede8e1 !important; border-color: #d8d0c8 !important; }
+    .dash-activity-text     { color: #222 !important; }
+    .dash-activity-meta     { color: #555 !important; }
+    .dash-activity-body span[style*="58A6FF"] { color: #1a4fa0 !important; }
+    .dash-activity-body span[style*="8B949E"] { color: #444 !important; }
+  </style>
+
+
+  <style>
+    /* ── Buttons → violet ── */
+    .dash-hero-cta  { background: #7C3AED !important; }
+    .dash-hero-cta:hover { background: #6D28D9 !important; box-shadow: 0 8px 24px rgba(109,40,217,0.35) !important; }
+    .dash-brand-icon { background: linear-gradient(135deg, #7C3AED, #A78BFA) !important; box-shadow: 0 4px 12px rgba(124,58,237,0.35) !important; }
+    .env-badge.homo { background: #1E1535; color: #A78BFA !important; border-color: #7C3AED44 !important; }
+
+    /* ── Activity feed rows: bold + vivid colors ── */
+    .dash-activity-text span { font-weight: 700 !important; }
+  </style>
+
+
+  <style>
+    /* KPI sub (date/count/token) → vivid violet */
+    .dash-kpi-sub { color: #7C3AED !important; font-weight: 600 !important; }
+
+    /* Nav circles → violet */
+    .dash-nav-icon { background: #7C3AED !important; }
+  </style>
+
+
+  <style>
+    /* KPI sub → #00B050 */
+    .dash-kpi-sub { color: #00B050 !important; font-weight: 600 !important; }
+  </style>
+
+
+  <style>
+    .dash-kpi-value { color: #00B050 !important; }
+    .dash-kpi-sub   { color: #7C3AED !important; font-weight: 600 !important; }
+  </style>
+
 </body>
-</html>
+</html><!-- PATCH injected via script tag before
+  <style>
+    /* ── Hero: left-aligned (title + subtitle stay left) ── */
+    .dash-hero-content {
+      align-items: flex-start !important;
+      text-align: left !important;
+    }
+
+    /* ── KPI strip: center each KPI cell ── */
+    .dash-kpi {
+      align-items: center !important;
+      text-align: center !important;
+    }
+    .dash-kpi-value, .dash-kpi-label, .dash-kpi-sub {
+      text-align: center !important;
+    }
+
+    /* ── Green labels → violet ── */
+    .dash-hero-eyebrow,
+    .dash-kpi-label,
+    .dash-panel-title,
+    .dash-nav-section {
+      color: #6D28D9 !important;
+    }
+
+    /* ── Hero title + subtitle: strong dark contrast ── */
+    .dash-hero-title {
+      color: #1a0a2e !important;
+    }
+    .dash-hero-subtitle {
+      color: #3a2a50 !important;
+      font-weight: 400 !important;
+    }
+
+    /* ── Sidebar → #FFB7FF ── */
+    .dash-sidebar {
+      background: #FFB7FF !important;
+      border-right: 1px solid #e89ee8 !important;
+    }
+    .dash-brand          { border-bottom: 1px solid #e89ee8 !important; }
+    .dash-brand-name     { color: #1a001a !important; font-weight: 700 !important; }
+    .dash-nav-section    { color: #6D28D9 !important; }
+    .dash-nav-item       { color: #2d002d !important; font-weight: 600 !important; }
+    .dash-nav-item:hover { background: #f5c8f5 !important; color: #0d000d !important; }
+    .dash-nav-item.active {
+      background: #f0a8f0 !important;
+      color: #1a001a !important;
+      border-color: #cc66cc !important;
+    }
+    .dash-sidebar-footer { border-top: 1px solid #e89ee8 !important; }
+    .dash-version        { color: #6D28D9 !important; }
+
+    /* ── Nav icons → blue circles ── */
+    .dash-nav-icon {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 20px !important;
+      height: 20px !important;
+      border-radius: 50% !important;
+      background: #1F6FEB !important;
+      color: transparent !important;
+      font-size: 0 !important;
+      flex-shrink: 0 !important;
+    }
+
+    /* ── Main bg → creamy white ── */
+    .dash-main, body { background: #FAF7F2 !important; }
+    .dash-hero        { background: #FAF7F2 !important; border-bottom-color: #d8d0c8 !important; }
+    .dash-kpi-strip   { background: #ede8e1 !important; gap: 1px; }
+    .dash-kpi         { background: #FAF7F2 !important; }
+    .dash-bottom      { background: #FAF7F2 !important; }
+    .dash-panel       { background: #FAF7F2 !important; border-right-color: #d8d0c8 !important; }
+
+    /* ── KPI values: dark + readable ── */
+    .dash-kpi-value  { color: #111 !important; }
+    .dash-kpi-sub    { color: #555 !important; }
+    .dash-kpi-label  { color: #6D28D9 !important; }
+
+    /* ── Panel + status rows: dark text ── */
+    .dash-panel-title       { color: #6D28D9 !important; }
+    .dash-panel-title::after { background: #d8d0c8 !important; }
+    .arca-status-row        { border-bottom-color: #e8e0d8 !important; }
+    .arca-status-label      { color: #222 !important; font-weight: 600 !important; }
+    .arca-status-value      { color: #555 !important; }
+    .arca-status-value.ok   { color: #166534 !important; }
+    .arca-status-value.warn { color: #92400e !important; }
+    .arca-status-value.error{ color: #991b1b !important; }
+
+    /* ── Activity feed: dark text ── */
+    .dash-activity-item     { border-bottom-color: #e8e0d8 !important; }
+    .dash-activity-icon     { background: #ede8e1 !important; border-color: #d8d0c8 !important; }
+    .dash-activity-text     { color: #222 !important; }
+    .dash-activity-meta     { color: #555 !important; }
+    .dash-activity-body span[style*="58A6FF"] { color: #1a4fa0 !important; }
+    .dash-activity-body span[style*="8B949E"] { color: #444 !important; }
+  </style>
+
+
+  <style>
+    /* ── Buttons → violet ── */
+    .dash-hero-cta  { background: #7C3AED !important; }
+    .dash-hero-cta:hover { background: #6D28D9 !important; box-shadow: 0 8px 24px rgba(109,40,217,0.35) !important; }
+    .dash-brand-icon { background: linear-gradient(135deg, #7C3AED, #A78BFA) !important; box-shadow: 0 4px 12px rgba(124,58,237,0.35) !important; }
+    .env-badge.homo { background: #1E1535; color: #A78BFA !important; border-color: #7C3AED44 !important; }
+
+    /* ── Activity feed rows: bold + vivid colors ── */
+    .dash-activity-text span { font-weight: 700 !important; }
+  </style>
+
+
+  <style>
+    /* KPI sub (date/count/token) → vivid violet */
+    .dash-kpi-sub { color: #7C3AED !important; font-weight: 600 !important; }
+
+    /* Nav circles → violet */
+    .dash-nav-icon { background: #7C3AED !important; }
+  </style>
+
+
+  <style>
+    /* KPI sub → #00B050 */
+    .dash-kpi-sub { color: #00B050 !important; font-weight: 600 !important; }
+  </style>
+
+
+  <style>
+    .dash-kpi-value { color: #00B050 !important; }
+    .dash-kpi-sub   { color: #7C3AED !important; font-weight: 600 !important; }
+  </style>
+
+</body> — overrides via specificity -->

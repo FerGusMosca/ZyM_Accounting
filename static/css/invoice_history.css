@@ -519,3 +519,103 @@ td {
   .ih-header, .ih-stats, .ih-filters, .ih-table-wrap { padding-left: 16px; padding-right: 16px; }
   .ih-title { font-size: 2rem; }
 }
+
+/* ══════════════════════════════════════════════
+   THEME OVERRIDES — creamy / violet palette
+══════════════════════════════════════════════ */
+
+body, .ih-main         { background: #FAF7F2; }
+
+.ih-header::before {
+  background-image:
+    linear-gradient(rgba(124,58,237,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124,58,237,.025) 1px, transparent 1px);
+}
+
+.ih-eyebrow            { color: #6D28D9; }
+.ih-title              { color: #1a0a2e; }
+.ih-title em           { color: #7C3AED; }
+.ih-subtitle           { color: #6b5b8a; }
+
+/* Stats strip */
+.ih-stat               { background: #f0ebe3; border-color: #d8d0c8; }
+.ih-stat:hover         { border-color: #c8b8e8; }
+.ih-stat-label         { color: #9977bb; }
+.ih-stat-val           { color: #1a0a2e; }
+.ih-stat-val.blue      { color: #7C3AED; }
+.ih-stat-val.green     { color: #00B050; }
+.ih-stat-val.gold      { color: #92400e; }
+.ih-stat-val.purple    { color: #7C3AED; }
+.ih-stat-sub           { color: #9977bb; }
+
+/* Filters */
+.ih-flabel             { color: #9977bb; }
+.ih-input              { background: #f0ebe3; border-color: #d8d0c8; color: #2d1a00; }
+.ih-input:focus        { border-color: #7C3AED; box-shadow: 0 0 0 3px rgba(124,58,237,.1); }
+.ih-input::placeholder { color: #b8a8cc; }
+input[type="date"].ih-input::-webkit-calendar-picker-indicator { filter: none; }
+
+/* Buttons */
+.btn-primary           { background: #7C3AED; color: white; }
+.btn-primary:hover     { background: #6D28D9; box-shadow: 0 4px 16px rgba(124,58,237,.3); }
+.btn-ghost             { background: transparent; color: #6b5b8a; border-color: #d8d0c8; }
+.btn-ghost:hover       { background: #ede8e1; color: #2d1a00; border-color: #c8b8e8; }
+
+/* Table box */
+.ih-table-box          { background: #f0ebe3; border-color: #d8d0c8; }
+.ih-toolbar            { border-bottom-color: #d8d0c8; }
+.ih-count              { color: #6b5b8a; }
+.ih-count strong       { color: #7C3AED; }
+
+thead th               { background: #ede8e1; color: #9977bb; border-bottom-color: #d8d0c8; }
+thead th:hover         { color: #6D28D9; }
+thead th.sorted        { color: #7C3AED; }
+
+tbody tr               { border-bottom-color: #d8d0c8; }
+tbody tr:hover         { background: #f5f0e8; cursor: pointer; }
+
+td                     { color: #2d1a00; }
+.td-mono               { color: #2d1a00; }
+td[style*="color:#8B949E"] { color: #9977bb !important; }
+
+.td-amount             { color: #00B050; }
+.td-cae                { color: #c8b8e8; }
+.td-cae.has-cae        { color: #7C3AED; }
+
+.badge.ok              { background: #d1fae5; color: #166534; border-color: #86efac; }
+.badge.pending         { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+
+/* Pagination */
+.ih-pagination         { border-top-color: #d8d0c8; }
+.pg-btn                { border-color: #d8d0c8; color: #6b5b8a; }
+.pg-btn:hover          { background: #ede8e1; color: #2d1a00; }
+.pg-btn.active         { background: #7C3AED; border-color: #7C3AED; color: white; }
+
+/* Drawer */
+.overlay               { background: rgba(80,40,120,.35); }
+.drawer                { background: #FAF7F2; border-left-color: #d8d0c8; }
+.drawer-hdr            { background: #FAF7F2; border-bottom-color: #d8d0c8; }
+.drawer-ttl            { color: #1a0a2e; }
+.drawer-close          { border-color: #d8d0c8; color: #6b5b8a; }
+.drawer-close:hover    { background: #ede8e1; color: #2d1a00; }
+
+.dsec                  { background: #f0ebe3; border-color: #d8d0c8; }
+.dsec-ttl              { background: #ede8e1; border-bottom-color: #d8d0c8; color: #9977bb; }
+.drow                  { border-bottom-color: #e8e0d8; }
+.dkey                  { color: #6b5b8a; }
+.dval                  { color: #2d1a00; }
+.dval.green            { color: #00B050; }
+.dval.blue             { color: #7C3AED; }
+
+/* Toast */
+.toast                 { background: #f0ebe3; border-color: #d8d0c8; color: #2d1a00; box-shadow: 0 8px 28px rgba(80,40,120,.15); }
+.toast.ok              { border-color: #86efac; }
+.toast.err             { border-color: #fca5a5; }
+
+/* Spinner */
+.spinner               { border-color: #d8d0c8; border-top-color: #7C3AED; }
+
+/* States */
+.ih-state              { color: #9977bb; }
+.ih-state-title        { color: #6b5b8a; }
+.ih-state-sub          { color: #9977bb; }
