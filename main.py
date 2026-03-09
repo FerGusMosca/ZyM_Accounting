@@ -1,19 +1,17 @@
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 import uvicorn
 from starlette.middleware.sessions import SessionMiddleware
 from common.config.settings import get_settings
-from controllers.billing_extractor_n_generator_controller import BillingExtractorNGeneratorController
-from starlette.middleware.sessions import SessionMiddleware
+from common.util.templates import templates
 
+from controllers.billing_extractor_n_generator_controller import BillingExtractorNGeneratorController
 from controllers.dashboard_controller import DashboardController
 from controllers.invoice_history_controller import InvoiceHistoryController
 
 settings = get_settings()
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
 
 app.add_middleware(SessionMiddleware, secret_key=settings.session_key)
 
@@ -33,16 +31,14 @@ async def main_page(request: Request):
 #       CONTROLLERS
 # ===========================
 
-main_dashboard= DashboardController()
+main_dashboard = DashboardController()
 app.include_router(main_dashboard.router)
 
-billing_extractor_n_generator= BillingExtractorNGeneratorController()
+billing_extractor_n_generator = BillingExtractorNGeneratorController()
 app.include_router(billing_extractor_n_generator.router)
 
-
-bills_history= InvoiceHistoryController()
+bills_history = InvoiceHistoryController()
 app.include_router(bills_history.router)
-
 
 
 # ===========================

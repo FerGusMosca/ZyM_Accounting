@@ -37,6 +37,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from common.util.std_in_out.root_locator import RootLocator
+from common.util.templates import templates
 
 logger = logging.getLogger(__name__)
 
@@ -375,9 +376,7 @@ class BillingExtractorNGeneratorController:
 
     def __init__(self):
         self.router = APIRouter(prefix="/billing_extractor_n_generator")
-
-        templates_path = os.path.join(RootLocator.get_root(), "templates")
-        self.templates = Jinja2Templates(directory=templates_path)
+        self.templates = templates
 
         try:
             from common.config.settings import get_settings

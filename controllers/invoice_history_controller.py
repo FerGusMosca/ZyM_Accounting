@@ -18,9 +18,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
-
 from common.util.std_in_out.root_locator import RootLocator
+from common.util.templates import templates
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +71,7 @@ class InvoiceHistoryController:
         self.router = APIRouter(prefix="/invoice_history")
 
         templates_path = os.path.join(RootLocator.get_root(), "templates")
-        self.templates = Jinja2Templates(directory=templates_path)
+        self.templates = templates
 
         @self.router.get("/", response_class=HTMLResponse)
         async def page(request: Request):

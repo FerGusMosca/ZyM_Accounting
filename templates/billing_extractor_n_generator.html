@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Extracción y Generación de Facturas</title>
-  <link rel="stylesheet" href="/static/css/main.css">
-  <link rel="stylesheet" href="/static/css/billing_extractor_n_generator.css">
+  <link rel="stylesheet" href="{{ sv('/static/css/main.css') }}">
+  <link rel="stylesheet" href="{{ sv('/static/css/billing_extractor_n_generator.css') }}">
+  <link rel="stylesheet" href="{{ sv('/static/css/theme.css') }}">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     if (typeof pdfjsLib !== 'undefined') {
@@ -18,7 +19,7 @@
 <nav class="navbar">
   <ul>
     <!-- FIX #2: ZyM Accounting lleva a la landing -->
-    <li><a href="/">🏠 ZyM Accounting</a></li>
+    <li><a href="/">🏠 MOSCA</a></li>
   </ul>
 </nav>
 
@@ -146,6 +147,6 @@
   </div>
 </div>
 
-<script src="/static/js/billing_extractor_n_generator.js"></script>
+<script src="{{ sv('/static/js/billing_extractor_n_generator.js') }}"></script>
 </body>
 </html>

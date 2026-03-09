@@ -1,80 +1,61 @@
 /*
- * theme.css — Shared design tokens for MOSCA
- * Import this in every page AFTER main.css and the page-specific CSS.
+ * theme.css — Paleta compartida MOSCA
+ * Importar en todos los HTML DESPUÉS de los CSS específicos de cada página.
  *
- * Covers:
- *   - Background: creamy white (#FAF7F2)
- *   - Sidebar: #FFB7FF with dark text
- *   - Accent / buttons: violet (#7C3AED / #6D28D9)
- *   - KPI values: green (#00B050)
- *   - Labels / eyebrows: violet (#6D28D9)
- *   - Nav circles: violet
- *   - Text: dark (#2d1a00) on light bg
+ * Orden de imports en cada HTML:
+ *   <link rel="stylesheet" href="/static/css/main.css">
+ *   <link rel="stylesheet" href="/static/css/[page].css">
+ *   <link rel="stylesheet" href="/static/css/theme.css">
  */
 
-/* ── CSS Variables ─────────────────────────────────────────────── */
+/* ── Variables ─────────────────────────────────────────────────── */
 :root {
-  --bg:          #FAF7F2;
-  --bg-muted:    #f0ebe3;
-  --bg-subtle:   #ede8e1;
-  --border:      #d8d0c8;
-  --border-soft: #c8b8e8;
+  --bg:           #FAF7F2;
+  --bg-muted:     #f0ebe3;
+  --bg-subtle:    #ede8e1;
+  --border:       #d8d0c8;
+  --border-soft:  #c8b8e8;
 
-  --violet:      #7C3AED;
-  --violet-dark: #6D28D9;
-  --violet-pale: #A78BFA;
-  --violet-bg:   #e8dff5;
+  --violet:       #7C3AED;
+  --violet-dark:  #6D28D9;
+  --violet-pale:  #A78BFA;
+  --violet-bg:    #e8dff5;
 
-  --green:       #00B050;
-  --sidebar-bg:  #FFB7FF;
+  --green:        #00B050;
+  --sidebar-bg:   #FFB7FF;
 
-  --text:        #2d1a00;
-  --text-muted:  #6b5b8a;
-  --text-label:  #6D28D9;
+  --text:         #2d1a00;
+  --text-muted:   #6b5b8a;
+  --text-label:   #6D28D9;
 }
 
-/* ── Global background ─────────────────────────────────────────── */
-body,
-.content,
-.dash-main,
-.ih-main       { background: var(--bg) !important; }
+/* ── Global ────────────────────────────────────────────────────── */
+body                   { background: var(--bg) !important; }
 
-.panel,
-.dash-kpi,
-.dash-hero,
-.dash-bottom,
-.dash-panel    { background: var(--bg) !important; }
-
-/* ── Navbar ────────────────────────────────────────────────────── */
-.navbar {
-  background: var(--bg) !important;
-  border-bottom-color: var(--border) !important;
-}
-.navbar a       { color: var(--violet) !important; }
-.navbar a:hover { color: var(--violet-dark) !important; }
+/* ── Navbar (billing extractor page) ──────────────────────────── */
+.navbar                { background: var(--bg) !important; border-bottom-color: var(--border) !important; }
+.navbar a              { color: var(--violet) !important; }
+.navbar a:hover        { color: var(--violet-dark) !important; }
+.content               { background: var(--bg) !important; }
+.panel                 { background: var(--bg) !important; border-color: var(--border) !important; box-shadow: 0 8px 32px rgba(80,40,120,.08) !important; }
 
 /* ── Sidebar ───────────────────────────────────────────────────── */
-.dash-sidebar {
-  background: var(--sidebar-bg) !important;
-  border-right: 1px solid #e89ee8 !important;
-}
-.dash-brand           { border-bottom-color: #e89ee8 !important; }
-.dash-brand-icon      { background: linear-gradient(135deg, var(--violet), var(--violet-pale)) !important; box-shadow: 0 4px 12px rgba(124,58,237,.35) !important; }
-.dash-brand-name      { color: #1a001a !important; font-weight: 700 !important; }
-.dash-nav-section     { color: var(--violet-dark) !important; }
-.dash-nav-item        { color: #2d002d !important; font-weight: 600 !important; }
-.dash-nav-item:hover  { background: #f5c8f5 !important; color: #0d000d !important; }
-.dash-nav-item.active { background: #f0a8f0 !important; color: #1a001a !important; border-color: #cc66cc !important; }
-.dash-sidebar-footer  { border-top-color: #e89ee8 !important; }
-.dash-version         { color: var(--violet-dark) !important; }
-
-/* Nav icons → violet circles */
+.dash-sidebar          { background: var(--sidebar-bg) !important; border-right: 1px solid #e89ee8 !important; }
+.dash-brand            { border-bottom-color: #e89ee8 !important; }
+.dash-brand-icon       { background: #1F6FEB !important; box-shadow: 0 4px 12px rgba(31,111,235,.35) !important; }
+.dash-brand-name       { color: #1a001a !important; font-weight: 700 !important; }
+.dash-brand-sub        { color: var(--violet) !important; display: block !important; font-size: 10px !important; text-transform: uppercase !important; letter-spacing: .06em !important; font-weight: 600 !important; }
+.dash-nav-section      { color: var(--violet-dark) !important; }
+.dash-nav-item         { color: #2d002d !important; font-weight: 600 !important; }
+.dash-nav-item:hover   { background: #f5c8f5 !important; color: #0d000d !important; }
+.dash-nav-item.active  { background: #f0a8f0 !important; color: #1a001a !important; border-color: #cc66cc !important; }
+.dash-sidebar-footer   { border-top-color: #e89ee8 !important; }
+.dash-version          { color: var(--violet-dark) !important; }
 .dash-nav-icon {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 20px !important;
-  height: 20px !important;
+  width: 20px !important; height: 20px !important;
   border-radius: 50% !important;
   background: var(--violet) !important;
   color: transparent !important;
@@ -82,163 +63,150 @@ body,
   flex-shrink: 0 !important;
 }
 
-/* ── Labels / eyebrows ─────────────────────────────────────────── */
-.dash-hero-eyebrow,
-.dash-kpi-label,
-.dash-panel-title,
-.dash-nav-section,
-.ih-eyebrow,
-.beg-control-group label,
-.beg-table th             { color: var(--violet-dark) !important; }
-
-.dash-panel-title::after  { background: var(--border) !important; }
-
-/* ── Buttons → violet ──────────────────────────────────────────── */
-.dash-hero-cta,
-.beg-btn-primary,
-.btn-primary {
-  background: var(--violet) !important;
-  color: white !important;
-}
-.dash-hero-cta:hover,
-.beg-btn-primary:hover,
-.btn-primary:hover {
-  background: var(--violet-dark) !important;
-  box-shadow: 0 4px 14px rgba(124,58,237,.4) !important;
-}
-
-.beg-btn-secondary,
-.beg-btn-small,
-.btn-ghost {
-  background: var(--bg-muted) !important;
-  color: var(--violet) !important;
-  border-color: var(--border-soft) !important;
-}
-.beg-btn-secondary:hover,
-.beg-btn-small:hover,
-.btn-ghost:hover {
-  background: var(--violet-bg) !important;
-  border-color: var(--violet) !important;
-}
-
-.beg-btn-icon {
-  background: var(--bg-muted) !important;
-  color: var(--text-muted) !important;
-  border-color: var(--border) !important;
-}
-.beg-btn-icon:hover { color: var(--violet) !important; border-color: var(--border-soft) !important; }
-
-/* ARCA button */
-.beg-btn-arca {
-  background: linear-gradient(135deg, #2a1840, #1a1020) !important;
-  border-color: rgba(124,58,237,.27) !important;
-  color: var(--violet-pale) !important;
-}
-.beg-btn-arca:hover { background: #3d2060 !important; border-color: var(--violet) !important; }
+/* ── Dashboard main areas ──────────────────────────────────────── */
+.dash-main             { background: var(--bg) !important; }
+.dash-hero             { background: var(--bg) !important; border-bottom-color: var(--border) !important; }
+.dash-hero::before     { background-image: linear-gradient(rgba(124,58,237,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,.025) 1px, transparent 1px) !important; }
+.dash-hero-content     { align-items: flex-start !important; text-align: left !important; }
+.dash-hero-eyebrow     { color: var(--violet-dark) !important; }
+.dash-hero-title       { color: #1a0a2e !important; }
+.dash-hero-subtitle    { color: #3a2a50 !important; font-weight: 400 !important; }
+.dash-hero-cta         { background: var(--violet) !important; }
+.dash-hero-cta:hover   { background: var(--violet-dark) !important; box-shadow: 0 8px 24px rgba(109,40,217,.35) !important; }
 
 /* ── KPI strip ─────────────────────────────────────────────────── */
-.dash-kpi-strip  { background: var(--bg-subtle) !important; }
-.dash-kpi        {
-  background: var(--bg) !important;
-  align-items: center !important;
-  text-align: center !important;
-}
-.dash-kpi-value  { color: var(--green) !important; text-align: center !important; }
-.dash-kpi-sub    { color: var(--violet) !important; font-weight: 600 !important; text-align: center !important; }
-
-/* ── Hero ──────────────────────────────────────────────────────── */
-.dash-hero         { background: var(--bg) !important; border-bottom-color: var(--border) !important; }
-.dash-hero-content { align-items: flex-start !important; text-align: left !important; }
-.dash-hero-title   { color: #1a0a2e !important; }
-.dash-hero-subtitle { color: #3a2a50 !important; font-weight: 400 !important; }
+.dash-kpi-strip        { background: var(--bg-subtle) !important; }
+.dash-kpi              { background: var(--bg) !important; align-items: center !important; text-align: center !important; }
+.dash-kpi::after       { background: linear-gradient(90deg, transparent, rgba(124,58,237,.2), transparent) !important; }
+.dash-kpi-label        { color: var(--violet-dark) !important; text-align: center !important; }
+.dash-kpi-value        { color: var(--green) !important; text-align: center !important; }
+.dash-kpi-sub          { color: var(--violet) !important; font-weight: 600 !important; text-align: center !important; }
 
 /* ── Bottom panels ─────────────────────────────────────────────── */
-.dash-panel              { background: var(--bg) !important; border-right-color: var(--border) !important; }
-.arca-status-row         { border-bottom-color: #e8e0d8 !important; }
-.arca-status-label       { color: #222 !important; font-weight: 600 !important; }
-.arca-status-value       { color: #555 !important; }
-.arca-status-value.ok    { color: #166534 !important; }
-.arca-status-value.warn  { color: #92400e !important; }
+.dash-bottom           { background: var(--bg) !important; }
+.dash-panel            { background: var(--bg) !important; border-right-color: var(--border) !important; }
+.dash-panel-title      { color: var(--violet-dark) !important; }
+.dash-panel-title::after { background: var(--border) !important; }
+.arca-status-row       { border-bottom-color: #e8e0d8 !important; }
+.arca-status-label     { color: #222 !important; font-weight: 600 !important; }
+.arca-status-value     { color: #555 !important; }
+.arca-status-value.ok  { color: #166534 !important; }
+.arca-status-value.warn { color: #92400e !important; }
 .arca-status-value.error { color: #991b1b !important; }
-.dash-activity-item      { border-bottom-color: #e8e0d8 !important; }
-.dash-activity-icon      { background: var(--bg-subtle) !important; border-color: var(--border) !important; }
-.dash-activity-text      { color: #222 !important; }
-.dash-activity-meta      { color: #555 !important; }
+.dash-activity-item    { border-bottom-color: #e8e0d8 !important; }
+.dash-activity-icon    { background: var(--bg-subtle) !important; border-color: var(--border) !important; }
+.dash-activity-text    { color: #222 !important; }
+.dash-activity-meta    { color: #555 !important; }
+.env-badge.homo        { background: #1E1535; color: var(--violet-pale) !important; border-color: rgba(124,58,237,.27) !important; }
 
-/* ── Upload zone (billing page) ────────────────────────────────── */
-.beg-upload-zone {
-  background: var(--bg-muted) !important;
-  border-color: var(--border-soft) !important;
-}
-.beg-upload-zone:hover, .beg-upload-zone.drag-over {
-  background: var(--violet-bg) !important;
-  border-color: var(--violet) !important;
-}
-.beg-upload-text    { color: var(--text) !important; }
-.beg-upload-subtext { color: var(--text-muted) !important; }
+/* ── Invoice history ───────────────────────────────────────────── */
+.ih-main               { background: var(--bg) !important; }
+.ih-header::before     { background-image: linear-gradient(rgba(124,58,237,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,.025) 1px, transparent 1px) !important; }
+.ih-eyebrow            { color: var(--violet-dark) !important; }
+.ih-title              { color: #1a0a2e !important; }
+.ih-title em           { color: var(--violet) !important; }
+.ih-subtitle           { color: var(--text-muted) !important; }
+.ih-stat               { background: var(--bg-muted) !important; border-color: var(--border) !important; }
+.ih-stat:hover         { border-color: var(--border-soft) !important; }
+.ih-stat-label         { color: #9977bb !important; }
+.ih-stat-val           { color: #1a0a2e !important; }
+.ih-stat-val.blue      { color: var(--violet) !important; }
+.ih-stat-val.green     { color: var(--green) !important; }
+.ih-stat-val.gold      { color: #92400e !important; }
+.ih-stat-val.purple    { color: var(--violet) !important; }
+.ih-stat-sub           { color: #9977bb !important; }
+.ih-flabel             { color: #9977bb !important; }
+.ih-input              { background: var(--bg-muted) !important; border-color: var(--border) !important; color: var(--text) !important; }
+.ih-input:focus        { border-color: var(--violet) !important; box-shadow: 0 0 0 3px rgba(124,58,237,.1) !important; }
+.ih-input::placeholder { color: #b8a8cc !important; }
+.ih-table-box          { background: var(--bg-muted) !important; border-color: var(--border) !important; }
+.ih-toolbar            { border-bottom-color: var(--border) !important; }
+.ih-count              { color: var(--text-muted) !important; }
+.ih-count strong       { color: var(--violet) !important; }
+.ih-pagination         { border-top-color: var(--border) !important; }
+.pg-btn                { border-color: var(--border) !important; color: var(--text-muted) !important; }
+.pg-btn:hover          { background: var(--bg-subtle) !important; color: var(--text) !important; }
+.pg-btn.active         { background: var(--violet) !important; border-color: var(--violet) !important; color: white !important; }
 
-/* ── Emisor controls ───────────────────────────────────────────── */
-.beg-controls-row {
-  background: var(--bg-muted) !important;
-  border-color: var(--border) !important;
-}
-.beg-input {
-  background: var(--bg) !important;
-  border-color: var(--border-soft) !important;
-  color: var(--text) !important;
-}
-.beg-input:focus { outline-color: var(--violet) !important; border-color: var(--violet) !important; }
-.beg-input-locked { background: var(--bg-subtle) !important; color: #9977bb !important; }
+/* ── Tables (invoice history only) ────────────────────────────────── */
+.ih-table-box thead th               { background: var(--bg-subtle) !important; color: #9977bb !important; border-bottom-color: var(--border) !important; }
+.ih-table-box thead th:hover         { color: var(--violet-dark) !important; }
+.ih-table-box thead th.sorted        { color: var(--violet) !important; }
+.ih-table-box tbody tr               { border-bottom-color: var(--border) !important; }
+.ih-table-box tbody tr:hover         { background: #f5f0e8 !important; }
+.ih-table-box td                     { color: var(--text) !important; }
+.td-amount             { color: var(--green) !important; }
+.td-cae                { color: var(--border-soft) !important; }
+.td-cae.has-cae        { color: var(--violet) !important; }
+.badge.ok              { background: #d1fae5 !important; color: #166534 !important; border-color: #86efac !important; }
+.badge.pending         { background: #fef3c7 !important; color: #92400e !important; border-color: #fcd34d !important; }
 
-/* ── Table (billing) ───────────────────────────────────────────── */
-.beg-title           { color: var(--violet) !important; }
-.beg-table-wrapper   { border-color: var(--border) !important; }
-.beg-table th        { background: var(--bg-subtle) !important; border-bottom-color: var(--border) !important; }
-.beg-table td        { color: var(--text) !important; border-bottom-color: var(--bg-subtle) !important; }
+/* ── Drawer ────────────────────────────────────────────────────── */
+.overlay               { background: rgba(80,40,120,.35) !important; }
+.drawer                { background: var(--bg) !important; border-left-color: var(--border) !important; }
+.drawer-hdr            { background: var(--bg) !important; border-bottom-color: var(--border) !important; }
+.drawer-ttl            { color: #1a0a2e !important; }
+.drawer-close          { border-color: var(--border) !important; color: var(--text-muted) !important; }
+.drawer-close:hover    { background: var(--bg-subtle) !important; color: var(--text) !important; }
+.dsec                  { background: var(--bg-muted) !important; border-color: var(--border) !important; }
+.dsec-ttl              { background: var(--bg-subtle) !important; border-bottom-color: var(--border) !important; color: #9977bb !important; }
+.drow                  { border-bottom-color: #e8e0d8 !important; }
+.dkey                  { color: var(--text-muted) !important; }
+.dval                  { color: var(--text) !important; }
+.dval.green            { color: var(--green) !important; }
+.dval.blue             { color: var(--violet) !important; }
+
+/* ── Toast ─────────────────────────────────────────────────────── */
+.toast                 { background: var(--bg-muted) !important; border-color: var(--border) !important; color: var(--text) !important; box-shadow: 0 8px 28px rgba(80,40,120,.15) !important; }
+.toast.ok              { border-color: #86efac !important; }
+.toast.err             { border-color: #fca5a5 !important; }
+
+/* ── Spinner ───────────────────────────────────────────────────── */
+.spinner               { border-color: var(--border) !important; border-top-color: var(--violet) !important; }
+
+/* ── Billing extractor page ────────────────────────────────────── */
+.beg-title             { color: var(--violet) !important; }
+.beg-upload-zone       { background: var(--bg-muted) !important; border-color: var(--border-soft) !important; }
+.beg-upload-zone:hover,
+.beg-upload-zone.drag-over { background: var(--violet-bg) !important; border-color: var(--violet) !important; box-shadow: 0 8px 24px rgba(124,58,237,.12) !important; }
+.beg-upload-text       { color: var(--text) !important; }
+.beg-upload-subtext    { color: var(--text-muted) !important; }
+.beg-btn-primary       { background: var(--violet) !important; color: white !important; }
+.beg-btn-primary:hover { background: var(--violet-dark) !important; box-shadow: 0 4px 14px rgba(124,58,237,.4) !important; }
+.beg-btn-secondary     { background: var(--bg-muted) !important; color: var(--violet) !important; border-color: var(--border-soft) !important; }
+.beg-btn-secondary:hover { background: var(--violet-bg) !important; border-color: var(--violet) !important; }
+.beg-btn-small         { background: var(--bg-muted) !important; color: var(--violet) !important; border-color: var(--border-soft) !important; }
+.beg-btn-small:hover   { background: var(--violet-bg) !important; border-color: var(--violet) !important; }
+.beg-btn-icon          { background: var(--bg-muted) !important; color: var(--text-muted) !important; border-color: var(--border) !important; }
+.beg-btn-icon:hover    { color: var(--violet) !important; border-color: var(--border-soft) !important; }
+.beg-btn-arca          { background: linear-gradient(135deg, #2a1840, #1a1020) !important; border-color: rgba(124,58,237,.27) !important; color: var(--violet-pale) !important; }
+.beg-btn-arca:hover    { background: #3d2060 !important; border-color: var(--violet) !important; }
+.beg-controls-row      { background: var(--bg-muted) !important; border-color: var(--border) !important; }
+.beg-control-group label { color: var(--violet-dark) !important; }
+.beg-input             { background: var(--bg) !important; border-color: var(--border-soft) !important; color: var(--text) !important; }
+.beg-input:focus       { outline-color: var(--violet) !important; border-color: var(--violet) !important; }
+.beg-input-locked      { background: var(--bg-subtle) !important; color: #9977bb !important; }
+.beg-table-wrapper     { border-color: var(--border) !important; }
+.beg-table th          { background: var(--bg-subtle) !important; color: var(--violet-dark) !important; border-bottom-color: var(--border) !important; }
+.beg-table td          { color: var(--text) !important; border-bottom-color: var(--bg-subtle) !important; }
 .beg-table tr:hover td { background: #f5f0e8 !important; }
 .beg-table td.beg-amount   { color: var(--green) !important; }
 .beg-table td.beg-comp-nro { color: var(--violet) !important; font-weight: 700 !important; }
-.beg-section-header h2     { color: var(--text) !important; }
-.beg-badge                 { background: var(--violet) !important; }
-
-/* ── PDF cards ─────────────────────────────────────────────────── */
-.beg-pdf-card { background: var(--bg-muted) !important; border-color: var(--border) !important; }
-.beg-pdf-card:hover { border-color: var(--violet) !important; box-shadow: 0 4px 16px rgba(124,58,237,.12) !important; }
-.beg-pdf-card-title  { color: var(--violet) !important; }
-.beg-pdf-card-client { color: var(--text) !important; }
-.beg-pdf-card-amount { color: var(--green) !important; }
-
-/* ── Modal ─────────────────────────────────────────────────────── */
-.beg-modal-content   { background: var(--bg-muted) !important; border-color: var(--border) !important; }
-.beg-modal-header    { background: var(--bg-subtle) !important; border-bottom-color: var(--border) !important; }
-.beg-modal-header h3 { color: var(--violet) !important; }
-
-/* ── ARCA console ──────────────────────────────────────────────── */
-.beg-arca-console        { background: #1a1020 !important; border-color: #3d2060 !important; }
+.beg-section-header h2 { color: var(--text) !important; }
+.beg-badge             { background: var(--violet) !important; }
+.beg-pdf-card          { background: var(--bg-muted) !important; border-color: var(--border) !important; }
+.beg-pdf-card:hover    { border-color: var(--violet) !important; box-shadow: 0 4px 16px rgba(124,58,237,.12) !important; }
+.beg-pdf-card-title    { color: var(--violet) !important; }
+.beg-pdf-card-client   { color: var(--text) !important; }
+.beg-pdf-card-amount   { color: var(--green) !important; }
+.beg-modal-content     { background: var(--bg-muted) !important; border-color: var(--border) !important; }
+.beg-modal-header      { background: var(--bg-subtle) !important; border-bottom-color: var(--border) !important; }
+.beg-modal-header h3   { color: var(--violet) !important; }
+.beg-arca-console      { background: #1a1020 !important; border-color: #3d2060 !important; }
 .beg-arca-console-header { background: #2a1840 !important; border-bottom-color: #3d2060 !important; color: var(--violet-pale) !important; }
 
-/* ── Invoice history page ──────────────────────────────────────── */
-.ih-title em  { color: var(--violet) !important; }
-.ih-eyebrow   { color: var(--violet) !important; }
-.ih-stat      { background: var(--bg-muted) !important; border-color: var(--border) !important; }
-.ih-stat:hover { border-color: var(--border-soft) !important; }
-.ih-stat-label { color: var(--text-muted) !important; }
-.ih-input { background: var(--bg-muted) !important; border-color: var(--border) !important; color: var(--text) !important; }
-.ih-input:focus { border-color: var(--violet) !important; box-shadow: 0 0 0 3px rgba(124,58,237,.1) !important; }
-.ih-table-box { background: var(--bg-muted) !important; border-color: var(--border) !important; }
-.ih-toolbar   { border-bottom-color: var(--border) !important; }
-thead th      { background: var(--bg-subtle) !important; color: var(--text-muted) !important; border-bottom-color: var(--border) !important; }
-thead th:hover { color: var(--violet) !important; }
-thead th.sorted { color: var(--violet) !important; }
-tbody tr      { border-bottom-color: var(--border) !important; }
-tbody tr:hover { background: #f5f0e8 !important; }
-td            { color: var(--text) !important; }
-.td-amount    { color: var(--green) !important; }
-.drawer       { background: var(--bg) !important; border-left-color: var(--border) !important; }
-.drawer-hdr   { background: var(--bg) !important; border-bottom-color: var(--border) !important; }
-.dsec         { background: var(--bg-muted) !important; border-color: var(--border) !important; }
-.dsec-ttl     { background: var(--bg-subtle) !important; border-bottom-color: var(--border) !important; color: var(--text-muted) !important; }
-.drow         { border-bottom-color: var(--border) !important; }
-.dkey         { color: #555 !important; }
-.dval         { color: var(--text) !important; }
-.dval.blue    { color: var(--violet) !important; }
+/* ── Buttons shared (invoice history) ─────────────────────────── */
+.btn-primary           { background: var(--violet) !important; color: white !important; }
+.btn-primary:hover     { background: var(--violet-dark) !important; box-shadow: 0 4px 16px rgba(124,58,237,.3) !important; }
+.btn-ghost             { background: transparent !important; color: var(--text-muted) !important; border-color: var(--border) !important; }
+.btn-ghost:hover       { background: var(--bg-subtle) !important; color: var(--text) !important; border-color: var(--border-soft) !important; }
