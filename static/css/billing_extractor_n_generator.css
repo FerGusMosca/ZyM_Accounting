@@ -555,3 +555,80 @@
   border-top-color: transparent;
   animation: spin .7s linear infinite;
 }
+
+/* ── Botón Mercado Pago ── */
+.beg-btn-mp {
+  background: #009ee3;
+  color: white;
+  border: none;
+}
+.beg-btn-mp:hover {
+  background: #007ab8;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0,158,227,0.4);
+}
+
+/* ── Tabla MP: tipo badges ── */
+.mp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  white-space: nowrap;
+}
+.mp-badge-recibida   { background: #d1fae5; color: #166534; border: 1px solid #86efac; }
+.mp-badge-enviada    { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+.mp-badge-rendimiento { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+.mp-badge-otro       { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+
+/* ── Fila MP con CUIT faltante en grilla principal ── */
+.beg-cuit-missing input {
+  border-color: #ef4444 !important;
+  background: #fff1f1 !important;
+}
+.beg-cuit-missing input:focus {
+  outline-color: #ef4444 !important;
+}
+.beg-cuit-error {
+  font-size: 10px;
+  color: #ef4444;
+  margin-top: 2px;
+}
+
+/* ── Botón Mercado Pago ── */
+.beg-btn-mp {
+  background: #009ee3;
+  color: white;
+  border: none;
+}
+.beg-btn-mp:hover {
+  background: #007ab8;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0,158,227,0.4);
+}
+
+/* ── Filas MP según tipo ── */
+.mp-row-recibida  td { border-left: 3px solid #00B050; }
+.mp-row-enviada   td { border-left: 3px solid #991b1b; opacity: 0.7; }
+.mp-row-rendimiento td,
+.mp-row-otro      td { border-left: 3px solid #92400e; opacity: 0.6; }
+
+/* CUIT input dentro de tabla MP */
+.mp-cuit-input {
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  width: 140px;
+  box-sizing: border-box;
+}
+.mp-cuit-input.invalid {
+  border-color: #991b1b !important;
+  background: rgba(153,27,27,.08) !important;
+}
+.mp-cuit-input.valid {
+  border-color: #00B050 !important;
+}

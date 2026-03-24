@@ -7,6 +7,7 @@ used by the dashboard widgets.
 
 Routes:
     GET  /                          → HTML landing page
+    GET  /dashboard/meta            → JSON product_name + customer_name (instant, no ARCA)
     GET  /dashboard/recent_invoices → JSON last N invoices from AFIP
 """
 
@@ -16,9 +17,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 
 from common.util.std_in_out.root_locator import RootLocator
+from common.util.templates import templates
 
 logger = logging.getLogger(__name__)
 
@@ -71,16 +72,23 @@ class DashboardController:
 
     def __init__(self):
         self.router = APIRouter()
-
-        templates_path = os.path.join(RootLocator.get_root(), "templates")
-        self.templates = Jinja2Templates(directory=templates_path)
+        self.templates = templates
 
         @self.router.get("/", response_class=HTMLResponse)
         async def landing(request: Request):
             return self.templates.TemplateResponse(
-                "dashboard.html",
+                "main_dashboard.html",
                 {"request": request},
             )
+
+        @self.router.get("/dashboard/meta")
+        async def meta():
+            """
+            Instant endpoint — returns only product_name and customer_name.
+            No ARCA calls. Used by the dashboard to render the brand/title
+            immediately without waiting for the slow ARCA connection.
+            """
+            return JSONResponse(_app_meta())
 
         @self.router.get("/dashboard/recent_invoices")
         async def recent_invoices(limit: int = 10):

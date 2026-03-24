@@ -97,10 +97,13 @@ function emisorData() {
 
 function isSkippable(row) {
   const comp = String(row.comp_nro || '').toUpperCase().trim();
-  if (!comp)                           return [true, 'Comp. Nro vacío'];
+  // MP rows: allow empty comp_nro — they get it assigned at generation time
+  if (!comp && !row._from_mp)          return [true, 'Comp. Nro vacío'];
   if (comp.startsWith('EMITIR'))       return [true, `Pendiente: ${row.comp_nro}`];
   if (!row.amount || row.amount === 0) return [true, 'Importe cero o vacío'];
   if (!row.razon_social_cliente)       return [true, 'Sin razón social del cliente'];
+  // MP rows without CUIT: warn but don't skip (user can still fill inline)
+  if (row._from_mp && row._cuit_pending) return [false, ''];
   return [false, ''];
 }
 
@@ -304,11 +307,25 @@ function renderPreviewTable() {
           <button class="beg-btn beg-btn-arca" onclick="registrarEnArca(${i})" title="Registrar en ARCA">🏛</button>
         </div></td>`;
 
+    // Highlight MP rows with pending CUIT
+    if (row._from_mp) {
+      tr.style.borderLeft = row._cuit_pending ? '3px solid #92400e' : '3px solid #7C3AED';
+    }
+
+    // CUIT cell: editable inline for MP rows missing CUIT
+    const cuitCell = row._from_mp && row._cuit_pending
+      ? `<td><input type="text" class="beg-input mp-cuit-input" style="width:140px"
+              placeholder="20-12345678-9"
+              value="${row.cuit_cliente || ''}"
+              oninput="onGridCuitInput(this, ${i})"
+              title="CUIT requerido para ARCA"></td>`
+      : `<td>${row.cuit_cliente || '—'}</td>`;
+
     tr.innerHTML = `
       <td>${i + 1}</td>
-      <td class="beg-comp-nro">${row.comp_nro || '—'}</td>
+      <td class="beg-comp-nro">${row.comp_nro || (row._from_mp ? '<span style="color:#92400e;font-size:11px">sin comp.</span>' : '—')}</td>
       <td>${row.fecha_emision || '—'}</td>
-      <td>${row.cuit_cliente}</td>
+      ${cuitCell}
       <td>${row.razon_social_cliente || '—'}</td>
       <td class="beg-desc ${skip ? 'beg-warn' : ''}" title="${row.descripcion}">
         ${skip ? `⏭ ${motivo}` : (row.descripcion || '(sin descripción)')}
@@ -658,3 +675,267 @@ function arcaLog(line) {
   body.appendChild(el);
   body.scrollTop = body.scrollHeight;
 }
+
+// ── Inline CUIT edit for MP rows in main grid ─────────────────────────────────
+window.onGridCuitInput = function(input, rowIdx) {
+  const val   = input.value.trim();
+  const valid = validarCuit(val);
+  input.classList.remove('valid', 'invalid');
+  if (val === '') {
+    // neutral
+  } else if (valid === true) {
+    input.classList.add('valid');
+    state.rows[rowIdx].cuit_cliente   = val;
+    state.rows[rowIdx]._cuit_pending  = false;
+    // Update border
+    input.closest('tr').style.borderLeft = '3px solid #7C3AED';
+  } else {
+    input.classList.add('invalid');
+  }
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// MERCADO PAGO IMPORT
+// ════════════════════════════════════════════════════════════════════════════
+
+const mpFileInput  = $('mpFileInput');
+const loadMpBtn    = $('loadMpBtn');
+const mpModal      = $('mpModal');
+const closeMpModal = $('closeMpModal');
+const mpImportBtn  = $('mpImportBtn');
+const mpTableBody  = $('mpTableBody');
+const mpCheckAll   = $('mpCheckAll');
+const mpSelCount   = $('mpSelCount');
+
+// State for MP transactions
+const mpState = { transactions: [] };
+
+// ── Open file picker ──────────────────────────────────────────────────────────
+loadMpBtn.addEventListener('click', e => { e.stopPropagation(); mpFileInput.click(); });
+mpFileInput.addEventListener('change', () => {
+  if (mpFileInput.files[0]) uploadMpPdf(mpFileInput.files[0]);
+  mpFileInput.value = '';  // allow re-upload of same file
+});
+
+// ── Close modal ───────────────────────────────────────────────────────────────
+closeMpModal.addEventListener('click', () => mpModal.classList.add('beg-hidden'));
+mpModal.addEventListener('click', e => { if (e.target === mpModal) mpModal.classList.add('beg-hidden'); });
+
+// ── Upload & parse PDF ────────────────────────────────────────────────────────
+async function uploadMpPdf(file) {
+  // Open modal and show loading
+  mpModal.classList.remove('beg-hidden');
+  $('mpHeader').classList.add('beg-hidden');
+  $('mpTableWrap').classList.add('beg-hidden');
+  $('mpEmpty').classList.add('beg-hidden');
+  $('mpLoading').classList.remove('beg-hidden');
+  mpImportBtn.classList.add('beg-hidden');
+  $('mpModalTitle').textContent = `💳 Importar desde Mercado Pago — ${file.name}`;
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const resp = await fetch('/mp_extractor/parse_pdf', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await resp.json();
+
+    $('mpLoading').classList.add('beg-hidden');
+
+    if (data.status !== 'ok') {
+      showStatus(`❌ Error al procesar PDF: ${data.message}`, 'error');
+      mpModal.classList.add('beg-hidden');
+      return;
+    }
+
+    mpState.transactions = data.transactions || [];
+
+    if (!mpState.transactions.length) {
+      $('mpEmpty').classList.remove('beg-hidden');
+      return;
+    }
+
+    // Show header info
+    $('mpTitular').textContent = data.titular || '';
+    $('mpPeriodo').textContent = data.periodo  || '';
+    $('mpHeader').classList.remove('beg-hidden');
+
+    renderMpTable();
+    $('mpTableWrap').classList.remove('beg-hidden');
+    mpImportBtn.classList.remove('beg-hidden');
+
+  } catch (err) {
+    $('mpLoading').classList.add('beg-hidden');
+    showStatus(`❌ Error de red: ${err.message}`, 'error');
+    mpModal.classList.add('beg-hidden');
+  }
+}
+
+// ── Render MP transaction table ───────────────────────────────────────────────
+function renderMpTable() {
+  mpTableBody.innerHTML = '';
+
+  mpState.transactions.forEach((txn, idx) => {
+    const tr = document.createElement('tr');
+    tr.className = `mp-row-${txn.tipo}`;
+
+    const tipoLabel = {
+      recibida:    '<span style="color:#00B050;font-weight:600">↓ recibida</span>',
+      enviada:     '<span style="color:#991b1b;font-weight:600">↑ enviada</span>',
+      rendimiento: '<span style="color:#92400e">~ rendimiento</span>',
+      otro:        '<span style="color:#92400e">? otro</span>',
+    }[txn.tipo] || txn.tipo;
+
+    const amountColor = txn.amount >= 0 ? '#00B050' : '#991b1b';
+    const amountStr   = fmtCurrency(Math.abs(txn.amount));
+    const prefix      = txn.amount < 0 ? '−' : '+';
+
+    tr.innerHTML = `
+      <td style="text-align:center">
+        <input type="checkbox" class="mp-row-check" data-idx="${idx}"
+          ${txn.preselected ? 'checked' : ''}>
+      </td>
+      <td class="beg-comp-nro">${txn.fecha}</td>
+      <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+          title="${txn.descripcion}">${txn.contraparte}</td>
+      <td>${tipoLabel}</td>
+      <td style="text-align:right;font-family:monospace;color:${amountColor};font-weight:600">
+        ${prefix} ${amountStr}
+      </td>
+      <td>
+        <input type="text" class="beg-input mp-cuit-input"
+               placeholder="20-12345678-9"
+               data-idx="${idx}"
+               value="${txn.cuit_cliente || ''}"
+               oninput="onMpCuitInput(this)">
+      </td>
+    `;
+    mpTableBody.appendChild(tr);
+  });
+
+  updateMpSelCount();
+}
+
+// ── CUIT validation ───────────────────────────────────────────────────────────
+function validarCuit(cuit) {
+  if (!cuit) return null;  // null = vacío (no inválido, solo pendiente)
+  const clean = cuit.replace(/[^0-9]/g, '');
+  if (clean.length !== 11) return false;
+
+  const mult   = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  let suma = 0;
+  for (let i = 0; i < 10; i++) suma += parseInt(clean[i]) * mult[i];
+  const resto = suma % 11;
+  const dv    = resto === 0 ? 0 : resto === 1 ? 9 : 11 - resto;
+  return dv === parseInt(clean[10]);
+}
+
+function onMpCuitInput(input) {
+  const idx  = parseInt(input.dataset.idx);
+  const val  = input.value.trim();
+  const valid = validarCuit(val);
+
+  // Update state
+  mpState.transactions[idx].cuit_cliente = val;
+
+  // Visual feedback
+  input.classList.remove('valid', 'invalid');
+  if (val === '') {
+    // empty — neutral
+  } else if (valid === true) {
+    input.classList.add('valid');
+  } else {
+    input.classList.add('invalid');
+  }
+
+  updateMpSelCount();
+}
+
+// ── Select all checkbox ───────────────────────────────────────────────────────
+mpCheckAll.addEventListener('change', () => {
+  document.querySelectorAll('.mp-row-check').forEach(cb => {
+    cb.checked = mpCheckAll.checked;
+    const idx = parseInt(cb.dataset.idx);
+    mpState.transactions[idx].preselected = mpCheckAll.checked;
+  });
+  updateMpSelCount();
+});
+
+// Sync individual checkboxes to state
+document.addEventListener('change', e => {
+  if (e.target.classList.contains('mp-row-check')) {
+    const idx = parseInt(e.target.dataset.idx);
+    mpState.transactions[idx].preselected = e.target.checked;
+    updateMpSelCount();
+  }
+});
+
+function updateMpSelCount() {
+  const selected = mpState.transactions.filter((_, idx) => {
+    const cb = document.querySelector(`.mp-row-check[data-idx="${idx}"]`);
+    return cb ? cb.checked : _.preselected;
+  });
+  const sinCuit = selected.filter(t => !t.cuit_cliente).length;
+  let msg = `${selected.length} seleccionada${selected.length !== 1 ? 's' : ''}`;
+  if (sinCuit > 0) msg += ` · <span style="color:#92400e">⚠ ${sinCuit} sin CUIT</span>`;
+  mpSelCount.innerHTML = msg;
+}
+
+// ── Import selected rows into main grid ──────────────────────────────────────
+mpImportBtn.addEventListener('click', () => {
+  const selected = mpState.transactions.filter((txn, idx) => {
+    const cb = document.querySelector(`.mp-row-check[data-idx="${idx}"]`);
+    return cb ? cb.checked : txn.preselected;
+  });
+
+  if (!selected.length) {
+    showStatus('⚠️ No hay transacciones seleccionadas.', 'error');
+    return;
+  }
+
+  // Find highest existing idx to avoid collisions
+  const maxIdx = state.rows.length ? Math.max(...state.rows.map(r => r.idx)) : -1;
+
+  const newRows = selected.map((txn, i) => ({
+    idx:                  maxIdx + 1 + i,
+    fecha_emision:        txn.fecha_emision,
+    cuit_cliente:         txn.cuit_cliente || '',
+    razon_social_cliente: txn.razon_social_cliente,
+    domicilio_cliente:    txn.domicilio_cliente || '',
+    nombre_contacto:      txn.nombre_contacto  || '',
+    descripcion:          txn.descripcion_servicio,
+    amount:               Math.abs(txn.amount),
+    comp_nro:             '',        // vacío — se asigna al generar
+    cae_number:           '',
+    vencimiento:          '',
+    _from_mp:             true,      // marker para highlight en grilla
+    _cuit_pending:        !txn.cuit_cliente,
+  }));
+
+  // Append to state
+  state.rows = [...state.rows, ...newRows];
+
+  // Reset MP statuses for new rows
+  newRows.forEach(r => {
+    state.rowStatus[r.comp_nro]  = undefined;
+    state.arcaStatus[r.comp_nro] = undefined;
+  });
+
+  // Close modal, show/refresh table
+  mpModal.classList.add('beg-hidden');
+  mpState.transactions = [];
+
+  // Show the preview table with new rows highlighted
+  renderPreviewTable();
+
+  const sinCuit = newRows.filter(r => r._cuit_pending).length;
+  let msg = `✅ ${newRows.length} fila${newRows.length !== 1 ? 's' : ''} importada${newRows.length !== 1 ? 's' : ''} desde Mercado Pago.`;
+  if (sinCuit > 0) msg += ` <strong style="color:#92400e">⚠ ${sinCuit} requieren CUIT.</strong>`;
+  showStatus(msg, newRows.length > 0 && sinCuit === 0 ? 'success' : 'info');
+
+  // Show controls row if hidden
+  controlsRow.classList.remove('beg-hidden');
+  actionButtons.classList.remove('beg-hidden');
+});

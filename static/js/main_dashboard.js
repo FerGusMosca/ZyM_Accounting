@@ -1,6 +1,27 @@
 document.addEventListener('DOMContentLoaded', () => {
-  loadDashboard();
+  loadMeta();       // instant — brand name sin esperar ARCA
+  loadDashboard();  // async  — datos de ARCA cuando estén listos
 });
+
+// ── Instant: brand name + título (sin ARCA) ───────────────────────────────────
+async function loadMeta() {
+  try {
+    const res  = await fetch('/dashboard/meta');
+    const data = await res.json();
+    const name = data.product_name || 'MOSCA';
+    document.title = name;
+    document.getElementById('heroTitle').textContent = name;
+    document.getElementById('brandName').textContent = name;
+    if (data.customer_name) {
+      const sub = document.getElementById('brandSub');
+      if (sub) sub.textContent = 'para ' + data.customer_name;
+      document.getElementById('heroSubtitle').textContent =
+        `Gestión de facturación, generación de comprobantes y trazabilidad contable para ${data.customer_name}.`;
+    }
+  } catch (e) {
+    console.warn('loadMeta:', e);
+  }
+}
 
 async function loadDashboard() {
   try {
