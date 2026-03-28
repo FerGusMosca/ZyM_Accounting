@@ -97,12 +97,13 @@ function emisorData() {
 
 function isSkippable(row) {
   const comp = String(row.comp_nro || '').toUpperCase().trim();
-  // MP rows: allow empty comp_nro — se asigna al generar
+  // MP rows: allow empty comp_nro — they get it assigned at generation time
   if (!comp && !row._from_mp)          return [true, 'Comp. Nro vacío'];
   if (comp.startsWith('EMITIR'))       return [true, `Pendiente: ${row.comp_nro}`];
   if (!row.amount || row.amount === 0) return [true, 'Importe cero o vacío'];
   if (!row.razon_social_cliente)       return [true, 'Sin razón social del cliente'];
-  // CUIT vacío = Consumidor Final, válido
+  // MP rows without CUIT: warn but don't skip (user can still fill inline)
+  if (row._from_mp && row._cuit_pending) return [false, ''];
   return [false, ''];
 }
 
@@ -283,16 +284,17 @@ function renderPreviewTable() {
     // Status dots: PDF y ARCA en columnas separadas
     let statusDot = '';
     if (!skip) {
-      const pdfStatus  = state.rowStatus[row.comp_nro];
-      const arcaStatus = state.arcaStatus[row.comp_nro];
+      const rowKey     = row.comp_nro || `mp_${row.idx}`;
+      const pdfStatus  = state.rowStatus[rowKey];
+      const arcaStatus = state.arcaStatus[rowKey];
       const pdfClass   = pdfStatus  === 'ok' ? 'row-status-ok'  : pdfStatus  === 'error' ? 'row-status-error'  : '';
       const arcaClass  = arcaStatus === 'ok' ? 'row-status-ok'  : arcaStatus === 'error' ? 'row-status-error' : '';
       statusDot = `
         <td style="text-align:center;width:36px">
-          <span class="row-status-dot ${pdfClass}" data-pdf-cell="${row.comp_nro}" title="PDF"></span>
+          <span class="row-status-dot ${pdfClass}" data-pdf-cell="${rowKey}" title="PDF"></span>
         </td>
         <td style="text-align:center;width:36px">
-          <span class="row-status-dot ${arcaClass}" data-arca-cell="${row.comp_nro}" title="ARCA"></span>
+          <span class="row-status-dot ${arcaClass}" data-arca-cell="${rowKey}" title="ARCA"></span>
         </td>`;
     } else {
       statusDot = `<td></td><td></td>`;
@@ -311,20 +313,14 @@ function renderPreviewTable() {
       tr.style.borderLeft = row._cuit_pending ? '3px solid #92400e' : '3px solid #7C3AED';
     }
 
-    // CUIT cell: editable inline para filas MP; muestra "Consumidor Final" si vacío
-    let cuitCell;
-    if (row._from_mp && row._cuit_pending) {
-      cuitCell = `<td><input type="text" class="beg-input mp-cuit-input" style="width:160px"
-              placeholder="CUIT o dejar vacío (CF)"
+    // CUIT cell: editable inline for MP rows missing CUIT
+    const cuitCell = row._from_mp && row._cuit_pending
+      ? `<td><input type="text" class="beg-input mp-cuit-input" style="width:140px"
+              placeholder="20-12345678-9"
               value="${row.cuit_cliente || ''}"
               oninput="onGridCuitInput(this, ${i})"
-              title="Dejar vacío para Consumidor Final"></td>`;
-    } else {
-      const cuitDisplay = row.cuit_cliente
-        ? row.cuit_cliente
-        : '<span style="color:var(--text-muted);font-style:italic;font-size:11px">Consumidor Final</span>';
-      cuitCell = `<td>${cuitDisplay}</td>`;
-    }
+              title="CUIT requerido para ARCA"></td>`
+      : `<td>${row.cuit_cliente || '—'}</td>`;
 
     tr.innerHTML = `
       <td>${i + 1}</td>
@@ -405,7 +401,8 @@ window.generateSingle = async function(idx) {
   if (previewSection.classList.contains('beg-hidden')) {
     renderPreviewTable();
   }
-  markRowStatus(row.comp_nro, 'loading');
+  const _rk = row.comp_nro || `mp_${row.idx}`;
+  markRowStatus(_rk, 'loading');
 
   try {
     const resp = await fetch('/billing_extractor_n_generator/generate_pdf', {
@@ -427,7 +424,7 @@ window.generateSingle = async function(idx) {
       const existingCard = document.querySelector(`[data-card="${row.comp_nro}"]`);
       if (existingCard) existingCard.remove();
       addToPDFGallery(row, url, filename);
-      markRowStatus(row.comp_nro, 'ok');
+      markRowStatus(row.comp_nro || `mp_${row.idx}`, 'ok');
 
     } else {
       // Sin wkhtmltopdf: guardar HTML para imprimir
@@ -440,7 +437,7 @@ window.generateSingle = async function(idx) {
       const existingCard = document.querySelector(`[data-card="${row.comp_nro}"]`);
       if (existingCard) existingCard.remove();
       addToPDFGalleryPrintOnly(row, url);
-      markRowStatus(row.comp_nro, 'ok');
+      markRowStatus(row.comp_nro || `mp_${row.idx}`, 'ok');
     }
   } catch (err) {
     markRowStatus(row.comp_nro, 'error');
@@ -491,7 +488,8 @@ generateAllBtn.addEventListener('click', async () => {
 
   for (const row of validRows) {
     arcaLog(`── Generando ${row.comp_nro} (${done + 1}/${validRows.length})…`);
-    markRowStatus(row.comp_nro, 'loading');
+    const _rk = row.comp_nro || `mp_${row.idx}`;
+  markRowStatus(_rk, 'loading');
 
     try {
       const result = await _fetchPdfBlob(row, emisor);
@@ -501,20 +499,20 @@ generateAllBtn.addEventListener('click', async () => {
         const url      = URL.createObjectURL(result.blob);
         state.generatedPDFs[row.comp_nro] = { url, filename };
         addToPDFGallery(row, url, filename);
-        markRowStatus(row.comp_nro, 'ok');
+        markRowStatus(row.comp_nro || `mp_${row.idx}`, 'ok');
         arcaLog(`✅ ${row.comp_nro} — OK  ($ ${row.amount.toLocaleString('es-AR')})`);
       } else {
         const blob = new Blob([result.text], { type: 'text/html' });
         const url  = URL.createObjectURL(blob);
         state.generatedPDFs[row.comp_nro] = { url, filename: `factura_${row.comp_nro}.html` };
         addToPDFGalleryPrintOnly(row, url);
-        markRowStatus(row.comp_nro, 'ok');
+        markRowStatus(row.comp_nro || `mp_${row.idx}`, 'ok');
         arcaLog(`✅ ${row.comp_nro} — HTML (sin wkhtmltopdf)`);
       }
       done++;
     } catch (err) {
       errors++;
-      markRowStatus(row.comp_nro, 'error');
+      markRowStatus(row.comp_nro || `mp_${row.idx}`, 'error');
       arcaLog(`❌ ${row.comp_nro} — Error: ${err.message}`);
     }
   }
@@ -620,7 +618,7 @@ window.registrarEnArca = async function(idx) {
     (data.log || []).forEach(line => arcaLog(line));
 
     if (data.status === 'ok') {
-      markArcaStatus(row.comp_nro, 'ok');
+      markArcaStatus(row.comp_nro || `mp_${row.idx}`, 'ok');
       arcaLog('');
       arcaLog('✅ ¡Factura registrada en AFIP!');
       arcaLog(`   CAE:      ${data.cae}`);
@@ -632,7 +630,7 @@ window.registrarEnArca = async function(idx) {
       arcaLog('⚠️  ARCA no configurado en este ambiente.');
       arcaLog(`   ${data.error || ''}`);
     } else {
-      markArcaStatus(row.comp_nro, 'error');
+      markArcaStatus(row.comp_nro || `mp_${row.idx}`, 'error');
       arcaLog(`❌ Error: ${data.error || 'desconocido'}`);
     }
   } catch (err) {
@@ -686,19 +684,13 @@ window.onGridCuitInput = function(input, rowIdx) {
   const val   = input.value.trim();
   const valid = validarCuit(val);
   input.classList.remove('valid', 'invalid');
-
   if (val === '') {
-    // Vacío = Consumidor Final — válido
-    input.placeholder = 'CUIT o dejar vacío (CF)';
-    state.rows[rowIdx].cuit_cliente      = '';
-    state.rows[rowIdx].consumidor_final  = true;
-    state.rows[rowIdx]._cuit_pending     = false;
-    input.closest('tr').style.borderLeft = '3px solid #7C3AED';
+    // neutral
   } else if (valid === true) {
     input.classList.add('valid');
-    state.rows[rowIdx].cuit_cliente      = val;
-    state.rows[rowIdx].consumidor_final  = false;
-    state.rows[rowIdx]._cuit_pending     = false;
+    state.rows[rowIdx].cuit_cliente   = val;
+    state.rows[rowIdx]._cuit_pending  = false;
+    // Update border
     input.closest('tr').style.borderLeft = '3px solid #7C3AED';
   } else {
     input.classList.add('invalid');
@@ -812,7 +804,7 @@ function renderMpTable() {
       <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
           title="${txn.descripcion}">${txn.contraparte}</td>
       <td>${tipoLabel}</td>
-      <td style="text-align:right;font-family:monospace;color:${amountColor};font-weight:600">
+      <td style="text-align:right;font-family:monospace;color:${amountColor};font-weight:600;white-space:nowrap;min-width:130px">
         ${prefix} ${amountStr}
       </td>
       <td>
@@ -844,16 +836,17 @@ function validarCuit(cuit) {
 }
 
 function onMpCuitInput(input) {
-  const idx   = parseInt(input.dataset.idx);
-  const val   = input.value.trim();
+  const idx  = parseInt(input.dataset.idx);
+  const val  = input.value.trim();
   const valid = validarCuit(val);
 
-  mpState.transactions[idx].cuit_cliente     = val;
-  mpState.transactions[idx].consumidor_final = (val === '');
+  // Update state
+  mpState.transactions[idx].cuit_cliente = val;
 
+  // Visual feedback
   input.classList.remove('valid', 'invalid');
   if (val === '') {
-    // Vacío = Consumidor Final — neutral (válido)
+    // empty — neutral
   } else if (valid === true) {
     input.classList.add('valid');
   } else {
@@ -889,7 +882,7 @@ function updateMpSelCount() {
   });
   const sinCuit = selected.filter(t => !t.cuit_cliente).length;
   let msg = `${selected.length} seleccionada${selected.length !== 1 ? 's' : ''}`;
-  if (sinCuit > 0) msg += ` · <span style="color:var(--text-muted);font-style:italic">${sinCuit} como Consumidor Final</span>`;
+  if (sinCuit > 0) msg += ` · <span style="color:#92400e">⚠ ${sinCuit} sin CUIT</span>`;
   mpSelCount.innerHTML = msg;
 }
 
@@ -912,16 +905,15 @@ mpImportBtn.addEventListener('click', () => {
     idx:                  maxIdx + 1 + i,
     fecha_emision:        txn.fecha_emision,
     cuit_cliente:         txn.cuit_cliente || '',
-    consumidor_final:     !txn.cuit_cliente,   // sin CUIT = Consumidor Final
     razon_social_cliente: txn.razon_social_cliente,
     domicilio_cliente:    txn.domicilio_cliente || '',
     nombre_contacto:      txn.nombre_contacto  || '',
     descripcion:          txn.descripcion_servicio,
     amount:               Math.abs(txn.amount),
-    comp_nro:             '',
+    comp_nro:             '',        // vacío — se asigna al generar
     cae_number:           '',
     vencimiento:          '',
-    _from_mp:             true,
+    _from_mp:             true,      // marker para highlight en grilla
     _cuit_pending:        !txn.cuit_cliente,
   }));
 
@@ -930,8 +922,9 @@ mpImportBtn.addEventListener('click', () => {
 
   // Reset MP statuses for new rows
   newRows.forEach(r => {
-    state.rowStatus[r.comp_nro]  = undefined;
-    state.arcaStatus[r.comp_nro] = undefined;
+    const _rk2 = r.comp_nro || `mp_${r.idx}`;
+    state.rowStatus[_rk2]  = undefined;
+    state.arcaStatus[_rk2] = undefined;
   });
 
   // Close modal, show/refresh table

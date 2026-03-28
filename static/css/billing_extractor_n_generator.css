@@ -345,7 +345,20 @@
 
 .beg-row-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.beg-row-actions .beg-btn-icon,
+.beg-row-actions .beg-btn-arca {
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+  height: 26px;
+  min-width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ── Galería de PDFs generados ── */
@@ -546,6 +559,8 @@
   border-radius: 50%;
   background: #30363D;
   vertical-align: middle;
+  line-height: 1;
+  flex-shrink: 0;
 }
 .row-status-ok    { background: #3FB950; box-shadow: 0 0 4px #3FB95066; }
 .row-status-error { background: #F85149; box-shadow: 0 0 4px #F8514966; }

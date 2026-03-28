@@ -370,28 +370,19 @@ def wsfe_request_cae(
     homo: bool = True,
     consumidor_final: bool = False,
 ) -> dict:
-    """
-    Request a CAE for a type-C invoice.
+    """Request a CAE for a type-C invoice. consumidor_final=True → DocTipo=99, DocNro=0"""
+    host, path = _WSFE["homo" if homo else "prod"]
+    auth       = _wsfe_auth(token, sign, cuit)
+    amount_str = f"{total_amount:.2f}"
 
-    consumidor_final=True → DocTipo=99, DocNro=0 (sin documento)
-    consumidor_final=False → DocTipo=80, DocNro=CUIT del cliente
-    """
-    host, path        = _WSFE["homo" if homo else "prod"]
-    auth              = _wsfe_auth(token, sign, cuit)
-    amount_str        = f"{total_amount:.2f}"
-
-    # ── Receptor: Consumidor Final o con CUIT ─────────────────────────────────
-    if consumidor_final or not client_cuit or client_cuit.strip() in ("", "0"):
-        doc_tipo          = 99   # Sin documento
-        doc_nro           = 0
-        cond_iva_receptor = 5    # Consumidor Final
-        client_label      = "CONSUMIDOR FINAL"
+    if consumidor_final or not client_cuit or not client_cuit.strip():
+        doc_tipo     = 99
+        doc_nro      = 0
+        client_label = "CONSUMIDOR FINAL"
     else:
-        doc_tipo          = 80   # CUIT
-        doc_nro           = _clean_cuit(client_cuit)
-        cond_iva_receptor = 5    # Consumidor Final (tipo C siempre)
-        client_label      = doc_nro
-    # ─────────────────────────────────────────────────────────────────────────
+        doc_tipo     = 80
+        doc_nro      = _clean_cuit(client_cuit)
+        client_label = doc_nro
 
     body = f"""
 <FECAESolicitar xmlns="{_WSFE_NS}">
@@ -413,7 +404,7 @@ def wsfe_request_cae(
         <FchServHasta>{invoice_date}</FchServHasta>
         <FchVtoPago>{invoice_date}</FchVtoPago>
         <MonId>{CURRENCY_ARS}</MonId><MonCotiz>1</MonCotiz>
-        <CondicionIVAReceptorId>{cond_iva_receptor}</CondicionIVAReceptorId>
+        <CondicionIVAReceptorId>5</CondicionIVAReceptorId>
       </FECAEDetRequest>
     </FeDetReq>
   </FeCAEReq>
@@ -635,20 +626,21 @@ class ARCAClient:
         return all_invoices
 
     def issue_invoice(self, row: dict) -> dict:
-        """Issue an invoice in AFIP from an xlsx row dict."""
+        """Issue an invoice in AFIP from a row dict.
+        Always uses today's date — AFIP rejects past dates.
+        consumidor_final when cuit_cliente is empty.
+        """
         m  = re.match(r"[Cc](\d+)-", row.get("comp_nro", ""))
         pv = int(m.group(1)) if m else 2
-        fecha_str = row.get("fecha_emision", "")
-        if "/" in fecha_str:
-            d, mo, y = fecha_str.split("/")
-            invoice_date = f"{y}{mo}{d}"
-        else:
-            invoice_date = datetime.now().strftime("%Y%m%d")
+
+        # Always use today — AFIP rejects past/future dates in most cases
+        invoice_date = datetime.now().strftime("%Y%m%d")
+
         last_number    = self.get_last_invoice_number(pv)
         invoice_number = last_number + 1
         t = self._get_token()
-        cuit_cliente      = row.get("cuit_cliente", "") or ""
-        consumidor_final  = row.get("consumidor_final", False) or not cuit_cliente.strip()
+        cuit_cliente     = (row.get("cuit_cliente") or "").strip()
+        consumidor_final = row.get("consumidor_final", False) or not cuit_cliente
         return wsfe_request_cae(
             token=t["token"], sign=t["sign"], cuit=self.cuit,
             punto_venta=pv, invoice_number=invoice_number,
