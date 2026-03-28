@@ -97,13 +97,12 @@ function emisorData() {
 
 function isSkippable(row) {
   const comp = String(row.comp_nro || '').toUpperCase().trim();
-  // MP rows: allow empty comp_nro — they get it assigned at generation time
+  // MP rows: allow empty comp_nro — se asigna al generar
   if (!comp && !row._from_mp)          return [true, 'Comp. Nro vacío'];
   if (comp.startsWith('EMITIR'))       return [true, `Pendiente: ${row.comp_nro}`];
   if (!row.amount || row.amount === 0) return [true, 'Importe cero o vacío'];
   if (!row.razon_social_cliente)       return [true, 'Sin razón social del cliente'];
-  // MP rows without CUIT: warn but don't skip (user can still fill inline)
-  if (row._from_mp && row._cuit_pending) return [false, ''];
+  // CUIT vacío = Consumidor Final, válido
   return [false, ''];
 }
 
@@ -312,14 +311,20 @@ function renderPreviewTable() {
       tr.style.borderLeft = row._cuit_pending ? '3px solid #92400e' : '3px solid #7C3AED';
     }
 
-    // CUIT cell: editable inline for MP rows missing CUIT
-    const cuitCell = row._from_mp && row._cuit_pending
-      ? `<td><input type="text" class="beg-input mp-cuit-input" style="width:140px"
-              placeholder="20-12345678-9"
+    // CUIT cell: editable inline para filas MP; muestra "Consumidor Final" si vacío
+    let cuitCell;
+    if (row._from_mp && row._cuit_pending) {
+      cuitCell = `<td><input type="text" class="beg-input mp-cuit-input" style="width:160px"
+              placeholder="CUIT o dejar vacío (CF)"
               value="${row.cuit_cliente || ''}"
               oninput="onGridCuitInput(this, ${i})"
-              title="CUIT requerido para ARCA"></td>`
-      : `<td>${row.cuit_cliente || '—'}</td>`;
+              title="Dejar vacío para Consumidor Final"></td>`;
+    } else {
+      const cuitDisplay = row.cuit_cliente
+        ? row.cuit_cliente
+        : '<span style="color:var(--text-muted);font-style:italic;font-size:11px">Consumidor Final</span>';
+      cuitCell = `<td>${cuitDisplay}</td>`;
+    }
 
     tr.innerHTML = `
       <td>${i + 1}</td>
@@ -681,13 +686,19 @@ window.onGridCuitInput = function(input, rowIdx) {
   const val   = input.value.trim();
   const valid = validarCuit(val);
   input.classList.remove('valid', 'invalid');
+
   if (val === '') {
-    // neutral
+    // Vacío = Consumidor Final — válido
+    input.placeholder = 'CUIT o dejar vacío (CF)';
+    state.rows[rowIdx].cuit_cliente      = '';
+    state.rows[rowIdx].consumidor_final  = true;
+    state.rows[rowIdx]._cuit_pending     = false;
+    input.closest('tr').style.borderLeft = '3px solid #7C3AED';
   } else if (valid === true) {
     input.classList.add('valid');
-    state.rows[rowIdx].cuit_cliente   = val;
-    state.rows[rowIdx]._cuit_pending  = false;
-    // Update border
+    state.rows[rowIdx].cuit_cliente      = val;
+    state.rows[rowIdx].consumidor_final  = false;
+    state.rows[rowIdx]._cuit_pending     = false;
     input.closest('tr').style.borderLeft = '3px solid #7C3AED';
   } else {
     input.classList.add('invalid');
@@ -833,17 +844,16 @@ function validarCuit(cuit) {
 }
 
 function onMpCuitInput(input) {
-  const idx  = parseInt(input.dataset.idx);
-  const val  = input.value.trim();
+  const idx   = parseInt(input.dataset.idx);
+  const val   = input.value.trim();
   const valid = validarCuit(val);
 
-  // Update state
-  mpState.transactions[idx].cuit_cliente = val;
+  mpState.transactions[idx].cuit_cliente     = val;
+  mpState.transactions[idx].consumidor_final = (val === '');
 
-  // Visual feedback
   input.classList.remove('valid', 'invalid');
   if (val === '') {
-    // empty — neutral
+    // Vacío = Consumidor Final — neutral (válido)
   } else if (valid === true) {
     input.classList.add('valid');
   } else {
@@ -879,7 +889,7 @@ function updateMpSelCount() {
   });
   const sinCuit = selected.filter(t => !t.cuit_cliente).length;
   let msg = `${selected.length} seleccionada${selected.length !== 1 ? 's' : ''}`;
-  if (sinCuit > 0) msg += ` · <span style="color:#92400e">⚠ ${sinCuit} sin CUIT</span>`;
+  if (sinCuit > 0) msg += ` · <span style="color:var(--text-muted);font-style:italic">${sinCuit} como Consumidor Final</span>`;
   mpSelCount.innerHTML = msg;
 }
 
@@ -902,15 +912,16 @@ mpImportBtn.addEventListener('click', () => {
     idx:                  maxIdx + 1 + i,
     fecha_emision:        txn.fecha_emision,
     cuit_cliente:         txn.cuit_cliente || '',
+    consumidor_final:     !txn.cuit_cliente,   // sin CUIT = Consumidor Final
     razon_social_cliente: txn.razon_social_cliente,
     domicilio_cliente:    txn.domicilio_cliente || '',
     nombre_contacto:      txn.nombre_contacto  || '',
     descripcion:          txn.descripcion_servicio,
     amount:               Math.abs(txn.amount),
-    comp_nro:             '',        // vacío — se asigna al generar
+    comp_nro:             '',
     cae_number:           '',
     vencimiento:          '',
-    _from_mp:             true,      // marker para highlight en grilla
+    _from_mp:             true,
     _cuit_pending:        !txn.cuit_cliente,
   }));
 
