@@ -12,7 +12,12 @@ async function loadMeta() {
     document.title = name;
     document.getElementById('heroTitle').textContent = name;
     document.getElementById('brandName').textContent = name;
-
+    if (data.customer_name) {
+      const sub = document.getElementById('brandSub');
+      if (sub) sub.textContent = 'para ' + data.customer_name;
+      document.getElementById('heroSubtitle').textContent =
+        `Gestión de facturación, generación de comprobantes y trazabilidad contable para ${data.customer_name}.`;
+    }
   } catch (e) {
     console.warn('loadMeta:', e);
   }
@@ -28,9 +33,16 @@ async function loadDashboard() {
     document.title = productName;
     document.getElementById('heroTitle').textContent  = productName;
     document.getElementById('brandName').textContent  = productName;
+    if (data.customer_name) {
+      const sub = document.getElementById('brandSub');
+      if (sub) sub.textContent = 'para ' + data.customer_name;
+    }
 
-
-
+    // customer_name → hero subtitle (CUSTOMER_NAME in .env)
+    if (data.customer_name) {
+      document.getElementById('heroSubtitle').textContent =
+        `Gestión de facturación, generación de comprobantes y trazabilidad contable para ${data.customer_name}.`;
+    }
 
     const notConfigured = data.status === 'not_configured';
 
@@ -78,10 +90,26 @@ async function loadDashboard() {
       setKpi('kpiLastComp', 'kpiLastSub', '—', 'Sin facturas recientes', null);
     }
 
-    const total = invoices.reduce((s, i) => s + (+i.amount || 0), 0);
+    // Filtrar facturas del mes en curso
+    const now        = new Date();
+    const mesActual  = now.getMonth() + 1;   // 1-12
+    const anioActual = now.getFullYear();
+    const mesMes = String(mesActual).padStart(2, '0');
+    const MESES  = ['','enero','febrero','marzo','abril','mayo','junio',
+                    'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+    const invMes = invoices.filter(inv => {
+      // fecha_emision format: "DD/MM/YYYY"
+      const f = inv.fecha_emision || '';
+      const parts = f.split('/');
+      if (parts.length !== 3) return false;
+      return parseInt(parts[1]) === mesActual && parseInt(parts[2]) === anioActual;
+    });
+
+    const total = invMes.reduce((s, i) => s + (+i.amount || 0), 0);
     setKpi('kpiTotal', 'kpiTotalSub',
       `$ ${fmtNum(total)}`,
-      `${invoices.length} comprobante${invoices.length !== 1 ? 's' : ''}`,
+      `${invMes.length} comprobante${invMes.length !== 1 ? 's' : ''} · ${MESES[mesActual]} ${anioActual}`,
       true
     );
 
