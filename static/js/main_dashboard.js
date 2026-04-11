@@ -95,8 +95,8 @@ async function loadDashboard() {
     const mesActual  = now.getMonth() + 1;   // 1-12
     const anioActual = now.getFullYear();
     const mesMes = String(mesActual).padStart(2, '0');
-    const MESES  = ['','enero','febrero','marzo','abril','mayo','junio',
-                    'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    const MESES  = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
     const invMes = invoices.filter(inv => {
       // fecha_emision format: "DD/MM/YYYY"
@@ -109,7 +109,7 @@ async function loadDashboard() {
     const total = invMes.reduce((s, i) => s + (+i.amount || 0), 0);
     setKpi('kpiTotal', 'kpiTotalSub',
       `$ ${fmtNum(total)}`,
-      `${invMes.length} comprobante${invMes.length !== 1 ? 's' : ''} · ${MESES[mesActual]} ${anioActual}`,
+      `${MESES[mesActual]} ${anioActual}`,
       true
     );
 
