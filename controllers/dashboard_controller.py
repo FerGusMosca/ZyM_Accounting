@@ -95,8 +95,28 @@ class DashboardController:
             """
             Returns the last `limit` invoices across all sales points.
             Always includes product_name and customer_name from .env.
+
+            Always returns HTTP 200 — the dashboard widget is non-critical,
+            and bubbling 5xx up to the browser just makes the whole page look
+            broken when AFIP is having a bad day. The `status` field tells the
+            frontend what actually happened:
+
+              "ok"              — all good
+              "not_configured"  — ARCA credentials missing
+              "unavailable"     — AFIP is down / network issue (transient)
+              "auth_error"      — certificate / credential problem (permanent-ish)
+              "error"           — anything else
             """
             meta = _app_meta()
+
+            # Defer the import so we can reference the typed exceptions below
+            # even if the ARCA_client module had a collateral import issue.
+            try:
+                from service_client.ARCA_client import (
+                    ArcaUnavailableError, ArcaAuthError, ArcaConfigError
+                )
+            except Exception:  # pragma: no cover
+                ArcaUnavailableError = ArcaAuthError = ArcaConfigError = ()  # type: ignore
 
             client, err = _get_arca_client()
             if err:
@@ -105,7 +125,7 @@ class DashboardController:
                     "message":  err,
                     "invoices": [],
                     **meta,
-                }, status_code=200)
+                })
 
             try:
                 invoices = client.get_recent_invoices(limit=limit)
@@ -118,6 +138,33 @@ class DashboardController:
                     "cuit":     getattr(s, "arca_cuit", "") or "",
                     **meta,
                 })
+            except ArcaUnavailableError as exc:
+                # AFIP está caída / timeout / red — no es culpa del usuario.
+                logger.warning("Dashboard: ARCA unavailable: %s", exc)
+                return JSONResponse({
+                    "status":   "unavailable",
+                    "message":  "AFIP no responde en este momento. Reintentá en unos minutos.",
+                    "detail":   str(exc),
+                    "invoices": [],
+                    **meta,
+                })
+            except ArcaAuthError as exc:
+                logger.error("Dashboard: ARCA auth error: %s", exc)
+                return JSONResponse({
+                    "status":   "auth_error",
+                    "message":  "Problema de autenticación con ARCA. Revisá el certificado.",
+                    "detail":   str(exc),
+                    "invoices": [],
+                    **meta,
+                })
+            except ArcaConfigError as exc:
+                logger.error("Dashboard: ARCA config error: %s", exc)
+                return JSONResponse({
+                    "status":   "not_configured",
+                    "message":  str(exc),
+                    "invoices": [],
+                    **meta,
+                })
             except Exception as exc:
                 logger.exception("Error fetching recent invoices for dashboard")
                 return JSONResponse({
@@ -125,4 +172,4 @@ class DashboardController:
                     "message":  str(exc),
                     "invoices": [],
                     **meta,
-                }, status_code=500)
+                })

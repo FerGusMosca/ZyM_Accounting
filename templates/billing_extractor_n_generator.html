@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Extracción y Generación de Facturas</title>
+  <title>Generar facturas</title>
   <link rel="stylesheet" href="{{ sv('/static/css/main.css') }}">
   <link rel="stylesheet" href="{{ sv('/static/css/billing_extractor_n_generator.css') }}">
   <link rel="stylesheet" href="{{ sv('/static/css/theme.css') }}">
@@ -26,26 +26,51 @@
 <div class="content">
   <div class="panel beg-panel">
 
-    <h1 class="beg-title">🧾 Extracción y Generación de Facturas</h1>
+    <h1 class="beg-title">🧾 Generar facturas</h1>
 
-    <!-- Zona de carga -->
-    <div class="beg-upload-zone" id="uploadZone">
-      <div class="beg-upload-inner">
-        <div class="beg-upload-icon">📂</div>
-        <div class="beg-upload-text">Arrastrá tu Excel de facturación acá</div>
-        <div class="beg-upload-subtext">o hacé clic para seleccionar el archivo (.xlsx / .xls)</div>
+    <!-- Grid de 3 orígenes de carga -->
+    <div class="beg-sources-grid">
+
+      <!-- ── Card 1: Manual ─────────────────────────────────────── -->
+      <div class="beg-source-card beg-source-manual">
+        <div class="beg-source-icon">✍️</div>
+        <h3 class="beg-source-title">De manera manual</h3>
+        <p class="beg-source-desc">Cargá los datos de la factura en un formulario paso a paso.</p>
+        <div class="beg-source-actions">
+          <button type="button" class="beg-btn beg-btn-primary" id="manualInvoiceBtn" disabled>
+            ✍️ Crear factura manual
+          </button>
+        </div>
+        <span class="beg-source-note">Próximamente</span>
+      </div>
+
+      <!-- ── Card 2: Excel (zona de drop) ───────────────────────── -->
+      <div class="beg-source-card beg-source-excel" id="uploadZone">
+        <div class="beg-source-icon">📂</div>
+        <h3 class="beg-source-title">Desde un documento de Excel</h3>
+        <p class="beg-source-desc">Arrastrá tu Excel acá o seleccionalo desde tu equipo (.xlsx / .xls).</p>
         <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
-        <div class="beg-upload-buttons">
+        <div class="beg-source-actions">
           <button type="button" class="beg-btn beg-btn-primary" id="selectFileBtn">Seleccionar archivo</button>
           <a href="/billing_extractor_n_generator/download_modelo" class="beg-btn beg-btn-secondary" download>
             📥 Descargar Excel modelo
           </a>
+        </div>
+        <span id="uploadedFile" class="beg-file-badge beg-hidden"></span>
+      </div>
+
+      <!-- ── Card 3: Banco / Billetera ──────────────────────────── -->
+      <div class="beg-source-card beg-source-wallet">
+        <div class="beg-source-icon">💳</div>
+        <h3 class="beg-source-title">Desde un reporte de Banco o Billetera Virtual</h3>
+        <p class="beg-source-desc">Subí el PDF del resumen (ej: Mercado Pago) y seleccioná las transacciones a facturar.</p>
+        <div class="beg-source-actions">
           <button type="button" class="beg-btn beg-btn-mp" id="loadMpBtn">
             💳 Cargar resumen MP
           </button>
         </div>
-        <span id="uploadedFile" class="beg-file-badge beg-hidden"></span>
       </div>
+
     </div>
 
     <!-- Controles del emisor -->

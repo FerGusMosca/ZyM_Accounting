@@ -98,6 +98,8 @@ body                   { background: var(--bg) !important; }
 .dash-activity-text    { color: #222 !important; }
 .dash-activity-meta    { color: #555 !important; }
 .env-badge.homo        { background: #1E1535; color: var(--violet-pale) !important; border-color: rgba(124,58,237,.27) !important; }
+.env-badge.warn        { background: #fef3c7 !important; color: #92400e !important; border-color: #fcd34d !important; }
+.env-badge.no-conf     { background: var(--bg-subtle) !important; color: var(--text-muted) !important; border-color: var(--border) !important; }
 
 /* ── Invoice history ───────────────────────────────────────────── */
 .ih-main               { background: var(--bg) !important; }
@@ -166,15 +168,18 @@ body                   { background: var(--bg) !important; }
 
 /* ── Billing extractor page ────────────────────────────────────── */
 .beg-title             { color: var(--violet) !important; }
-.beg-upload-zone       { background: var(--bg-muted) !important; border-color: var(--border-soft) !important; }
-.beg-upload-zone:hover,
-.beg-upload-zone.drag-over { background: var(--violet-bg) !important; border-color: var(--violet) !important; box-shadow: 0 8px 24px rgba(124,58,237,.12) !important; }
-.beg-upload-text       { color: var(--text) !important; }
-.beg-upload-subtext    { color: var(--text-muted) !important; }
+.beg-source-card       { background: var(--bg-muted) !important; border-color: var(--border-soft) !important; }
+.beg-source-excel:hover,
+.beg-source-excel.drag-over { background: var(--violet-bg) !important; border-color: var(--violet) !important; box-shadow: 0 8px 24px rgba(124,58,237,.12) !important; }
+.beg-source-manual:hover,
+.beg-source-wallet:hover { border-color: var(--violet-pale) !important; box-shadow: 0 4px 14px rgba(124,58,237,.08) !important; }
+.beg-source-title      { color: var(--text) !important; }
+.beg-source-desc       { color: var(--text-muted) !important; }
+.beg-source-note       { color: var(--violet-pale) !important; }
 .beg-btn-primary       { background: var(--violet) !important; color: white !important; }
 .beg-btn-primary:hover { background: var(--violet-dark) !important; box-shadow: 0 4px 14px rgba(124,58,237,.4) !important; }
-.beg-btn-secondary     { background: var(--bg-muted) !important; color: var(--violet) !important; border-color: var(--border-soft) !important; }
-.beg-btn-secondary:hover { background: var(--violet-bg) !important; border-color: var(--violet) !important; }
+.beg-btn-secondary     { background: var(--bg) !important; color: var(--violet-dark) !important; border: 1.5px solid var(--violet-pale) !important; }
+.beg-btn-secondary:hover { background: var(--violet-bg) !important; border-color: var(--violet) !important; color: var(--violet-dark) !important; }
 .beg-btn-small         { background: var(--bg-muted) !important; color: var(--violet) !important; border-color: var(--border-soft) !important; }
 .beg-btn-small:hover   { background: var(--violet-bg) !important; border-color: var(--violet) !important; }
 .beg-btn-icon          { background: var(--bg-muted) !important; color: var(--text-muted) !important; border-color: var(--border) !important; }

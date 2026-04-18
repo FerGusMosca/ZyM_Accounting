@@ -16,55 +16,101 @@
   font-weight: 600;
 }
 
-/* ── Zona de carga ── */
-.beg-upload-zone {
+/* ── Grid de orígenes (3 cards) ─────────────────────────────── */
+.beg-sources-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 1.5rem;
+  align-items: stretch;
+}
+
+.beg-source-card {
   border: 2px dashed #30363D;
   border-radius: 16px;
   background: #161B22;
-  padding: 3rem 2rem;
+  padding: 1.8rem 1.4rem;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
   transition: all 0.3s;
-  cursor: pointer;
-  margin-bottom: 1.5rem;
+  min-height: 280px;
+  box-sizing: border-box;
 }
 
-.beg-upload-zone:hover,
-.beg-upload-zone.drag-over {
+/* La card de Excel es la única clickeable/droppable */
+.beg-source-excel { cursor: pointer; }
+.beg-source-excel:hover,
+.beg-source-excel.drag-over {
   border-color: #58A6FF;
   background: #1A2332;
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(88, 166, 255, 0.12);
 }
 
-.beg-upload-icon {
-  font-size: 3.5rem;
-  margin-bottom: 1rem;
+/* Hover suave para las otras dos */
+.beg-source-manual:hover,
+.beg-source-wallet:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(80, 40, 120, 0.08);
 }
 
-.beg-upload-text {
-  font-size: 1.2rem;
+.beg-source-icon {
+  font-size: 2.6rem;
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+
+.beg-source-title {
+  font-size: 1.05rem;
+  margin: 0;
   color: #E6EDF3;
-  font-weight: 500;
-  margin-bottom: 0.4rem;
-}
-
-.beg-upload-subtext {
-  font-size: 0.9rem;
-  color: #8B949E;
-  margin-bottom: 1.2rem;
-}
-
-.beg-upload-buttons {
+  font-weight: 600;
+  line-height: 1.25;
+  min-height: 2.6em;
   display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 0.6rem;
+}
+
+.beg-source-desc {
+  font-size: 0.85rem;
+  color: #8B949E;
+  margin: 0 0 0.3rem 0;
+  line-height: 1.45;
+  flex: 1;
+}
+
+.beg-source-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  align-items: stretch;
+}
+
+.beg-source-actions .beg-btn {
+  display: flex;              /* override del inline-flex base — ancho determinístico */
+  align-self: stretch;        /* redundante pero explícito contra defaults weird */
+  width: 100%;
+  box-sizing: border-box;     /* el borde de 1.5px del secondary no debe afectar el ancho */
+  padding: 11px 18px;
+}
+
+.beg-source-note {
+  font-size: 0.7rem;
+  color: #8B949E;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-top: 4px;
 }
 
 .beg-file-badge {
   display: inline-block;
-  margin-top: 0.8rem;
+  margin-top: 0.6rem;
   padding: 6px 14px;
   background: #1A3421;
   border: 1px solid #2EA043;
@@ -89,6 +135,18 @@
   padding: 13px 28px;
   position: relative;
   text-decoration: none;
+}
+
+.beg-btn:disabled,
+.beg-btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.25);
+}
+.beg-btn:disabled:hover,
+.beg-btn[disabled]:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .beg-btn-primary {
@@ -486,8 +544,14 @@
 .beg-hidden { display: none !important; }
 
 /* ── Responsive ── */
+@media (max-width: 1100px) {
+  .beg-sources-grid { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 900px) {
   .beg-controls-row { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 700px) {
+  .beg-sources-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
   .beg-title { font-size: 1.8rem; }
@@ -495,7 +559,7 @@
   .beg-controls-row { grid-template-columns: 1fr; }
   .beg-button-container { flex-direction: column; }
   .beg-btn { width: 100%; }
-  .beg-upload-buttons { flex-direction: column; align-items: center; }
+  .beg-source-card { min-height: auto; }
 }
 
 /* ── Consola ARCA ──────────────────────────────────────────────────────────── */
@@ -637,7 +701,7 @@
   padding: 5px 8px;
   border-radius: 6px;
   font-size: 12px;
-  width: 140px;
+  width: 170px;
   box-sizing: border-box;
 }
 .mp-cuit-input.invalid {

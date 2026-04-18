@@ -664,3 +664,15 @@ body {
   color: #3FB950;
   border: 1px solid #2EA04344;
 }
+
+.env-badge.warn {
+  background: #3a2a12;
+  color: #D29922;
+  border: 1px solid #D2992244;
+}
+
+.env-badge.no-conf {
+  background: #21262D;
+  color: #8B949E;
+  border: 1px solid #30363D;
+}

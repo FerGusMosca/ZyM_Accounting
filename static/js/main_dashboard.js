@@ -12,12 +12,6 @@ async function loadMeta() {
     document.title = name;
     document.getElementById('heroTitle').textContent = name;
     document.getElementById('brandName').textContent = name;
-    if (data.customer_name) {
-      const sub = document.getElementById('brandSub');
-      if (sub) sub.textContent = 'para ' + data.customer_name;
-      document.getElementById('heroSubtitle').textContent =
-        `Gestión de facturación, generación de comprobantes y trazabilidad contable para ${data.customer_name}.`;
-    }
   } catch (e) {
     console.warn('loadMeta:', e);
   }
@@ -33,46 +27,29 @@ async function loadDashboard() {
     document.title = productName;
     document.getElementById('heroTitle').textContent  = productName;
     document.getElementById('brandName').textContent  = productName;
-    if (data.customer_name) {
-      const sub = document.getElementById('brandSub');
-      if (sub) sub.textContent = 'para ' + data.customer_name;
-    }
 
-    // customer_name → hero subtitle (CUSTOMER_NAME in .env)
-    if (data.customer_name) {
-      document.getElementById('heroSubtitle').textContent =
-        `Gestión de facturación, generación de comprobantes y trazabilidad contable para ${data.customer_name}.`;
-    }
-
-    const notConfigured = data.status === 'not_configured';
+    const status = data.status;
+    const notConfigured = status === 'not_configured';
+    const unavailable   = status === 'unavailable';
+    const authError     = status === 'auth_error';
+    const genericError  = status === 'error';
+    const isDegraded    = notConfigured || unavailable || authError || genericError;
 
     // Env badge
     if (notConfigured) {
       setEnvBadge('no-conf', '⚠ No configurado');
+    } else if (unavailable) {
+      setEnvBadge('warn', '⚠ AFIP no disponible');
+    } else if (authError) {
+      setEnvBadge('no-conf', '⚠ Error de autenticación');
     } else {
       const isHomo = data.invoices?.length ? data.invoices[0].homo_no_cae !== undefined : true;
       setEnvBadge(isHomo ? 'homo' : 'prod', isHomo ? '🧪 Homologación' : '✓ Producción');
     }
 
-    // ARCA not configured
-    if (notConfigured) {
-      setKpi('kpiArcaStatus', 'kpiArcaSub', '—', 'No configurado', false);
-      setServiceStatus('dotWsaa', 'valWsaa', false, 'no conf.');
-      setServiceStatus('dotWsfe', 'valWsfe', false, 'no conf.');
-      setServiceStatus('dotToken', 'valToken', null, '—');
-      setServiceStatus('dotCuit',  'valCuit',  null, '—');
-      setServiceStatus('dotAmb',   'valAmb',   null, '—');
-      document.getElementById('activityFeed').innerHTML =
-        `<div style="color:#484F58;font-size:12px;font-family:'DM Mono',monospace;padding:20px 0">
-          ARCA no está configurado en este ambiente.
-        </div>`;
-      return;
-    }
-
-    if (data.status === 'error') {
-      setKpi('kpiArcaStatus', 'kpiArcaSub', 'ERROR', data.message?.slice(0, 30) || '', false);
-      setServiceStatus('dotWsaa', 'valWsaa', false, 'error');
-      setServiceStatus('dotWsfe', 'valWsfe', false, 'error');
+    // Degraded states — render friendly state instead of crashing the UI
+    if (isDegraded) {
+      renderDegradedState(status, data.message || '');
       return;
     }
 
@@ -156,12 +133,84 @@ async function loadDashboard() {
     }).join('');
 
   } catch (e) {
-    setKpi('kpiArcaStatus', 'kpiArcaSub', 'ERROR', e.message?.slice(0,30) || '', false);
-    setServiceStatus('dotWsaa', 'valWsaa', false, 'sin respuesta');
-    setServiceStatus('dotWsfe', 'valWsfe', false, 'sin respuesta');
-    document.getElementById('activityFeed').innerHTML =
-      `<div style="color:#F85149;font-size:12px;font-family:'DM Mono',monospace;padding:20px 0">Error: ${e.message}</div>`;
+    // Network-level failure (backend caído, CORS, DNS, etc.) — tratamos como
+    // "unavailable" para mantener la UX consistente con los demás caminos.
+    console.warn('loadDashboard:', e);
+    setEnvBadge('warn', '⚠ Sin conexión');
+    renderDegradedState('unavailable',
+      'No se pudo contactar al servidor. Verificá tu conexión.');
   }
+}
+
+function renderDegradedState(status, message) {
+  // Status → { kpiLabel, kpiSub, serviceLabel, serviceOk, feedColor, feedText }
+  const presets = {
+    not_configured: {
+      kpiLabel:     '—',
+      kpiSub:       'No configurado',
+      kpiOk:        false,
+      serviceLabel: 'no conf.',
+      serviceOk:    false,
+      feedColor:    '#484F58',
+      feedText:     'ARCA no está configurado en este ambiente.',
+    },
+    unavailable: {
+      kpiLabel:     'OFFLINE',
+      kpiSub:       'AFIP no responde',
+      kpiOk:        null,  // ámbar, no rojo — es transitorio
+      serviceLabel: 'no disponible',
+      serviceOk:    null,
+      serviceColor: 'warn',
+      feedColor:    '#92400e',
+      feedText:     (message || 'AFIP no responde en este momento.') +
+                    ' Reintentá en unos minutos.',
+    },
+    auth_error: {
+      kpiLabel:     'AUTH',
+      kpiSub:       'Error de credenciales',
+      kpiOk:        false,
+      serviceLabel: 'auth err.',
+      serviceOk:    false,
+      feedColor:    '#991b1b',
+      feedText:     (message || 'Error de autenticación con ARCA.') +
+                    ' Revisá el certificado y la clave privada.',
+    },
+    error: {
+      kpiLabel:     'ERROR',
+      kpiSub:       (message || '').slice(0, 30),
+      kpiOk:        false,
+      serviceLabel: 'error',
+      serviceOk:    false,
+      feedColor:    '#F85149',
+      feedText:     message || 'Error desconocido.',
+    },
+  };
+
+  const p = presets[status] || presets.error;
+
+  setKpi('kpiArcaStatus', 'kpiArcaSub', p.kpiLabel, p.kpiSub, p.kpiOk);
+  setServiceStatus('dotWsaa',  'valWsaa',  p.serviceOk, p.serviceLabel, p.serviceColor);
+  setServiceStatus('dotWsfe',  'valWsfe',  p.serviceOk, p.serviceLabel, p.serviceColor);
+  setServiceStatus('dotToken', 'valToken', null, '—');
+  setServiceStatus('dotCuit',  'valCuit',  null, '—');
+  setServiceStatus('dotAmb',   'valAmb',   null, '—');
+
+  // KPIs de facturas no tienen datos — los mostramos como guión
+  setKpi('kpiLastComp', 'kpiLastSub', '—', '—', null);
+  setKpi('kpiTotal',    'kpiTotalSub', '—', '—', null);
+
+  document.getElementById('activityFeed').innerHTML =
+    `<div style="color:${p.feedColor};font-size:12px;font-family:'DM Mono',monospace;padding:20px 0;line-height:1.5">
+      ${escapeHtml(p.feedText)}
+     </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function setKpi(valId, subId, val, sub, ok) {

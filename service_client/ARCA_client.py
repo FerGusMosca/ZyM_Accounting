@@ -31,10 +31,13 @@ import http.client
 import json
 import logging
 import os
+import random
 import re
+import socket
 import ssl
 import subprocess
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -57,6 +60,97 @@ CONCEPT_SERVICES = 2    # Servicios
 CURRENCY_ARS     = "PES"
 
 _TOKEN_CACHE_DIR = Path(__file__).parent / ".token_cache"
+
+# ── Retry tuning for transient WSAA/WSFE failures ─────────────────────────────
+_WSAA_RETRY_ATTEMPTS = 3
+_WSAA_RETRY_BACKOFF  = 1.2   # seconds; doubled each attempt (1.2s, 2.4s, 4.8s)
+_SOAP_TIMEOUT_SEC    = 30
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Exception taxonomy  — blindaje: los callers pueden discriminar por tipo
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ArcaError(RuntimeError):
+    """Base class for ARCA / AFIP-related errors."""
+
+
+class ArcaUnavailableError(ArcaError):
+    """
+    Transient failure on AFIP side or network. Retryable.
+
+    Includes:
+      - Network errors (socket.timeout, ConnectionError, ssl.SSLError, OSError)
+      - HTTP 5xx from AFIP
+      - Well-known transient SOAP faults (EJBException, NumberFormatException,
+        "Zero length BigInteger", database-connection errors on AFIP's side)
+    """
+
+
+class ArcaAuthError(ArcaError):
+    """
+    Authentication / credential problem. Not automatically retryable.
+
+    Includes:
+      - openssl cms sign failures (bad cert/key)
+      - WSAA faults about invalid CMS, expired cert, revoked cert
+      - "TA ya valido" edge case (active token not in local cache)
+    """
+
+
+class ArcaConfigError(ArcaError):
+    """Missing or invalid local configuration (cert path, CUIT, etc.)."""
+
+
+# Regex/substring hints used to classify SOAP faults coming back from AFIP.
+# These are *best-effort* — WSAA doesn't have a formal error catalog, so we
+# pattern-match known text.
+_TRANSIENT_FAULT_HINTS = (
+    "zero length biginteger",
+    "ejbexception",
+    "numberformatexception",
+    "nullpointerexception",
+    "service unavailable",
+    "connection refused",
+    "read timed out",
+    "could not connect",
+    "database",
+    "datasource",
+    "ora-",                 # Oracle errors (AFIP backend is Oracle)
+    "socket",
+    "timeout",
+    "internal server error",
+    "temporarily unavailable",
+)
+
+_AUTH_FAULT_HINTS = (
+    "cms.bad",
+    "cms.sign",
+    "certificado",
+    "certificate",
+    "cert is not yet valid",
+    "cert has expired",
+    "revoked",
+    "ta valido",            # previously-issued token still active
+    "alias",                # signer alias not found in AFIP keystore
+    "autenticar",           # "error al autenticar"
+    "computador no autorizado",
+    "no autorizado",
+)
+
+
+def _classify_fault(message: str) -> ArcaError:
+    """Return the most specific ArcaError subclass for a given fault text."""
+    lower = (message or "").lower()
+    for hint in _AUTH_FAULT_HINTS:
+        if hint in lower:
+            return ArcaAuthError(message)
+    for hint in _TRANSIENT_FAULT_HINTS:
+        if hint in lower:
+            return ArcaUnavailableError(message)
+    # Unknown fault — treat as generic; callers that want to be lenient can
+    # catch ArcaError.
+    return ArcaError(message)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -90,8 +184,10 @@ def _soap_call(host: str, path: str, soap_action: str, body: str) -> str:
     ctx.check_hostname = False
     ctx.verify_mode    = ssl.CERT_NONE
     logger.debug("SOAP → https://%s%s  action=%s", host, path, soap_action)
-    conn = http.client.HTTPSConnection(host, context=ctx, timeout=30)
+
+    conn = None
     try:
+        conn = http.client.HTTPSConnection(host, context=ctx, timeout=_SOAP_TIMEOUT_SEC)
         conn.request("POST", path, body=payload, headers={
             "Content-Type":   "text/xml; charset=utf-8",
             "SOAPAction":     f'"{soap_action}"',
@@ -99,12 +195,34 @@ def _soap_call(host: str, path: str, soap_action: str, body: str) -> str:
         })
         resp = conn.getresponse()
         xml  = resp.read().decode("utf-8", errors="replace")
-        logger.debug("SOAP ← HTTP %s", resp.status)
+        logger.debug("SOAP ← HTTP %s  (len=%d)", resp.status, len(xml))
+
+        # AFIP returns 200 on success and 500 on SOAP Faults — both carry body we must parse.
+        # Any other status is treated as infrastructure problem.
         if resp.status not in (200, 500):
-            raise ConnectionError(f"HTTP {resp.status} from {host}")
+            if 500 <= resp.status < 600:
+                raise ArcaUnavailableError(
+                    f"AFIP returned HTTP {resp.status} from {host} (service unavailable)"
+                )
+            raise ArcaError(f"Unexpected HTTP {resp.status} from {host}")
         return xml
+
+    except (socket.timeout, TimeoutError) as exc:
+        raise ArcaUnavailableError(
+            f"Timeout ({_SOAP_TIMEOUT_SEC}s) connecting to AFIP host {host}"
+        ) from exc
+    except ssl.SSLError as exc:
+        raise ArcaUnavailableError(f"TLS error contacting {host}: {exc}") from exc
+    except (ConnectionError, http.client.HTTPException, OSError) as exc:
+        # OSError covers DNS failures ("Name or service not known"), refused
+        # connections, "Network is unreachable", etc.
+        raise ArcaUnavailableError(f"Network error contacting {host}: {exc}") from exc
     finally:
-        conn.close()
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def _xml_find(root: ET.Element, local_tag: str) -> Optional[str]:
@@ -118,11 +236,11 @@ def _xml_find(root: ET.Element, local_tag: str) -> Optional[str]:
 def _xml_raise_fault(root: ET.Element) -> None:
     fault = _xml_find(root, "faultstring")
     if fault:
-        raise RuntimeError(f"SOAP Fault: {fault}")
+        raise _classify_fault(f"SOAP Fault: {fault}")
     err_code = _xml_find(root, "ErrCode")
     err_msg  = _xml_find(root, "ErrMsg")
     if err_code and err_code != "0":
-        raise RuntimeError(f"AFIP Error {err_code}: {err_msg}")
+        raise _classify_fault(f"AFIP Error {err_code}: {err_msg}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -192,26 +310,41 @@ def _build_tra() -> str:
 
 
 def _sign_tra(tra_xml: str, cert_path: str, key_path: str) -> str:
+    if not os.path.exists(cert_path):
+        raise ArcaConfigError(f"Certificate file not found: {cert_path}")
+    if not os.path.exists(key_path):
+        raise ArcaConfigError(f"Private key file not found: {key_path}")
+
     with tempfile.TemporaryDirectory() as tmp:
         tra_file = os.path.join(tmp, "tra.xml")
         cms_file = os.path.join(tmp, "tra.cms")
         with open(tra_file, "w", encoding="utf-8") as f:
             f.write(tra_xml)
-        result = subprocess.run(
-            ["openssl", "cms", "-sign", "-in", tra_file, "-signer", cert_path,
-             "-inkey", key_path, "-nodetach", "-outform", "DER", "-out", cms_file],
-            capture_output=True,
-        )
+        try:
+            result = subprocess.run(
+                ["openssl", "cms", "-sign", "-in", tra_file, "-signer", cert_path,
+                 "-inkey", key_path, "-nodetach", "-outform", "DER", "-out", cms_file],
+                capture_output=True,
+                timeout=30,
+            )
+        except FileNotFoundError as exc:
+            raise ArcaConfigError(
+                "openssl binary not found in PATH — cannot sign WSAA TRA"
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise ArcaUnavailableError("openssl cms sign timed out") from exc
+
         if result.returncode != 0:
-            raise RuntimeError(
-                f"openssl cms sign failed (exit {result.returncode}):\n"
-                f"{result.stderr.decode(errors='replace')}"
+            stderr = result.stderr.decode(errors="replace")
+            raise ArcaAuthError(
+                f"openssl cms sign failed (exit {result.returncode}): {stderr.strip()}"
             )
         with open(cms_file, "rb") as f:
             return base64.b64encode(f.read()).decode("ascii")
 
 
-def wsaa_get_token(cert_path: str, key_path: str, homo: bool = True) -> dict:
+def _wsaa_get_token_once(cert_path: str, key_path: str, homo: bool) -> dict:
+    """Single WSAA attempt — raises typed ArcaError on failure."""
     host, path = _WSAA["homo" if homo else "prod"]
     tra   = _build_tra()
     cms64 = _sign_tra(tra, cert_path, key_path)
@@ -222,7 +355,13 @@ def wsaa_get_token(cert_path: str, key_path: str, homo: bool = True) -> dict:
         '</loginCms>'
     )
     raw  = _soap_call(host, path, soap_action="", body=body)
-    root = ET.fromstring(raw)
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as exc:
+        # Malformed XML from AFIP is almost always a gateway-level transient.
+        raise ArcaUnavailableError(
+            f"WSAA: malformed XML response from {host}: {exc}"
+        ) from exc
     _xml_raise_fault(root)
 
     token = sign = expiration = None
@@ -242,10 +381,50 @@ def wsaa_get_token(cert_path: str, key_path: str, homo: bool = True) -> dict:
         expiration = _xml_find(root, "expirationTime")
 
     if not token or not sign:
-        raise RuntimeError(f"WSAA: token/sign not found in response:\n{raw[:600]}")
+        raise ArcaUnavailableError(
+            f"WSAA: token/sign not found in response:\n{raw[:600]}"
+        )
 
     logger.info("WSAA: ✅ token obtained, expires %s", expiration)
     return {"token": token, "sign": sign, "expiration": expiration}
+
+
+def wsaa_get_token(cert_path: str, key_path: str, homo: bool = True) -> dict:
+    """
+    WSAA login with retry/backoff on transient failures.
+
+    Retries `ArcaUnavailableError` up to _WSAA_RETRY_ATTEMPTS times with
+    exponential backoff + jitter. Auth/config errors are raised immediately
+    (no point in retrying a bad certificate).
+    """
+    last_exc: Optional[ArcaError] = None
+    for attempt in range(1, _WSAA_RETRY_ATTEMPTS + 1):
+        try:
+            return _wsaa_get_token_once(cert_path, key_path, homo)
+        except (ArcaAuthError, ArcaConfigError):
+            # Don't retry — the problem won't resolve by trying again.
+            raise
+        except ArcaUnavailableError as exc:
+            last_exc = exc
+            if attempt == _WSAA_RETRY_ATTEMPTS:
+                break
+            delay = _WSAA_RETRY_BACKOFF * (2 ** (attempt - 1))
+            delay += random.uniform(0, 0.3)  # jitter
+            logger.warning(
+                "WSAA: attempt %d/%d failed (%s) — retrying in %.1fs",
+                attempt, _WSAA_RETRY_ATTEMPTS, exc, delay,
+            )
+            time.sleep(delay)
+        except ArcaError as exc:
+            # Unknown ArcaError — retry once to be safe, then give up.
+            last_exc = exc
+            if attempt >= 2:
+                break
+            time.sleep(_WSAA_RETRY_BACKOFF)
+
+    # Exhausted retries
+    assert last_exc is not None
+    raise last_exc
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -517,11 +696,14 @@ class ARCAClient:
         logger.info("WSAA: requesting new token from AFIP...")
         try:
             token_data = wsaa_get_token(self.cert_path, self.key_path, self.homo)
-        except RuntimeError as exc:
-            if "TA valido" in str(exc):
+        except ArcaAuthError as exc:
+            # "TA ya valido" is a special case — wipe local cache and re-raise
+            # with a more actionable message. It is *not* retryable but it will
+            # resolve itself in ~12h.
+            if "ta valido" in str(exc).lower():
                 _delete_token_from_disk(self.cuit, self.homo)
                 self._mem_cache = None
-                raise RuntimeError(
+                raise ArcaAuthError(
                     "ARCA reports an active token that is not available in local cache "
                     "(the process likely restarted before the previous token expired). "
                     "This resolves automatically when the token expires (~12h after last "
