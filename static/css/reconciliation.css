@@ -1,0 +1,142 @@
+/* reconciliation.css — Conciliación de Cobranzas (paleta MOSCA via theme.css) */
+
+/* FIX: el atributo hidden tiene que ganarle siempre a los display: de las clases */
+[hidden] { display: none !important; }
+
+.rc-main { flex: 1; padding: 32px 40px 64px; overflow-y: auto; background: var(--bg); }
+
+/* ── Header ── */
+.rc-header { display: flex; justify-content: space-between; align-items: flex-end;
+             gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+.rc-eyebrow { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .14em;
+              text-transform: uppercase; color: var(--violet-dark); margin-bottom: 6px; }
+.rc-title { font-family: 'DM Serif Display', serif; font-size: 34px; font-weight: 400;
+            color: var(--text); margin: 0 0 6px; }
+.rc-title em { color: var(--violet); }
+.rc-subtitle { font-family: 'Outfit', sans-serif; font-size: 14px; color: var(--text-muted); margin: 0; }
+.rc-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* "Cargar sesion" es un <label> y los otros dos son <button>: igualarlos
+   para que no queden escalonados. */
+.rc-header-actions .btn,
+.rc-header-actions .rc-import-label {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 34px; padding: 0 14px; margin: 0; line-height: 1;
+  font-family: 'Outfit', sans-serif; font-size: 13px; white-space: nowrap;
+  box-sizing: border-box;
+}
+.rc-import-label { cursor: pointer; }
+
+/* ── Stepper ── */
+.rc-steps { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.rc-step { font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600;
+           padding: 10px 16px; border: 1px solid var(--border); border-radius: 10px;
+           background: var(--bg-muted); color: var(--text-muted); cursor: pointer;
+           display: flex; align-items: center; gap: 8px; user-select: none; }
+.rc-step:hover { border-color: var(--violet-pale); }
+.rc-step.active { background: var(--violet-bg); border-color: var(--violet);
+                  color: var(--violet-dark); }
+.rc-step-num { display: inline-flex; align-items: center; justify-content: center;
+               width: 20px; height: 20px; border-radius: 50%; background: var(--violet);
+               color: #fff; font-size: 11px; font-family: 'DM Mono', monospace; }
+.rc-step-count { font-family: 'DM Mono', monospace; font-size: 11px; background: var(--bg);
+                 border: 1px solid var(--border); border-radius: 20px; padding: 1px 8px; }
+
+/* ── Panels / dropzone ── */
+.rc-panel { background: var(--bg); border: 1px solid var(--border); border-radius: 14px;
+            padding: 20px; box-shadow: 0 8px 32px rgba(80,40,120,.06); }
+.rc-drop { border: 2px dashed var(--border-soft); border-radius: 12px; padding: 34px;
+           text-align: center; cursor: pointer; transition: all .15s ease;
+           font-family: 'Outfit', sans-serif; }
+.rc-drop:hover, .rc-drop.dragover { border-color: var(--violet); background: var(--violet-bg); }
+.rc-drop-icon { font-size: 30px; margin-bottom: 8px; }
+.rc-drop-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.rc-drop-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
+
+.rc-loading { display: flex; align-items: center; gap: 10px; padding: 14px 4px;
+              font-family: 'Outfit', sans-serif; font-size: 13px; color: var(--violet-dark); }
+.rc-spinner { width: 16px; height: 16px; border: 2px solid var(--violet-bg);
+              border-top-color: var(--violet); border-radius: 50%;
+              animation: rcspin .7s linear infinite; }
+@keyframes rcspin { to { transform: rotate(360deg); } }
+
+/* ── Tables ── */
+.rc-table-wrap { overflow-x: auto; margin-top: 14px; }
+.rc-table { width: 100%; border-collapse: collapse; font-family: 'Outfit', sans-serif;
+            font-size: 13px; }
+.rc-table th { text-align: left; font-size: 11px; text-transform: uppercase;
+               letter-spacing: .08em; color: var(--text-label); padding: 8px 10px;
+               border-bottom: 2px solid var(--border); white-space: nowrap; }
+.rc-table td { padding: 9px 10px; border-bottom: 1px solid var(--border);
+               color: var(--text); vertical-align: top; }
+.rc-table .num, .rc-table td.num { text-align: right; font-family: 'DM Mono', monospace;
+                                   white-space: nowrap; }
+.rc-table .mono { font-family: 'DM Mono', monospace; font-size: 12px; white-space: nowrap; }
+.rc-del { border: none; background: none; cursor: pointer; color: var(--text-muted);
+          font-size: 14px; }
+.rc-del:hover { color: #c0392b; }
+
+/* ── Badges ── */
+.rc-badge { display: inline-block; padding: 2px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 600; font-family: 'Outfit', sans-serif;
+            white-space: nowrap; }
+.rc-badge.alta    { background: #d9f2e3; color: #0a7a3d; }
+.rc-badge.media   { background: #fdf3d7; color: #9a6b00; }
+.rc-badge.revisar { background: #fde3d7; color: #b1470f; }
+.rc-badge.rojo    { background: #fadbd8; color: #a93226; }
+.rc-badge.cuenta  { background: var(--violet-bg); color: var(--violet-dark); }
+
+/* ── KPIs ── */
+.rc-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+           gap: 12px; margin-bottom: 22px; }
+.rc-kpi { background: var(--bg-muted); border: 1px solid var(--border); border-radius: 12px;
+          padding: 14px 16px; font-family: 'Outfit', sans-serif; }
+.rc-kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+                color: var(--text-label); margin-bottom: 4px; }
+.rc-kpi-value { font-family: 'DM Mono', monospace; font-size: 20px; color: var(--text); }
+
+/* ── Cuenta corriente ── */
+.rc-h2 { font-family: 'DM Serif Display', serif; font-weight: 400; font-size: 21px;
+         color: var(--text); margin: 26px 0 10px; }
+.rc-cc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+              gap: 12px; }
+.rc-cc-card { background: var(--bg-muted); border: 1px solid var(--border);
+              border-radius: 12px; padding: 16px; font-family: 'Outfit', sans-serif; }
+.rc-cc-name { font-weight: 600; font-size: 14px; color: var(--text); margin-bottom: 2px; }
+.rc-cc-cuit { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted);
+              margin-bottom: 10px; }
+.rc-cc-row { display: flex; justify-content: space-between; font-size: 13px;
+             padding: 3px 0; }
+.rc-cc-row .val { font-family: 'DM Mono', monospace; }
+.rc-cc-saldo { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px;
+               font-weight: 600; }
+.rc-cc-saldo .val.pos { color: #a93226; }
+.rc-cc-saldo .val.zero { color: #0a7a3d; }
+
+/* ── Misc ── */
+.rc-panel-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.rc-empty { text-align: center; padding: 44px 0; font-family: 'Outfit', sans-serif; }
+.rc-error { background: #fadbd8; border: 1px solid #e6b0aa; color: #a93226;
+            border-radius: 10px; padding: 10px 14px; margin-top: 12px;
+            font-family: 'Outfit', sans-serif; font-size: 13px; }
+.rc-toast { position: fixed; bottom: 22px; right: 22px; background: var(--text);
+            color: #fff; padding: 12px 18px; border-radius: 10px;
+            font-family: 'Outfit', sans-serif; font-size: 13px; z-index: 99;
+            box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+
+/* ── Hint guía ── */
+.rc-hint { font-family: 'Outfit', sans-serif; font-size: 13px; color: var(--violet-dark);
+           background: var(--violet-bg); border: 1px solid var(--border-soft);
+           border-radius: 10px; padding: 10px 14px; margin: 0 0 18px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── Barra de progreso ── */
+.rc-loading { display: block; }
+.rc-progress { width: 100%; font-family: 'Outfit', sans-serif; }
+.rc-progress-head { display: flex; justify-content: space-between; align-items: baseline;
+                    font-size: 12.5px; color: var(--violet-dark); margin-bottom: 6px; }
+.rc-progress-pct { font-family: 'DM Mono', monospace; font-size: 12px; }
+.rc-progress-track { height: 6px; background: var(--bg-subtle); border-radius: 20px;
+                     overflow: hidden; }
+.rc-progress-bar { height: 100%; width: 0%; border-radius: 20px;
+                   background: linear-gradient(90deg, var(--violet-pale), var(--violet));
+                   transition: width .25s ease; }

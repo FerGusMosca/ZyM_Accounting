@@ -1,0 +1,74 @@
+Sos un extractor de datos de facturas electrónicas argentinas (ARCA/AFIP).
+
+Te paso el texto crudo extraído de un PDF de factura. Tu tarea es devolver
+EXCLUSIVAMENTE un objeto JSON válido, sin markdown, sin backticks, sin texto
+adicional antes o después.
+
+TEXTO DE LA FACTURA:
+---------------------
+{document_text}
+---------------------
+
+Devolvé este JSON exacto (usá null si un campo no aparece):
+
+{
+  "tipo_comprobante": "FACTURA",
+  "letra": "C",
+  "punto_venta": "00002",
+  "comp_nro": "00000183",
+  "fecha_emision": "DD/MM/AAAA",
+  "cuit_emisor": "solo dígitos, sin guiones",
+  "razon_social_emisor": "string",
+  "cuit_cliente": "solo dígitos, sin guiones",
+  "razon_social_cliente": "string",
+  "importe_total": 0.0,
+  "cae": "string",
+  "descripcion": "el servicio facturado, máx 140 caracteres"
+}
+
+════════════════════════════════════════════════════════════════════════
+EMISOR vs CLIENTE
+════════════════════════════════════════════════════════════════════════
+- El EMISOR es quien factura: aparece arriba, con "Razón Social", "Domicilio
+  Comercial", "Punto de Venta" y "Fecha de Inicio de Actividades".
+- El CLIENTE es el RECEPTOR (el que paga): aparece en el bloque de abajo,
+  etiquetado "Apellido y Nombre / Razón Social" junto a su propio CUIT.
+- "cuit_cliente" es el del RECEPTOR. Nunca pongas ahí el CUIT del emisor.
+
+════════════════════════════════════════════════════════════════════════
+DESCRIPCIÓN — LEÉ ESTO CON ATENCIÓN
+════════════════════════════════════════════════════════════════════════
+"descripcion" sale ÚNICAMENTE de la columna "Producto / Servicio" de la tabla
+de ítems (la que tiene las columnas Código, Cantidad, U. Medida, Precio Unit.,
+Subtotal). Es el detalle concreto del trabajo hecho.
+
+NO uses el eslogan ni la leyenda comercial del pie de página. Frases genéricas
+tipo "Servicios Integrales, remodelaciones." o similares aparecen abajo de todo,
+entre comillas, y son publicidad del emisor — NUNCA son la descripción.
+
+Ejemplos de descripciones correctas (salen de la tabla de ítems):
+  "Mano de obra. Cambio de flotante tanques elevados."
+  "Mano de obra y materiales. Cambio de lámpara en luminarias varias paliers - sótano."
+  "Mano de obra y materiales según presupuesto Nº 1177. Trabajo en U.F. portería, sector baño."
+
+Si el detalle es más largo que 140 caracteres, cortalo, pero conservá siempre
+el arranque real del texto y cualquier marca de estado que traiga al final
+(ADELANTO, SALDO, CUOTA 1/2, etc.), porque sirven para la conciliación.
+Si hay varios ítems, concatenalos separados por " | ".
+
+NO incluyas en la descripción los valores de las otras columnas de la tabla.
+Frases como "1,00 unidades 495000,00" o "0,00 0,00" son cantidad, unidad de
+medida, precio y bonificación — son columnas vecinas que se mezclan al extraer
+el texto del PDF. Sacalas: dejá solo el texto del servicio.
+
+════════════════════════════════════════════════════════════════════════
+FORMATO
+════════════════════════════════════════════════════════════════════════
+- Los CUIT van SIN guiones ni espacios: "30572212749", nunca "30-57221274-9".
+- "importe_total" es un número (float), sin símbolo $, sin separador de miles.
+  El formato argentino "632.500,00" se convierte a 632500.00.
+- "punto_venta" y "comp_nro" conservan los ceros a la izquierda como strings.
+- Las fechas siempre en formato DD/MM/AAAA.
+- Si el PDF trae ORIGINAL, DUPLICADO y TRIPLICADO de la misma factura,
+  devolvé UN solo JSON (es una sola factura).
+- Respondé SOLO el JSON. Nada más.

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conciliación de Cobranzas — MOSCA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ sv('/static/css/main.css') }}">
+  <link rel="stylesheet" href="{{ sv('/static/css/main_dashboard.css') }}">
+  <link rel="stylesheet" href="{{ sv('/static/css/reconciliation.css') }}">
+  <link rel="stylesheet" href="{{ sv('/static/css/theme.css') }}">
+</head>
+<body>
+
+<div class="dash-root">
+
+  <!-- ── Sidebar ── -->
+  <aside class="dash-sidebar">
+    <div class="dash-brand">
+      <div class="dash-brand-icon">M</div>
+      <div class="dash-brand-text">
+        <span class="dash-brand-name">MOSCA</span>
+        <span class="dash-brand-sub"></span>
+      </div>
+    </div>
+    <nav class="dash-nav">
+      <div class="dash-nav-section">Módulos</div>
+      <a href="/billing_extractor_n_generator" class="dash-nav-item">
+        <span class="dash-nav-icon">🧾</span>
+        <span>Generar factura</span>
+      </a>
+      <a href="/invoice_history" class="dash-nav-item">
+        <span class="dash-nav-icon">📋</span>
+        <span>Facturas Enviadas</span>
+      </a>
+      <a href="/reconciliation" class="dash-nav-item active">
+        <span class="dash-nav-icon">🔗</span>
+        <span>Conciliación</span>
+      </a>
+    </nav>
+    <div class="dash-sidebar-footer">
+      <div class="dash-version">v1.0.0</div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="rc-main">
+
+    <div class="rc-header">
+      <div>
+        <div class="rc-eyebrow">Cobranzas</div>
+        <h1 class="rc-title">Conciliación <em>de Cobranzas</em></h1>
+        <p class="rc-subtitle">Subí facturas emitidas y comprobantes de pago — el sistema arma el cruce y la cuenta corriente por cliente</p>
+      </div>
+      <div class="rc-header-actions">
+        <button class="btn btn-ghost" onclick="exportSession()" title="Descarga un archivo .json con las facturas, los pagos y la conciliación de esta pantalla, para retomar el trabajo otro día">⬇ Guardar sesión</button>
+        <label class="btn btn-ghost rc-import-label" title="Vuelve a cargar un .json guardado antes, con todo lo que habías subido">⬆ Cargar sesión
+          <input type="file" accept=".json" id="importSession" hidden>
+        </label>
+        <button class="btn btn-ghost" onclick="resetAll()" title="Borra facturas, pagos y conciliación de esta pantalla y arranca de cero">✕ Limpiar todo</button>
+      </div>
+    </div>
+
+    <!-- ── Stepper ── -->
+    <div class="rc-steps">
+      <div class="rc-step active" id="stepTab1" onclick="showStep(1)">
+        <span class="rc-step-num">1</span> Facturas emitidas
+        <span class="rc-step-count" id="invCount">0</span>
+      </div>
+      <div class="rc-step" id="stepTab2" onclick="showStep(2)">
+        <span class="rc-step-num">2</span> Comprobantes de pago
+        <span class="rc-step-count" id="payCount">0</span>
+      </div>
+      <div class="rc-step" id="stepTab3" onclick="showStep(3)">
+        <span class="rc-step-num">3</span> Conciliación
+      </div>
+    </div>
+
+    <p class="rc-hint" id="rcHint"></p>
+
+    <!-- ── Paso 1: Facturas ── -->
+    <section class="rc-panel" id="panel1">
+      <div class="rc-drop" id="dropInv">
+        <div class="rc-drop-icon">🧾</div>
+        <div class="rc-drop-title">Arrastrá acá los PDF de las facturas emitidas</div>
+        <div class="rc-drop-sub">o hacé clic para elegirlos — se pueden subir varios a la vez, en distintas tandas</div>
+        <input type="file" id="fileInv" accept=".pdf" multiple hidden>
+      </div>
+      <div class="rc-loading" id="loadInv" hidden>
+        <div class="rc-progress">
+          <div class="rc-progress-head">
+            <span id="loadInvText">Preparando…</span>
+            <span id="loadInvPct" class="rc-progress-pct">0%</span>
+          </div>
+          <div class="rc-progress-track">
+            <div class="rc-progress-bar" id="loadInvBar"></div>
+          </div>
+        </div>
+      </div>
+      <div id="invErrors"></div>
+      <div class="rc-table-wrap">
+        <table class="rc-table" id="invTable" hidden>
+          <thead>
+            <tr>
+              <th>Comprobante</th><th>Fecha</th><th>Cliente</th><th>CUIT</th>
+              <th class="num">Importe</th><th>Descripción</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="invBody"></tbody>
+        </table>
+      </div>
+      <div class="rc-panel-foot">
+        <button class="btn btn-primary" id="btnToPay" onclick="showStep(2)" disabled>Continuar → Pagos</button>
+      </div>
+    </section>
+
+    <!-- ── Paso 2: Pagos ── -->
+    <section class="rc-panel" id="panel2" hidden>
+      <div class="rc-drop" id="dropPay">
+        <div class="rc-drop-icon">💸</div>
+        <div class="rc-drop-title">Arrastrá acá los PDF de los comprobantes de transferencia</div>
+        <div class="rc-drop-sub">o hacé clic para elegirlos — Banco Ciudad, Santander, Mercado Pago, etc.</div>
+        <input type="file" id="filePay" accept=".pdf" multiple hidden>
+      </div>
+      <div class="rc-loading" id="loadPay" hidden>
+        <div class="rc-progress">
+          <div class="rc-progress-head">
+            <span id="loadPayText">Preparando…</span>
+            <span id="loadPayPct" class="rc-progress-pct">0%</span>
+          </div>
+          <div class="rc-progress-track">
+            <div class="rc-progress-bar" id="loadPayBar"></div>
+          </div>
+        </div>
+      </div>
+      <div id="payErrors"></div>
+      <div class="rc-table-wrap">
+        <table class="rc-table" id="payTable" hidden>
+          <thead>
+            <tr>
+              <th>Banco</th><th>Fecha</th><th>Originante</th><th>CUIT</th>
+              <th class="num">Importe</th><th>Referencia</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="payBody"></tbody>
+        </table>
+      </div>
+      <div class="rc-panel-foot">
+        <button class="btn btn-ghost" onclick="showStep(1)">← Facturas</button>
+        <button class="btn btn-primary" id="btnReconcile" onclick="runReconcile()" disabled>Conciliar ahora →</button>
+      </div>
+    </section>
+
+    <!-- ── Paso 3: Resultado ── -->
+    <section class="rc-panel" id="panel3" hidden>
+      <div class="rc-empty" id="rcEmpty">
+        <div class="rc-drop-icon">🔗</div>
+        <div class="rc-drop-title">Todavía no hay conciliación</div>
+        <div class="rc-drop-sub">Cargá facturas y pagos, y apretá “Conciliar ahora”.</div>
+      </div>
+
+      <div id="rcResult" hidden>
+        <!-- KPIs -->
+        <div class="rc-kpis" id="rcKpis"></div>
+
+        <!-- Cuenta corriente -->
+        <h2 class="rc-h2">Cuenta corriente por cliente</h2>
+        <div class="rc-cc-grid" id="ccGrid"></div>
+
+        <!-- Matches -->
+        <h2 class="rc-h2">Cruce factura ↔ pago</h2>
+        <div class="rc-table-wrap">
+          <table class="rc-table">
+            <thead>
+              <tr><th>Estado</th><th>Factura</th><th>Cliente</th><th class="num">Importe</th>
+                  <th>Pago</th><th>Motivo</th></tr>
+            </thead>
+            <tbody id="matchBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Pendientes -->
+        <h2 class="rc-h2">Facturas pendientes de cobro</h2>
+        <div class="rc-table-wrap">
+          <table class="rc-table">
+            <thead>
+              <tr><th>Comprobante</th><th>Fecha</th><th>Cliente</th>
+                  <th class="num">Importe</th><th>Descripción</th></tr>
+            </thead>
+            <tbody id="pendBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Pagos sin imputar -->
+        <h2 class="rc-h2">Pagos sin imputar</h2>
+        <div class="rc-table-wrap">
+          <table class="rc-table">
+            <thead>
+              <tr><th>Banco</th><th>Fecha</th><th>Originante</th>
+                  <th class="num">Importe</th><th>Estado</th></tr>
+            </thead>
+            <tbody id="unassBody"></tbody>
+          </table>
+        </div>
+
+        <div class="rc-panel-foot">
+          <button class="btn btn-ghost" onclick="exportCSV()">⬇ Exportar CSV</button>
+          <button class="btn btn-primary" onclick="runReconcile()">↺ Re-conciliar</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast" class="rc-toast" hidden></div>
+<script src="{{ sv('/static/js/reconciliation.js') }}"></script>
+</body>
+</html>

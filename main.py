@@ -10,6 +10,7 @@ from controllers.billing_extractor_n_generator_controller import BillingExtracto
 from controllers.dashboard_controller import DashboardController
 from controllers.invoice_history_controller import InvoiceHistoryController
 from controllers.mp_extractor_controller import MpExtractorController
+from controllers.reconciliation_controller import ReconciliationController
 
 settings = get_settings()
 app = FastAPI()
@@ -43,6 +44,9 @@ app.include_router(bills_history.router)
 
 mp_extractor = MpExtractorController()
 app.include_router(mp_extractor.router)
+
+reconciliation = ReconciliationController()
+app.include_router(reconciliation.router)
 
 
 # ===========================

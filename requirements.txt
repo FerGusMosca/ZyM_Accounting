@@ -29,3 +29,6 @@ pytz==2025.2
 
 # Testing
 pytest==8.4.1
+openai
+langchain_openai
+langchain_core

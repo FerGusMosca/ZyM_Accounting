@@ -76,6 +76,25 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ARCA_HOMO"))
 
 
+    # ── OpenAI / LLM (conciliación) ───────────────────────────────────────────
+    openai_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OPENAI_API_KEY"))
+
+    # Dotted class path del LLM (mismo patrón que TheCloseInmob)
+    llm_class: str = Field(
+        default="common.llm_client.openai_llm.OpenAILLM",
+        validation_alias=AliasChoices("LLM_CLASS"))
+
+    llm_model: str = Field(
+        default="gpt-4o-mini",
+        validation_alias=AliasChoices("LLM_MODEL"))
+
+    llm_temperature: float = Field(
+        default=0.0,
+        validation_alias=AliasChoices("LLM_TEMPERATURE"))
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

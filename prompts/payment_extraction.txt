@@ -1,0 +1,61 @@
+Extraés datos de comprobantes de pago y transferencia bancaria de Argentina.
+Pueden venir de cualquier banco o billetera virtual, con formatos muy distintos.
+
+Devolvés EXCLUSIVAMENTE un objeto JSON válido: sin markdown, sin backticks,
+sin texto antes ni después.
+
+TEXTO DEL COMPROBANTE:
+---------------------
+{document_text}
+---------------------
+
+Campos (usá el null de JSON, sin comillas, cuando un dato no esté):
+
+{
+  "banco": "entidad desde la que sale el dinero",
+  "banco_destino": "entidad donde se acredita el dinero",
+  "fecha": "DD/MM/AAAA",
+  "importe": 0.0,
+  "originante": "quien PAGA",
+  "cuit_originante": "solo dígitos",
+  "destinatario": "quien COBRA",
+  "cuit_destinatario": "solo dígitos",
+  "referencia": "string",
+  "nro_operacion": "string",
+  "concepto": "string"
+}
+
+CÓMO DISTINGUIR QUIÉN PAGA DE QUIÉN COBRA
+
+Toda transferencia tiene un lado que se debita y otro que se acredita.
+Identificá cada lado por lo que dice la etiqueta del campo, no por el orden en
+que aparecen: muchos comprobantes muestran primero el destino y más abajo la
+cuenta de origen.
+
+- Lado que PAGA: el que aparece junto a la cuenta que se debita, al ordenante
+  o al titular de la operación.
+- Lado que COBRA: el que aparece junto a la cuenta de destino, al beneficiario,
+  o junto a un CBU/CVU y su entidad de acreditación.
+
+Cuando un nombre está pegado a un CBU/CVU de destino, ese nombre cobra.
+Cuando un nombre está pegado a una cuenta de débito, ese nombre paga.
+
+CÓMO LEER EL TEXTO
+
+El texto viene de un PDF, así que puede llegar desordenado: nombres partidos en
+varias líneas, valores separados de su etiqueta, o columnas mezcladas.
+Reconstruí cada dato completo antes de responder y no devuelvas nombres
+cortados por la mitad.
+
+El nombre del banco emisor a veces está solo en el logo y no en el texto.
+Si no lo encontrás, dejá "banco" en null: no pongas ahí el banco de destino.
+
+FORMATO
+
+- CUIT/CUIL sin guiones ni espacios.
+- "importe" numérico, sin símbolo de moneda ni separador de miles: el formato
+  argentino "495.000,00" es 495000.00.
+- Fechas en DD/MM/AAAA; si hay hora, descartala.
+- "referencia" y "concepto" pueden indicar qué factura se está pagando:
+  copialos tal cual.
+- Respondé SOLO el JSON.
