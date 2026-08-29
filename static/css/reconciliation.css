@@ -104,9 +104,15 @@
 .rc-cc-name { font-weight: 600; font-size: 14px; color: var(--text); margin-bottom: 2px; }
 .rc-cc-cuit { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted);
               margin-bottom: 10px; }
+/* Facturado y Cobrado quedaban heredando el gris claro del tema oscuro de
+   main.css sobre el fondo beige, y no se leian. Se les fija color propio. */
 .rc-cc-row { display: flex; justify-content: space-between; font-size: 13px;
-             padding: 3px 0; }
-.rc-cc-row .val { font-family: 'DM Mono', monospace; }
+             padding: 3px 0; color: #3a2a50; }
+.rc-cc-row > span:first-child { color: #4a3a60; }
+.rc-cc-row .val { font-family: 'DM Mono', monospace; color: #1a0a2e;
+                  font-weight: 500; }
+.rc-cc-name { color: var(--text); }
+.rc-cc-cuit { color: #6b5b8a; }
 .rc-cc-saldo { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px;
                font-weight: 600; }
 .rc-cc-saldo .val.pos { color: #a93226; }
@@ -140,3 +146,85 @@
 .rc-progress-bar { height: 100%; width: 0%; border-radius: 20px;
                    background: linear-gradient(90deg, var(--violet-pale), var(--violet));
                    transition: width .25s ease; }
+
+/* ── Grupos de clientes ──────────────────────────────────────────────
+   El grupo es una capa de arriba: junta varios CUIT bajo un nombre libre
+   (hoy una administracion de consorcios) y muestra el saldo total. */
+.rc-cc-toolbar { display: flex; align-items: center; justify-content: space-between;
+                 gap: 12px; flex-wrap: wrap; margin: 6px 0 12px; }
+.rc-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+             font-family: 'Outfit', sans-serif; font-size: 13px; color: #3a2a50; }
+.rc-switch input { width: 16px; height: 16px; accent-color: var(--violet); cursor: pointer; }
+
+.rc-group { border: 1px solid var(--border); border-radius: 14px;
+            background: var(--bg-muted); padding: 14px 16px; margin-bottom: 14px; }
+.rc-group-head { display: flex; align-items: baseline; justify-content: space-between;
+                 gap: 12px; flex-wrap: wrap; padding-bottom: 10px;
+                 border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.rc-group-name { font-family: 'DM Serif Display', serif; font-size: 18px;
+                 color: #1a0a2e; }
+.rc-group-meta { font-family: 'Outfit', sans-serif; font-size: 12px; color: #4a3a60; }
+.rc-group-tot { font-family: 'DM Mono', monospace; font-size: 15px; color: #a93226;
+                font-weight: 500; }
+.rc-group .rc-cc-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.rc-group .rc-cc-card { background: var(--bg); }
+
+/* ── Modal de grupos ── */
+.rc-modal-bg { position: fixed; inset: 0; background: rgba(80,40,120,.35);
+               display: flex; align-items: center; justify-content: center;
+               z-index: 200; padding: 20px; }
+.rc-modal { background: var(--bg); border: 1px solid var(--border);
+            border-radius: 14px; width: min(760px, 100%); max-height: 86vh;
+            display: flex; flex-direction: column;
+            box-shadow: 0 20px 60px rgba(80,40,120,.25); }
+.rc-modal-head { display: flex; align-items: center; justify-content: space-between;
+                 padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.rc-modal-title { font-family: 'DM Serif Display', serif; font-size: 20px;
+                  color: #1a0a2e; }
+.rc-modal-body { padding: 16px 20px; overflow-y: auto;
+                 font-family: 'Outfit', sans-serif; font-size: 13px; color: #3a2a50; }
+.rc-modal-foot { display: flex; justify-content: flex-end; gap: 10px;
+                 padding: 14px 20px; border-top: 1px solid var(--border); }
+.rc-modal-close { border: none; background: none; font-size: 20px; cursor: pointer;
+                  color: #6b5b8a; line-height: 1; }
+.rc-modal-close:hover { color: #a93226; }
+
+.rc-newgroup { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.rc-input { flex: 1; min-width: 200px; height: 34px; padding: 0 12px;
+            border: 1px solid var(--border); border-radius: 8px;
+            background: var(--bg-muted); color: #1a0a2e;
+            font-family: 'Outfit', sans-serif; font-size: 13px; }
+.rc-input:focus { outline: none; border-color: var(--violet); }
+.rc-select { height: 30px; padding: 0 8px; border: 1px solid var(--border);
+             border-radius: 8px; background: var(--bg); color: #1a0a2e;
+             font-family: 'Outfit', sans-serif; font-size: 12.5px; min-width: 190px; }
+.rc-grouplist { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.rc-grouptag { display: inline-flex; align-items: center; gap: 8px;
+               background: var(--violet-bg); border: 1px solid var(--border-soft);
+               border-radius: 20px; padding: 4px 12px; font-size: 12.5px;
+               color: var(--violet-dark); }
+.rc-grouptag button { border: none; background: none; cursor: pointer;
+                      color: var(--violet-dark); font-size: 13px; line-height: 1; }
+.rc-grouptag button:hover { color: #a93226; }
+.rc-assign-row { display: flex; align-items: center; justify-content: space-between;
+                 gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.rc-assign-name { color: #1a0a2e; font-weight: 500; }
+.rc-assign-cuit { font-family: 'DM Mono', monospace; font-size: 11px; color: #6b5b8a; }
+.rc-nodb { background: #fdf3d7; border: 1px solid #f0d78a; color: #7a5500;
+           border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
+           font-size: 12.5px; }
+
+/* ── Aviso de documento duplicado ── */
+.rc-dupe { background: #fdf3d7; border: 1px solid #f0d78a; color: #7a5500;
+           border-radius: 10px; padding: 10px 14px; margin-top: 12px;
+           font-family: 'Outfit', sans-serif; font-size: 13px; }
+.rc-table tr.dupe td { background: #fdf9ec; }
+
+/* ── Modal de confirmar / pedir un dato ──────────────────────────────
+   El boton seguro (el que NO hace nada) queda destacado y a la izquierda,
+   asi el clic apurado o el Enter no cargan algo repetido. */
+.rc-modal-sm { width: min(460px, 100%); }
+.rc-ask-msg { white-space: pre-line; line-height: 1.5; color: #3a2a50; }
+.rc-ask-msg b { color: #1a0a2e; }
+.rc-ask-input { width: 100%; margin-top: 14px; }
+.rc-modal-foot .btn { min-width: 120px; }

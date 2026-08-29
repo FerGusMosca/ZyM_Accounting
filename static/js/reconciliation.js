@@ -1,9 +1,20 @@
-// reconciliation.js — estado sin BD: sessionStorage + export/import JSON
+// reconciliation.js — estado en sessionStorage + base opcional
+//
+// Tanda 3 (pedidos del 29/08/2026):
+//   1. Aviso cuando se sube dos veces la misma factura, con la opción de
+//      cargarla igual.
+//   3. Agrupar clientes bajo un nombre libre y ver el saldo total del grupo.
+//   4. Un mismo CUIT sale siempre con el mismo nombre (lo resuelve el backend).
 
 // ── State ──────────────────────────────────────────────────────────
 let invoices = [];
 let payments = [];
 let lastResult = null;
+
+let dbEnabled = false;      // hay base configurada y respondiendo
+let agrupar = false;        // vista agrupada de la cuenta corriente
+let grupos = [];            // [{id, nombre}]
+let asignaciones = {};      // cuit -> {group_id, group_name}
 
 const SS_KEY = 'zym_reconciliation_v1';
 
@@ -15,10 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('importSession')
     .addEventListener('change', e => importSession(e.target.files[0]));
   renderAll();
+  checkDb();
 });
 
 function persist() {
-  sessionStorage.setItem(SS_KEY, JSON.stringify({ invoices, payments, lastResult }));
+  sessionStorage.setItem(SS_KEY,
+    JSON.stringify({ invoices, payments, lastResult, agrupar }));
 }
 function restore() {
   try {
@@ -28,8 +41,69 @@ function restore() {
     invoices = s.invoices || [];
     payments = s.payments || [];
     lastResult = s.lastResult || null;
+    agrupar = !!s.agrupar;
   } catch (_) { /* sesión corrupta → arrancar vacío */ }
 }
+
+// ── Base de datos ──────────────────────────────────────────────────
+async function checkDb() {
+  try {
+    const res = await fetch('/reconciliation/db_status');
+    const data = await res.json();
+    dbEnabled = !!data.enabled;
+  } catch (_) { dbEnabled = false; }
+
+  const btn = document.getElementById('btnSaveDb');
+  if (btn) btn.hidden = !dbEnabled;
+  const chk = document.getElementById('chkAgrupar');
+  if (chk) chk.checked = agrupar;
+  if (dbEnabled) loadGroups();
+}
+
+async function loadGroups() {
+  try {
+    const res = await fetch('/reconciliation/groups');
+    const data = await res.json();
+    grupos = data.grupos || [];
+    asignaciones = data.asignaciones || {};
+  } catch (_) { /* sin grupos, la pantalla sigue andando */ }
+}
+
+
+// ── Modal propio de confirmar / pedir un dato ──────────────────────
+// Reemplaza confirm() y prompt(), que salen con el estilo del sistema
+// operativo. Devuelve una promesa: true/false, o el texto escrito.
+let _askResolver = null;
+
+function ask({ titulo, mensaje, ok = 'Sí', cancel = 'No', input = null }) {
+  document.getElementById('askTitle').textContent = titulo;
+  document.getElementById('askMsg').innerHTML = mensaje;
+  document.getElementById('askOk').textContent = ok;
+  document.getElementById('askCancel').textContent = cancel;
+
+  const campo = document.getElementById('askInput');
+  campo.hidden = input === null;
+  campo.value = input || '';
+
+  document.getElementById('askModal').hidden = false;
+  if (input !== null) setTimeout(() => { campo.focus(); campo.select(); }, 30);
+
+  return new Promise(res => { _askResolver = res; });
+}
+
+function askResolve(acepta) {
+  document.getElementById('askModal').hidden = true;
+  const campo = document.getElementById('askInput');
+  const valor = campo.hidden ? acepta : (acepta ? campo.value.trim() : null);
+  const r = _askResolver; _askResolver = null;
+  if (r) r(valor);
+}
+
+document.addEventListener('keydown', e => {
+  if (document.getElementById('askModal').hidden) return;
+  // Escape y Enter cierran sin hacer nada: la opcion segura es la de salir.
+  if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); askResolve(false); }
+});
 
 // ── Upload — un archivo por request, para tener progreso real ──────
 function bindDrop(dropId, inputId, handler) {
@@ -58,7 +132,7 @@ async function uploadFiles(fileList, kind) {
   errEl.innerHTML = '';
   progressStart(pfx, files.length);
 
-  let ok = 0;
+  let ok = 0, saltados = 0;
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
     progressStep(pfx, i, files.length, f.name);
@@ -76,7 +150,10 @@ async function uploadFiles(fileList, kind) {
       }
       if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
 
-      (data.documents || []).forEach(d => { target.push(d); ok++; });
+      for (const d of (data.documents || [])) {
+        if (!await aceptarDoc(d, target, isInv, errEl)) { saltados++; continue; }
+        target.push(d); ok++;
+      }
       (data.errors || []).forEach(e =>
         errEl.innerHTML += `<div class="rc-error">❌ ${esc(e.archivo)}: ${esc(e.error)}</div>`);
     } catch (e) {
@@ -91,6 +168,49 @@ async function uploadFiles(fileList, kind) {
 
   progressEnd(pfx);
   if (ok) toast(`✅ ${ok} documento(s) procesado(s)`);
+  if (saltados) toast(`↩️ ${saltados} documento(s) repetido(s) no se cargaron`);
+}
+
+/**
+ * Decide si el documento se carga o se descarta.
+ *
+ * Hay dos formas de que esté repetido:
+ *   - ya se subió en esta misma pantalla (se compara la huella del archivo)
+ *   - ya está guardado en la base, quizá de otro día (lo avisa el backend)
+ * En los dos casos se pregunta antes de cargarlo, nunca se bloquea solo.
+ */
+async function aceptarDoc(d, target, isInv, errEl) {
+  const queEs = isInv ? 'factura' : 'comprobante';
+
+  const yaEnPantalla = d._hash && target.some(x => x._hash === d._hash);
+  if (yaEnPantalla) {
+    const seguir = await ask({
+      titulo: `Este ${queEs} ya lo subiste`,
+      mensaje: `Ya está en esta pantalla:\n\n<b>${esc(d._archivo)}</b>\n\n` +
+               `Si lo cargás igual va a aparecer dos veces.`,
+      cancel: 'No cargar',
+      ok: 'Cargar igual',
+    });
+    if (!seguir) return false;
+    errEl.innerHTML += `<div class="rc-dupe">⚠️ ${esc(d._archivo)}: repetido en esta pantalla, cargado igual.</div>`;
+    return true;
+  }
+
+  if (d._duplicado) {
+    const pagada = /PAGADA/.test(d._aviso || '');
+    const seguir = await ask({
+      titulo: pagada ? `Esta ${queEs} figura pagada` : `Este ${queEs} ya está registrado`,
+      mensaje: `<b>${esc(d._archivo)}</b>\n\n${esc(d._aviso)}.` +
+               (pagada ? '\n\nSi la cargás igual vas a poder imputarle un pago nuevo.' : ''),
+      cancel: 'No cargar',
+      ok: 'Cargar igual',
+    });
+    if (!seguir) return false;
+    errEl.innerHTML += `<div class="rc-dupe">⚠️ ${esc(d._archivo)}: ${esc(d._aviso)} — cargado igual.</div>`;
+    return true;
+  }
+
+  return true;
 }
 
 // ── Barra de progreso ──────────────────────────────────────────────
@@ -132,6 +252,167 @@ async function runReconcile() {
   }
 }
 
+// ── Guardar en la base ─────────────────────────────────────────────
+async function saveToDb() {
+  if (!lastResult) { toast('⚠️ Primero hacé una conciliación'); return; }
+  const seguir = await ask({
+    titulo: 'Guardar en base',
+    mensaje: 'Se van a guardar las facturas, los cobros y los cruces.\n\n' +
+             'Las facturas que quedaron cubiertas se registran como pagadas.',
+    cancel: 'Cancelar',
+    ok: 'Guardar',
+  });
+  if (!seguir) return;
+  try {
+    const res = await fetch('/reconciliation/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoices, payments, result: lastResult })
+    });
+    const data = await res.json();
+    if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+    toast(`💾 Guardado: ${data.n_facturas} factura(s), ${data.n_pagos} pago(s), ${data.n_matches} cruce(s)`);
+    loadGroups();
+  } catch (e) {
+    toast(`❌ ${e.message}`);
+  }
+}
+
+// ── Grupos de clientes ─────────────────────────────────────────────
+function toggleAgrupar() {
+  agrupar = document.getElementById('chkAgrupar').checked;
+  persist(); renderResult();
+}
+
+async function openGroups() {
+  document.getElementById('groupsNoDb').hidden = dbEnabled;
+  if (dbEnabled) await loadGroups();
+  renderGroupsModal();
+  document.getElementById('groupsModal').hidden = false;
+}
+
+function closeGroups() {
+  document.getElementById('groupsModal').hidden = true;
+  if (lastResult) runReconcile();   // vuelve a traer los grupos actualizados
+}
+
+function renderGroupsModal() {
+  document.getElementById('groupList').innerHTML = grupos.length
+    ? grupos.map(g => `
+        <span class="rc-grouptag">
+          ${esc(g.nombre)}
+          <button onclick="renameGroup(${g.id})" title="Cambiar el nombre">✎</button>
+          <button onclick="deleteGroup(${g.id})" title="Borrar el grupo">✕</button>
+        </span>`).join('')
+    : '<span class="rc-assign-cuit">Todavía no hay grupos.</span>';
+
+  const clientes = lastResult
+    ? lastResult.cuentas_corrientes.filter(c => c.cuit)
+    : [];
+
+  document.getElementById('assignList').innerHTML = clientes.length
+    ? clientes.map(c => {
+        const actual = (asignaciones[c.cuit] || {}).group_id || '';
+        const opts = ['<option value="">Sin grupo</option>']
+          .concat(grupos.map(g =>
+            `<option value="${g.id}" ${String(g.id) === String(actual) ? 'selected' : ''}>${esc(g.nombre)}</option>`))
+          .join('');
+        return `
+          <div class="rc-assign-row">
+            <div>
+              <div class="rc-assign-name">${esc(c.cliente)}</div>
+              <div class="rc-assign-cuit">${esc(c.cuit)}</div>
+            </div>
+            <select class="rc-select" onchange="assignGroup('${esc(c.cuit)}', this.value)"
+                    ${dbEnabled ? '' : 'disabled'}>${opts}</select>
+          </div>`;
+      }).join('')
+    : '<span class="rc-assign-cuit">Hacé una conciliación primero para ver los clientes.</span>';
+}
+
+async function createGroup() {
+  const input = document.getElementById('newGroupName');
+  const nombre = input.value.trim();
+  if (!nombre) { toast('⚠️ Poné un nombre para el grupo'); return; }
+  if (!dbEnabled) { toast('⚠️ Sin base no se pueden guardar grupos'); return; }
+  try {
+    const res = await fetch('/reconciliation/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre })
+    });
+    const data = await res.json();
+    if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+    input.value = '';
+    await loadGroups(); renderGroupsModal();
+    toast('✅ Grupo creado');
+  } catch (e) { toast(`❌ ${e.message}`); }
+}
+
+async function renameGroup(groupId) {
+  const g = grupos.find(x => x.id === groupId);
+  const nombre = await ask({
+    titulo: 'Cambiar el nombre del grupo',
+    mensaje: 'Poné el nombre nuevo:',
+    cancel: 'Cancelar',
+    ok: 'Guardar',
+    input: g ? g.nombre : '',
+  });
+  if (!nombre) return;
+  try {
+    const res = await fetch('/reconciliation/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ group_id: groupId, nombre })
+    });
+    const data = await res.json();
+    if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+    await loadGroups(); renderGroupsModal();
+    toast('✅ Nombre cambiado');
+  } catch (e) { toast(`❌ ${e.message}`); }
+}
+
+async function deleteGroup(groupId) {
+  const seguir = await ask({
+    titulo: 'Borrar el grupo',
+    mensaje: 'Los clientes quedan sin grupo. No se borra ninguna factura ni ningún pago.',
+    cancel: 'Cancelar',
+    ok: 'Borrar',
+  });
+  if (!seguir) return;
+  try {
+    const res = await fetch('/reconciliation/groups/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ group_id: groupId })
+    });
+    const data = await res.json();
+    if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+    await loadGroups(); renderGroupsModal();
+    toast('🗑 Grupo borrado');
+  } catch (e) { toast(`❌ ${e.message}`); }
+}
+
+async function assignGroup(cuit, groupId) {
+  const c = (lastResult ? lastResult.cuentas_corrientes : [])
+    .find(x => x.cuit === cuit);
+  try {
+    const res = await fetch('/reconciliation/assign_group', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cuit,
+        cliente: c ? c.cliente : cuit,
+        group_id: groupId ? Number(groupId) : null
+      })
+    });
+    const data = await res.json();
+    if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+    await loadGroups();
+    toast('✅ Cliente asignado');
+  } catch (e) { toast(`❌ ${e.message}`); }
+}
+
 // ── Render ─────────────────────────────────────────────────────────
 function renderAll() {
   document.getElementById('invCount').textContent = invoices.length;
@@ -158,8 +439,8 @@ function renderInvTable() {
   const b = document.getElementById('invBody');
   t.hidden = !invoices.length;
   b.innerHTML = invoices.map((inv, i) => `
-    <tr>
-      <td class="mono">${esc(inv.punto_venta)}-${esc(inv.comp_nro)}</td>
+    <tr class="${inv._duplicado ? 'dupe' : ''}">
+      <td class="mono">${esc(inv.punto_venta)}-${esc(inv.comp_nro)}${inv._duplicado ? ' <span class="rc-badge media" title="Ya estaba registrada — la cargaste igual">repetida</span>' : ''}</td>
       <td class="mono">${esc(inv.fecha_emision)}</td>
       <td>${esc(inv.razon_social_cliente)}</td>
       <td class="mono">${esc(inv.cuit_cliente)}</td>
@@ -174,8 +455,8 @@ function renderPayTable() {
   const b = document.getElementById('payBody');
   t.hidden = !payments.length;
   b.innerHTML = payments.map((p, i) => `
-    <tr>
-      <td>${esc(p.banco || '-')}${p._corregido ? ' <span class="rc-badge media" title="El extractor había invertido pagador y cobrador — corregido automáticamente">corregido</span>' : ''}</td>
+    <tr class="${p._duplicado ? 'dupe' : ''}">
+      <td>${esc(p.banco || '-')}${p._corregido ? ' <span class="rc-badge media" title="El extractor había invertido pagador y cobrador — corregido automáticamente">corregido</span>' : ''}${p._duplicado ? ' <span class="rc-badge media" title="Ya estaba registrado — lo cargaste igual">repetido</span>' : ''}</td>
       <td class="mono">${esc(p.fecha)}</td>
       <td>${esc(p.originante)}</td>
       <td class="mono">${esc(p.cuit_originante)}</td>
@@ -210,17 +491,7 @@ function renderResult() {
     <div class="rc-kpi"><div class="rc-kpi-label">${l}</div>
     <div class="rc-kpi-value">${v}</div></div>`).join('');
 
-  document.getElementById('ccGrid').innerHTML = r.cuentas_corrientes.map(c => `
-    <div class="rc-cc-card">
-      <div class="rc-cc-name">${esc(c.cliente)}</div>
-      <div class="rc-cc-cuit">${esc(c.cuit) || 'sin CUIT'}</div>
-      <div class="rc-cc-row"><span>Facturado (${c.n_facturas})</span>
-        <span class="val">${money(c.facturado)}</span></div>
-      <div class="rc-cc-row"><span>Cobrado (${c.n_pagos})</span>
-        <span class="val">${money(c.cobrado)}</span></div>
-      <div class="rc-cc-row rc-cc-saldo"><span>Saldo</span>
-        <span class="val ${c.saldo > 0 ? 'pos' : 'zero'}">${money(c.saldo)}</span></div>
-    </div>`).join('');
+  renderCuentaCorriente(r);
 
   document.getElementById('matchBody').innerHTML = r.matches.length
     ? r.matches.map(m => `
@@ -255,6 +526,54 @@ function renderResult() {
     : `<tr><td colspan="5">Todos los pagos quedaron imputados.</td></tr>`;
 }
 
+/** Tarjeta de un cliente. Es la misma en la vista plana y en la agrupada. */
+function ccCard(c) {
+  return `
+    <div class="rc-cc-card">
+      <div class="rc-cc-name">${esc(c.cliente)}</div>
+      <div class="rc-cc-cuit">${esc(c.cuit) || 'sin CUIT'}</div>
+      <div class="rc-cc-row"><span>Facturado (${c.n_facturas})</span>
+        <span class="val">${money(c.facturado)}</span></div>
+      <div class="rc-cc-row"><span>Cobrado (${c.n_pagos})</span>
+        <span class="val">${money(c.cobrado)}</span></div>
+      <div class="rc-cc-row rc-cc-saldo"><span>Saldo</span>
+        <span class="val ${c.saldo > 0 ? 'pos' : 'zero'}">${money(c.saldo)}</span></div>
+    </div>`;
+}
+
+/**
+ * Cuenta corriente, plana o agrupada.
+ * Agrupada: un bloque por grupo, con el saldo total arriba y las tarjetas de
+ * sus clientes adentro. Los clientes sin grupo quedan al final.
+ */
+function renderCuentaCorriente(r) {
+  const plana = document.getElementById('ccGrid');
+  const agrup = document.getElementById('ccGrouped');
+
+  if (!agrupar) {
+    plana.hidden = false; agrup.hidden = true;
+    plana.innerHTML = r.cuentas_corrientes.map(ccCard).join('');
+    return;
+  }
+
+  plana.hidden = true; agrup.hidden = false;
+  const resumen = r.grupos_resumen || [];
+  agrup.innerHTML = resumen.map(g => {
+    const clientes = r.cuentas_corrientes.filter(c => (c.grupo || 'Sin grupo') === g.grupo);
+    return `
+      <div class="rc-group">
+        <div class="rc-group-head">
+          <div>
+            <div class="rc-group-name">${esc(g.grupo)}</div>
+            <div class="rc-group-meta">${g.n_clientes} cliente(s) · Facturado ${money(g.facturado)} · Cobrado ${money(g.cobrado)}</div>
+          </div>
+          <div class="rc-group-tot">Saldo ${money(g.saldo)}</div>
+        </div>
+        <div class="rc-cc-grid">${clientes.map(ccCard).join('')}</div>
+      </div>`;
+  }).join('');
+}
+
 // ── Session export / import ────────────────────────────────────────
 function exportSession() {
   const blob = new Blob([JSON.stringify({ invoices, payments, lastResult }, null, 2)],
@@ -284,14 +603,22 @@ function importSession(file) {
 
 function exportCSV() {
   if (!lastResult) { toast('⚠️ Primero hacé una conciliación'); return; }
-  const rows = [['estado', 'factura', 'fecha_factura', 'cliente', 'cuit', 'importe',
-                 'banco_pago', 'fecha_pago', 'originante', 'motivo']];
+  // El nombre del cliente y el grupo vienen ya unificados por CUIT desde el
+  // backend, asi que el mismo cliente no puede salir con dos nombres.
+  const rows = [['estado', 'grupo', 'factura', 'fecha_factura', 'cliente', 'cuit',
+                 'importe', 'banco_pago', 'fecha_pago', 'originante', 'motivo']];
+  const grupoDe = {};
+  (lastResult.cuentas_corrientes || []).forEach(c => {
+    grupoDe[c.cuit] = c.grupo || 'Sin grupo';
+  });
   lastResult.matches.forEach(m => rows.push([
-    label(m.confianza), m.factura.comp, m.factura.fecha, m.factura.cliente,
-    m.factura.cuit, m.factura.importe, m.pago.banco, m.pago.fecha,
+    labelPlano(m.confianza), grupoDe[m.factura.cuit] || 'Sin grupo',
+    m.factura.comp, m.factura.fecha, m.factura.cliente,
+    m.factura.cuit, numeroCSV(m.factura.importe), m.pago.banco, m.pago.fecha,
     m.pago.originante, m.motivo]));
   lastResult.facturas_pendientes.forEach(f => rows.push([
-    'PENDIENTE', f.comp, f.fecha, f.cliente, f.cuit, f.importe, '', '', '', '']));
+    'PENDIENTE', grupoDe[f.cuit] || 'Sin grupo', f.comp, f.fecha, f.cliente,
+    f.cuit, numeroCSV(f.importe), '', '', '', '']));
   const csv = rows.map(r => r.map(c =>
     `"${String(c ?? '').replace(/"/g, '""')}"`).join(';')).join('\n');
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
@@ -302,8 +629,15 @@ function exportCSV() {
   URL.revokeObjectURL(a.href);
 }
 
-function resetAll() {
-  if (!confirm('¿Borrar todas las facturas, pagos y la conciliación de esta sesión?')) return;
+async function resetAll() {
+  const seguir = await ask({
+    titulo: 'Limpiar la pantalla',
+    mensaje: 'Se borran las facturas, los pagos y la conciliación que tenés acá.\n\n' +
+             'Lo que ya guardaste en la base no se toca.',
+    cancel: 'Cancelar',
+    ok: 'Limpiar',
+  });
+  if (!seguir) return;
   invoices = []; payments = []; lastResult = null;
   sessionStorage.removeItem(SS_KEY);
   renderAll(); showStep(1);
@@ -330,6 +664,15 @@ function esc(s) {
 function trunc(s, n) { s = String(s ?? ''); return s.length > n ? s.slice(0, n) + '…' : s; }
 function label(c) {
   return { alta: '✔ Alta', media: '~ Media', revisar: '⚠ Revisar' }[c] || c;
+}
+// En el Excel el estado va sin simbolos, para poder filtrar por texto.
+function labelPlano(c) {
+  return { alta: 'Alta', media: 'Media', revisar: 'Revisar' }[c] || c;
+}
+// Importe con separador de miles y dos decimales, formato argentino.
+function numeroCSV(v) {
+  return Number(v || 0).toLocaleString('es-AR',
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 let toastTimer;
 function toast(msg) {

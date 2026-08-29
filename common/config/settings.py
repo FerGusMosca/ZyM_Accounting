@@ -76,6 +76,13 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ARCA_HOMO"))
 
 
+    # ── Base de datos (conciliación) ──────────────────────────────────────────
+    # Si queda vacío, la pantalla de Conciliación sigue funcionando con el
+    # estado en el navegador: no se detectan duplicados ni se guardan grupos.
+    database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DATABASE_URL"))
+
     # ── OpenAI / LLM (conciliación) ───────────────────────────────────────────
     openai_api_key: str | None = Field(
         default=None,

@@ -167,7 +167,15 @@
 
         <!-- Cuenta corriente -->
         <h2 class="rc-h2">Cuenta corriente por cliente</h2>
+        <div class="rc-cc-toolbar">
+          <label class="rc-switch" title="Junta los clientes bajo el grupo que les hayas asignado y muestra el saldo total de cada grupo">
+            <input type="checkbox" id="chkAgrupar" onchange="toggleAgrupar()">
+            <span>Agrupar clientes</span>
+          </label>
+          <button class="btn btn-ghost" onclick="openGroups()" title="Crear grupos y decidir qué cliente va en cada uno">⚙ Editar grupos</button>
+        </div>
         <div class="rc-cc-grid" id="ccGrid"></div>
+        <div id="ccGrouped" hidden></div>
 
         <!-- Matches -->
         <h2 class="rc-h2">Cruce factura ↔ pago</h2>
@@ -207,12 +215,62 @@
 
         <div class="rc-panel-foot">
           <button class="btn btn-ghost" onclick="exportCSV()">⬇ Exportar CSV</button>
+          <button class="btn btn-ghost" id="btnSaveDb" onclick="saveToDb()" hidden
+                  title="Guarda facturas, cobros y cruces en la base. Las facturas cubiertas quedan como pagadas y la próxima vez que subas ese PDF el sistema te avisa">💾 Guardar en base</button>
           <button class="btn btn-primary" onclick="runReconcile()">↺ Re-conciliar</button>
         </div>
       </div>
     </section>
 
   </main>
+</div>
+
+<!-- ── Modal: grupos de clientes ── -->
+<div class="rc-modal-bg" id="groupsModal" hidden>
+  <div class="rc-modal">
+    <div class="rc-modal-head">
+      <span class="rc-modal-title">Grupos de clientes</span>
+      <button class="rc-modal-close" onclick="closeGroups()">✕</button>
+    </div>
+    <div class="rc-modal-body">
+      <div class="rc-nodb" id="groupsNoDb" hidden>
+        Para guardar grupos hace falta la base. Agregá DATABASE_URL al .env y reiniciá la app.
+      </div>
+      <p>Un grupo junta varios clientes bajo un nombre que elegís vos. Sirve, por ejemplo,
+         para ver cuánto debe en total una administración con todos sus consorcios adentro.</p>
+      <div class="rc-newgroup">
+        <input type="text" class="rc-input" id="newGroupName" placeholder="Nombre del grupo nuevo">
+        <button class="btn btn-primary" onclick="createGroup()">+ Crear grupo</button>
+      </div>
+      <div class="rc-grouplist" id="groupList"></div>
+      <h3 style="font-family:'Outfit',sans-serif;font-size:13px;color:#4a3a60;margin:0 0 6px;">
+        Asignar cada cliente a su grupo</h3>
+      <div id="assignList"></div>
+    </div>
+    <div class="rc-modal-foot">
+      <button class="btn btn-ghost" onclick="closeGroups()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: confirmar / pedir un dato ──
+     Reemplaza los confirm() y prompt() del navegador, que salen con el
+     estilo del sistema operativo y no se pueden acomodar. -->
+<div class="rc-modal-bg" id="askModal" hidden>
+  <div class="rc-modal rc-modal-sm">
+    <div class="rc-modal-head">
+      <span class="rc-modal-title" id="askTitle"></span>
+      <button class="rc-modal-close" onclick="askResolve(false)">✕</button>
+    </div>
+    <div class="rc-modal-body">
+      <div id="askMsg" class="rc-ask-msg"></div>
+      <input type="text" class="rc-input rc-ask-input" id="askInput" hidden>
+    </div>
+    <div class="rc-modal-foot">
+      <button class="btn btn-primary" id="askCancel" onclick="askResolve(false)"></button>
+      <button class="btn btn-ghost" id="askOk" onclick="askResolve(true)"></button>
+    </div>
+  </div>
 </div>
 
 <div id="toast" class="rc-toast" hidden></div>
