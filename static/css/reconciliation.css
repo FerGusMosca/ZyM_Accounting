@@ -228,3 +228,60 @@
 .rc-ask-msg b { color: #1a0a2e; }
 .rc-ask-input { width: 100%; margin-top: 14px; }
 .rc-modal-foot .btn { min-width: 120px; }
+
+/* ── Cartel de trabajando ── */
+.rc-busy {
+  position: fixed; inset: 0; background: rgba(20, 12, 40, .45);
+  display: flex; align-items: center; justify-content: center; z-index: 80;
+}
+.rc-busy[hidden] { display: none !important; }
+
+.rc-busy-box {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 28px 34px; text-align: center;
+  box-shadow: 0 18px 50px rgba(20, 12, 40, .25);
+}
+.rc-busy-text { font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 600;
+                color: var(--text); margin-top: 14px; }
+.rc-busy-sub  { font-family: 'Outfit', sans-serif; font-size: 12px;
+                color: var(--text-muted); margin-top: 4px; }
+
+.rc-spinner {
+  width: 34px; height: 34px; margin: 0 auto; border-radius: 50%;
+  border: 3px solid var(--violet-pale); border-top-color: var(--violet);
+  animation: rc-spin .8s linear infinite;
+}
+@keyframes rc-spin { to { transform: rotate(360deg); } }
+
+/* ── Traer lo guardado por fecha ── */
+.rc-fromdb { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+             background: var(--bg-muted); border: 1px solid var(--border);
+             border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+.rc-fromdb-title { font-family: 'Outfit', sans-serif; font-size: 13px;
+                   font-weight: 600; color: var(--text); }
+.rc-fromdb label { display: flex; align-items: center; gap: 6px;
+                   font-family: 'Outfit', sans-serif; font-size: 12px;
+                   color: var(--text-muted); }
+.rc-fromdb input { height: 30px; padding: 0 8px; box-sizing: border-box;
+                   border: 1px solid var(--border); border-radius: 8px;
+                   background: var(--bg); color: var(--text);
+                   font-family: 'Outfit', sans-serif; font-size: 12px; }
+.rc-fromdb input:focus { outline: none; border-color: var(--violet); }
+.rc-fromdb-hint { font-family: 'Outfit', sans-serif; font-size: 11px;
+                  color: var(--text-muted); }
+
+/* ── Guardar en base: es la accion que deja el trabajo hecho ── */
+.rc-btn-save { font-size: 15px; font-weight: 600; padding: 12px 22px; }
+.rc-panel-foot .rc-btn-save { order: -1; }
+
+/* ── Fecha escrita a mano, siempre dd/mm/aaaa ── */
+.rc-fecha { width: 108px; font-family: 'DM Mono', monospace; }
+
+/* ── Campo de fecha con calendarito ── */
+.rc-fecha-wrap { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.rc-cal-btn { border: 1px solid var(--border); border-radius: 8px; height: 30px;
+              padding: 0 8px; background: var(--bg); cursor: pointer; font-size: 14px;
+              line-height: 1; }
+.rc-cal-btn:hover { border-color: var(--violet); }
+.rc-cal-oculto { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px;
+                 opacity: 0; pointer-events: none; border: none; padding: 0; }

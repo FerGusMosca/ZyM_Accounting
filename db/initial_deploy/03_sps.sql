@@ -378,3 +378,469 @@ AS $$
     SET name = p_name, updated_at = NOW()
     WHERE id = p_client_id;
 $$;
+
+
+-- ============================================================
+-- save_uploaded_file
+-- Guarda el archivo tal cual se subio. Si ese mismo archivo ya
+-- estaba guardado, no hace nada y no falla.
+-- ============================================================
+DROP FUNCTION IF EXISTS save_uploaded_file(CHAR, VARCHAR, VARCHAR, BYTEA);
+
+CREATE FUNCTION save_uploaded_file(
+    p_file_hash CHAR,
+    p_file_name VARCHAR,
+    p_mime_type VARCHAR,
+    p_content   BYTEA
+)
+RETURNS VOID
+LANGUAGE sql
+AS $$
+    INSERT INTO uploaded_files (file_hash, file_name, mime_type, byte_size, content)
+    VALUES (p_file_hash, p_file_name, p_mime_type, LENGTH(p_content), p_content)
+    ON CONFLICT (file_hash) DO NOTHING;
+$$;
+
+
+-- ============================================================
+-- get_uploaded_file
+-- Devuelve el archivo guardado para poder abrirlo en pantalla.
+-- ============================================================
+DROP FUNCTION IF EXISTS get_uploaded_file(CHAR);
+
+CREATE FUNCTION get_uploaded_file(p_file_hash CHAR)
+RETURNS TABLE (
+    file_name VARCHAR,
+    mime_type VARCHAR,
+    content   BYTEA
+)
+LANGUAGE sql
+AS $$
+    SELECT f.file_name, f.mime_type, f.content
+    FROM uploaded_files f
+    WHERE f.file_hash = p_file_hash;
+$$;
+
+
+-- ============================================================
+-- list_invoices
+-- Todas las facturas guardadas, con cuanto se le imputo y si
+-- el archivo original quedo guardado.
+-- ============================================================
+DROP FUNCTION IF EXISTS list_invoices();
+
+CREATE FUNCTION list_invoices()
+RETURNS TABLE (
+    id             INT,
+    client_name    VARCHAR,
+    client_cuit    VARCHAR,
+    invoice_number VARCHAR,
+    issue_date     DATE,
+    amount         NUMERIC,
+    paid_amount    NUMERIC,
+    status         VARCHAR,
+    description    TEXT,
+    file_name      VARCHAR,
+    file_hash      CHAR,
+    has_file       BOOLEAN,
+    created_at     TIMESTAMP
+)
+LANGUAGE sql
+AS $$
+    SELECT  i.id,
+            c.name,
+            c.cuit,
+            i.invoice_number,
+            i.issue_date,
+            i.amount,
+            COALESCE((SELECT SUM(ip.amount)
+                      FROM invoice_payments ip
+                      WHERE ip.invoice_id = i.id), 0),
+            i.status,
+            i.description,
+            i.file_name,
+            i.file_hash,
+            EXISTS (SELECT 1 FROM uploaded_files f WHERE f.file_hash = i.file_hash),
+            i.created_at
+    FROM invoices i
+    JOIN clients  c ON c.id = i.client_id
+    ORDER BY i.issue_date DESC NULLS LAST, i.id DESC;
+$$;
+
+
+-- ============================================================
+-- list_payments
+-- Todos los cobros guardados, con cuanto quedo imputado.
+-- ============================================================
+DROP FUNCTION IF EXISTS list_payments();
+
+CREATE FUNCTION list_payments()
+RETURNS TABLE (
+    id             INT,
+    payer_name     VARCHAR,
+    payer_cuit     VARCHAR,
+    payment_date   DATE,
+    amount         NUMERIC,
+    applied_amount NUMERIC,
+    bank           VARCHAR,
+    reference      VARCHAR,
+    file_name      VARCHAR,
+    file_hash      CHAR,
+    has_file       BOOLEAN,
+    created_at     TIMESTAMP
+)
+LANGUAGE sql
+AS $$
+    SELECT  p.id,
+            p.payer_name,
+            p.payer_cuit,
+            p.payment_date,
+            p.amount,
+            COALESCE((SELECT SUM(ip.amount)
+                      FROM invoice_payments ip
+                      WHERE ip.payment_id = p.id), 0),
+            p.bank,
+            p.reference,
+            p.file_name,
+            p.file_hash,
+            EXISTS (SELECT 1 FROM uploaded_files f WHERE f.file_hash = p.file_hash),
+            p.created_at
+    FROM payments p
+    ORDER BY p.payment_date DESC NULLS LAST, p.id DESC;
+$$;
+
+
+-- ============================================================
+-- list_matches
+-- Los cruces guardados, con los datos de las dos puntas.
+-- ============================================================
+DROP FUNCTION IF EXISTS list_matches();
+
+CREATE FUNCTION list_matches()
+RETURNS TABLE (
+    id             INT,
+    invoice_id     INT,
+    invoice_number VARCHAR,
+    client_name    VARCHAR,
+    issue_date     DATE,
+    invoice_amount NUMERIC,
+    payment_id     INT,
+    payment_date   DATE,
+    bank           VARCHAR,
+    payer_name     VARCHAR,
+    amount         NUMERIC,
+    confidence     VARCHAR,
+    created_at     TIMESTAMP
+)
+LANGUAGE sql
+AS $$
+    SELECT  ip.id,
+            i.id,
+            i.invoice_number,
+            c.name,
+            i.issue_date,
+            i.amount,
+            p.id,
+            p.payment_date,
+            p.bank,
+            p.payer_name,
+            ip.amount,
+            ip.confidence,
+            ip.created_at
+    FROM invoice_payments ip
+    JOIN invoices i ON i.id = ip.invoice_id
+    JOIN clients  c ON c.id = i.client_id
+    JOIN payments p ON p.id = ip.payment_id
+    ORDER BY ip.created_at DESC, ip.id DESC;
+$$;
+
+
+-- ============================================================
+-- persist_manual_payment
+-- Alta de un cobro cargado a mano, sin comprobante.
+-- La huella se arma con los propios datos del cobro, asi el
+-- mismo cobro cargado dos veces no se duplica.
+-- ============================================================
+DROP FUNCTION IF EXISTS persist_manual_payment(VARCHAR, VARCHAR, DATE, NUMERIC, VARCHAR, VARCHAR);
+
+CREATE FUNCTION persist_manual_payment(
+    p_payer_cuit   VARCHAR,
+    p_payer_name   VARCHAR,
+    p_payment_date DATE,
+    p_amount       NUMERIC,
+    p_bank         VARCHAR,
+    p_reference    VARCHAR
+)
+RETURNS INT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_hash       CHAR(64);
+    v_payment_id INT;
+BEGIN
+    v_hash := ENCODE(SHA256(CONVERT_TO(
+        'manual|' || COALESCE(p_payer_cuit, '') || '|' ||
+        COALESCE(LOWER(TRIM(p_payer_name)), '') || '|' ||
+        COALESCE(p_payment_date::TEXT, '') || '|' ||
+        COALESCE(p_amount::TEXT, '') || '|' ||
+        COALESCE(LOWER(TRIM(p_bank)), '') || '|' ||
+        COALESCE(LOWER(TRIM(p_reference)), ''), 'UTF8')), 'hex');
+
+    SELECT id INTO v_payment_id FROM payments WHERE file_hash = v_hash;
+    IF v_payment_id IS NOT NULL THEN
+        RETURN v_payment_id;
+    END IF;
+
+    INSERT INTO payments (
+        payer_cuit, payer_name, payment_date, amount,
+        bank, reference, file_name, file_hash, raw_json
+    )
+    VALUES (
+        p_payer_cuit, p_payer_name, p_payment_date, p_amount,
+        p_bank, p_reference, NULL, v_hash,
+        JSONB_BUILD_OBJECT('origen', 'manual')
+    )
+    RETURNING id INTO v_payment_id;
+
+    RETURN v_payment_id;
+END;
+$$;
+
+
+-- ============================================================
+-- delete_payment
+-- Baja de un cobro. Los cruces que tenia se borran solos y las
+-- facturas que quedaban cubiertas por ese cobro vuelven a
+-- quedar pendientes.
+-- ============================================================
+DROP FUNCTION IF EXISTS delete_payment(INT);
+
+CREATE FUNCTION delete_payment(p_payment_id INT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_invoice_ids INT[];
+BEGIN
+    SELECT ARRAY_AGG(DISTINCT invoice_id) INTO v_invoice_ids
+    FROM invoice_payments WHERE payment_id = p_payment_id;
+
+    DELETE FROM payments WHERE id = p_payment_id;
+
+    PERFORM refresh_invoice_status(v_invoice_ids);
+END;
+$$;
+
+
+-- ============================================================
+-- refresh_invoice_status
+-- Deja cada factura en pagada o pendiente segun lo que tenga
+-- imputado en ese momento.
+-- ============================================================
+DROP FUNCTION IF EXISTS refresh_invoice_status(INT[]);
+
+CREATE FUNCTION refresh_invoice_status(p_invoice_ids INT[])
+RETURNS VOID
+LANGUAGE sql
+AS $$
+    UPDATE invoices i
+    SET status = CASE
+            WHEN COALESCE((SELECT SUM(ip.amount)
+                           FROM invoice_payments ip
+                           WHERE ip.invoice_id = i.id), 0) >= i.amount
+            THEN 'paid' ELSE 'pending' END,
+        updated_at = NOW()
+    WHERE p_invoice_ids IS NOT NULL
+      AND i.id = ANY (p_invoice_ids);
+$$;
+
+
+-- ============================================================
+-- list_clients
+-- Clientes con su nombre actual, para poder corregirlo desde
+-- la pantalla.
+-- ============================================================
+DROP FUNCTION IF EXISTS list_clients();
+
+CREATE FUNCTION list_clients()
+RETURNS TABLE (
+    id            INT,
+    cuit          VARCHAR,
+    name          VARCHAR,
+    group_name    VARCHAR,
+    invoice_count BIGINT,
+    invoiced      NUMERIC
+)
+LANGUAGE sql
+AS $$
+    SELECT  c.id,
+            c.cuit,
+            c.name,
+            g.name,
+            COUNT(i.id),
+            COALESCE(SUM(i.amount), 0)
+    FROM clients c
+    LEFT JOIN client_groups g ON g.id = c.group_id
+    LEFT JOIN invoices      i ON i.client_id = c.id
+    GROUP BY c.id, c.cuit, c.name, g.name
+    ORDER BY c.name;
+$$;
+
+
+-- ============================================================
+-- reset_cobranzas
+-- Deja la base limpia: borra facturas, cobros, cruces y los
+-- archivos guardados. Los clientes y los grupos se borran solo
+-- si se pide expresamente.
+-- ============================================================
+DROP FUNCTION IF EXISTS reset_cobranzas(BOOLEAN);
+
+CREATE FUNCTION reset_cobranzas(p_incluir_clientes BOOLEAN DEFAULT FALSE)
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_facturas INT;
+    v_cobros   INT;
+BEGIN
+    SELECT COUNT(*) INTO v_facturas FROM invoices;
+    SELECT COUNT(*) INTO v_cobros   FROM payments;
+
+    DELETE FROM invoice_payments;
+    DELETE FROM invoices;
+    DELETE FROM payments;
+    DELETE FROM uploaded_files;
+
+    IF p_incluir_clientes THEN
+        DELETE FROM client_name_aliases;
+        DELETE FROM clients;
+        DELETE FROM client_groups;
+    END IF;
+
+    RETURN 'Se borraron ' || v_facturas || ' factura(s) y ' || v_cobros || ' cobro(s).';
+END;
+$$;
+
+
+-- ============================================================
+-- delete_match
+-- Saca UN cruce puntual, el que se elige en pantalla. Es la
+-- unica forma de deshacer una imputacion: guardar nunca borra.
+-- ============================================================
+DROP FUNCTION IF EXISTS delete_match(INT);
+
+CREATE FUNCTION delete_match(p_match_id INT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_invoice_id INT;
+BEGIN
+    SELECT invoice_id INTO v_invoice_id
+    FROM invoice_payments WHERE id = p_match_id;
+
+    DELETE FROM invoice_payments WHERE id = p_match_id;
+
+    PERFORM refresh_invoice_status(ARRAY[v_invoice_id]);
+END;
+$$;
+
+
+-- ============================================================
+-- set_payment_file
+-- Le engancha el comprobante a un cobro que se habia cargado a
+-- mano. No pisa nada mas del cobro.
+-- ============================================================
+DROP FUNCTION IF EXISTS set_payment_file(INT, CHAR, VARCHAR);
+
+CREATE FUNCTION set_payment_file(
+    p_payment_id INT,
+    p_file_hash  CHAR,
+    p_file_name  VARCHAR
+)
+RETURNS VOID
+LANGUAGE sql
+AS $$
+    UPDATE payments
+    SET file_hash  = p_file_hash,
+        file_name  = p_file_name,
+        updated_at = NOW()
+    WHERE id = p_payment_id;
+$$;
+
+
+-- ============================================================
+-- get_invoices_between / get_payments_between
+-- Traen lo YA GUARDADO en un rango de fechas, para poder
+-- llevarlo a la pantalla de Conciliacion y cruzarlo contra lo
+-- que se esta subiendo ahora.
+-- ============================================================
+DROP FUNCTION IF EXISTS get_invoices_between(DATE, DATE);
+
+CREATE FUNCTION get_invoices_between(
+    p_desde DATE,
+    p_hasta DATE
+)
+RETURNS TABLE (
+    id             INT,
+    client_id      INT,
+    client_name    VARCHAR,
+    client_cuit    VARCHAR,
+    issuer_cuit    VARCHAR,
+    invoice_number VARCHAR,
+    issue_date     DATE,
+    amount         NUMERIC,
+    status         VARCHAR,
+    description    TEXT,
+    file_name      VARCHAR,
+    file_hash      CHAR
+)
+LANGUAGE sql
+AS $$
+    SELECT  i.id, i.client_id, c.name, c.cuit, i.issuer_cuit,
+            i.invoice_number, i.issue_date, i.amount, i.status,
+            i.description, i.file_name, i.file_hash
+    FROM invoices i
+    JOIN clients  c ON c.id = i.client_id
+    WHERE (p_desde IS NULL OR i.issue_date >= p_desde)
+      AND (p_hasta IS NULL OR i.issue_date <= p_hasta)
+    ORDER BY i.issue_date, i.id;
+$$;
+
+
+DROP FUNCTION IF EXISTS get_payments_between(DATE, DATE);
+
+CREATE FUNCTION get_payments_between(
+    p_desde DATE,
+    p_hasta DATE
+)
+RETURNS TABLE (
+    id           INT,
+    payer_cuit   VARCHAR,
+    payer_name   VARCHAR,
+    payment_date DATE,
+    amount       NUMERIC,
+    bank         VARCHAR,
+    reference    VARCHAR,
+    file_name    VARCHAR,
+    file_hash    CHAR
+)
+LANGUAGE sql
+AS $$
+    SELECT  p.id, p.payer_cuit, p.payer_name, p.payment_date, p.amount,
+            p.bank, p.reference, p.file_name, p.file_hash
+    FROM payments p
+    WHERE (p_desde IS NULL OR p.payment_date >= p_desde)
+      AND (p_hasta IS NULL OR p.payment_date <= p_hasta)
+    ORDER BY p.payment_date, p.id;
+$$;
+
+
+-- ============================================================
+-- clear_matches QUEDA ELIMINADA A PROPOSITO.
+-- Borraba de una todos los cruces de las facturas y los cobros
+-- que estuvieran en pantalla. Ninguna funcion del sistema puede
+-- volver a borrar cruces en tanda: se borra de a uno, desde la
+-- pantalla, con delete_match.
+-- ============================================================
+DROP FUNCTION IF EXISTS clear_matches(INT[], INT[]);

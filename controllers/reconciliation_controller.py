@@ -35,8 +35,19 @@ Routes:
     POST /reconciliation/groups/delete  → borrar grupo
     POST /reconciliation/assign_group   → asignar un CUIT a un grupo
     POST /reconciliation/save           → guardar facturas, pagos y cruces
+    GET  /reconciliation/registros      → pantalla de registros guardados
+    GET  /reconciliation/registros/data → facturas, cobros y cruces guardados
+    GET  /reconciliation/registros/file/{huella} → abre el archivo original
+    POST /reconciliation/registros/payment_manual → alta de cobro a mano
+    POST /reconciliation/registros/payment_delete → baja de cobro
+    GET  /reconciliation/registros/clients       → clientes
+    POST /reconciliation/registros/client_name   → cambia el nombre del cliente
+    POST /reconciliation/registros/match_delete  → saca UN cruce
+    POST /reconciliation/registros/payment_file  → sube el comprobante de un cobro
+    POST /reconciliation/load_from_db            → trae lo guardado por fecha
 """
 
+import base64
 import hashlib
 import io
 import json
@@ -46,8 +57,8 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Request, UploadFile, File
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, Request, UploadFile, File, Form
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from common.config.settings import get_settings
 from common.util.templates import templates
@@ -153,14 +164,74 @@ def _parse_llm_json(raw: str) -> dict:
     return _clean_nulls(json.loads(clean))
 
 
-def _extract_document(pdf_bytes: bytes, prompt_name: str) -> dict:
+# Formatos de imagen aceptados como comprobante.
+_IMAGE_MIMES = {
+    "jpg":  "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png":  "image/png",
+    "webp": "image/webp",
+    "heic": "image/heic",
+}
+
+
+def _mime_de(nombre: str, content_type: str | None) -> str:
+    """
+    Tipo del archivo. Se mira primero la terminacion del nombre, que es mas
+    confiable que lo que manda el navegador.
+    """
+    ext = (nombre or "").rsplit(".", 1)[-1].lower()
+    if ext in _IMAGE_MIMES:
+        return _IMAGE_MIMES[ext]
+    if ext == "pdf":
+        return "application/pdf"
+    return content_type or "application/octet-stream"
+
+
+def _es_imagen(mime: str) -> bool:
+    return (mime or "").startswith("image/")
+
+
+def _extract_from_image(img_bytes: bytes, mime: str, prompt_name: str) -> dict:
+    """
+    Comprobante sacado con el celular o captura de pantalla: no hay texto para
+    leer, asi que la imagen se le manda al modelo tal cual y el lee lo que ve.
+    """
+    llm = _get_llm()
+    if llm is None:
+        raise RuntimeError(
+            "OPENAI_API_KEY no configurada en .env — no se puede leer la imagen")
+    if not hasattr(llm, "invoke_messages"):
+        raise RuntimeError("El modelo configurado no acepta imagenes")
+
+    from langchain_core.messages import HumanMessage
+
+    prompt_tpl = PromptLoader(_PROMPTS_PATH, prompt_name).get_prompt(prompt_name)
+    prompt = prompt_tpl.replace(
+        "{document_text}",
+        "(el comprobante va adjunto como imagen; leelo de la imagen)")
+
+    b64 = base64.b64encode(img_bytes).decode("ascii")
+    mensaje = HumanMessage(content=[
+        {"type": "text", "text": prompt},
+        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+    ])
+    return _parse_llm_json(llm.invoke_messages([mensaje]))
+
+
+def _extract_document(raw_bytes: bytes, prompt_name: str,
+                      mime: str = "application/pdf") -> dict:
+    if _es_imagen(mime):
+        return _extract_from_image(raw_bytes, mime, prompt_name)
+
     llm = _get_llm()
     if llm is None:
         raise RuntimeError(
             "OPENAI_API_KEY no configurada en .env — no se puede extraer el PDF")
-    text = _pdf_to_text(pdf_bytes)
+    text = _pdf_to_text(raw_bytes)
     if not text.strip():
-        raise RuntimeError("El PDF no tiene texto extraíble (¿es una imagen escaneada?)")
+        raise RuntimeError(
+            "El PDF no tiene texto: es una foto adentro de un PDF. "
+            "Subí la foto directamente (jpg o png) y se lee igual.")
     prompt_tpl = PromptLoader(_PROMPTS_PATH, prompt_name).get_prompt(prompt_name)
     prompt = prompt_tpl.replace("{document_text}", text[:12000])
     raw = llm.invoke(prompt)
@@ -459,6 +530,192 @@ class ReconciliationController:
             return templates.TemplateResponse(
                 "reconciliation.html", {"request": request})
 
+        @self.router.get("/registros", response_class=HTMLResponse)
+        async def registros_page(request: Request):
+            return templates.TemplateResponse(
+                "records.html", {"request": request})
+
+        @self.router.get("/registros/data")
+        async def registros_data():
+            """Facturas, cobros y cruces ya guardados en la base."""
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db",
+                                     "message": "Sin DATABASE_URL no hay registros"},
+                                    status_code=400)
+            try:
+                return JSONResponse({
+                    "status":   "ok",
+                    "facturas": mgr.list_invoices(),
+                    "pagos":    mgr.list_payments(),
+                    "cruces":   mgr.list_matches(),
+                })
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudieron traer los registros")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
+        @self.router.get("/registros/file/{file_hash}")
+        async def registros_file(file_hash: str):
+            """Abre el archivo original tal como se subio."""
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                doc = mgr.get_uploaded_file(file_hash)
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudo traer el archivo")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+            if not doc:
+                return JSONResponse({"status": "not_found",
+                                     "message": "El archivo no quedo guardado"},
+                                    status_code=404)
+            nombre = (doc["nombre"] or "documento.pdf").replace('"', "")
+            return Response(
+                content=doc["contenido"],
+                media_type=doc["tipo"],
+                headers={"Content-Disposition": f'inline; filename="{nombre}"'})
+
+        @self.router.post("/registros/payment_manual")
+        async def registros_payment_manual(request: Request):
+            """Alta de un cobro cargado a mano, sin comprobante."""
+            body = await request.json()
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                importe = _round2(body.get("importe"))
+                if not importe:
+                    return JSONResponse({"status": "error",
+                                         "message": "Falta el importe"},
+                                        status_code=400)
+                pay_id = mgr.persist_manual_payment({
+                    "cuit_originante": _norm_cuit(body.get("cuit")),
+                    "originante":      body.get("originante"),
+                    "fecha_iso":       _iso_date(body.get("fecha")),
+                    "importe":         importe,
+                    "banco":           body.get("banco") or "Carga manual",
+                    "referencia":      body.get("referencia"),
+                })
+                return JSONResponse({"status": "ok", "payment_id": pay_id})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudo cargar el cobro a mano")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
+        @self.router.post("/registros/payment_delete")
+        async def registros_payment_delete(request: Request):
+            """Baja de un cobro."""
+            body = await request.json()
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                mgr.delete_payment(int(body.get("payment_id")))
+                return JSONResponse({"status": "ok"})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudo borrar el cobro")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
+        @self.router.get("/registros/clients")
+        async def registros_clients():
+            """Clientes con su nombre actual."""
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                return JSONResponse({"status": "ok", "clientes": mgr.list_clients()})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudieron traer los clientes")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
+        @self.router.post("/registros/client_name")
+        async def registros_client_name(request: Request):
+            """Cambia el nombre con el que se muestra el cliente."""
+            body = await request.json()
+            nombre = (body.get("nombre") or "").strip()
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            if not nombre:
+                return JSONResponse({"status": "error",
+                                     "message": "Falta el nombre"},
+                                    status_code=400)
+            try:
+                mgr.set_client_name(int(body.get("client_id")), nombre)
+                return JSONResponse({"status": "ok"})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudo cambiar el nombre del cliente")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
+        @self.router.post("/registros/match_delete")
+        async def registros_match_delete(request: Request):
+            """Saca UN cruce, el que se eligio en pantalla."""
+            body = await request.json()
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                mgr.delete_match(int(body.get("match_id")))
+                return JSONResponse({"status": "ok"})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudo sacar el cruce")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
+        @self.router.post("/registros/payment_file")
+        async def registros_payment_file(payment_id: int = Form(...),
+                                         file: UploadFile = File(...)):
+            """Sube el comprobante de un cobro que se habia cargado a mano."""
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                raw_bytes = await file.read()
+                if not raw_bytes:
+                    return JSONResponse({"status": "error",
+                                         "message": "El archivo llego vacio"},
+                                        status_code=400)
+                huella = _file_hash(raw_bytes)
+                mime = _mime_de(file.filename, file.content_type)
+                mgr.save_uploaded_file(huella, file.filename, mime, raw_bytes)
+                mgr.set_payment_file(payment_id, huella, file.filename)
+                return JSONResponse({"status": "ok", "huella": huella})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudo guardar el comprobante del cobro")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
+        @self.router.post("/load_from_db")
+        async def load_from_db(request: Request):
+            """
+            Trae a la pantalla las facturas y los cobros YA GUARDADOS en un
+            rango de fechas, para poder cruzarlos con lo que se sube ahora.
+            No modifica nada: solo lee.
+            """
+            body = await request.json()
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db",
+                                     "message": "Sin base no hay nada guardado"},
+                                    status_code=400)
+            try:
+                desde = _iso_date(body.get("desde")) or body.get("desde") or None
+                hasta = _iso_date(body.get("hasta")) or body.get("hasta") or None
+                return JSONResponse({
+                    "status":   "ok",
+                    "invoices": mgr.get_invoices_between(desde, hasta),
+                    "payments": mgr.get_payments_between(desde, hasta),
+                })
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudo traer lo guardado")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
         @self.router.post("/parse_invoices")
         async def parse_invoices(files: list[UploadFile] = File(...)):
             return await self._parse_many(files, "invoice_extraction")
@@ -626,6 +883,10 @@ class ReconciliationController:
                     pay_ids[pay.get("_archivo")] = pay_id
 
                 # Cruces
+                # REGLA: guardar NUNCA borra nada. Un cruce que ya estaba se
+                # pisa solo si vuelve a salir el MISMO par factura-cobro; los
+                # demas quedan intactos. Para sacar un cruce hay que borrarlo
+                # a mano, de a uno, desde la pantalla de Registros.
                 n_matches = 0
                 for m in result.get("matches") or []:
                     comp = m["factura"]["comp"]
@@ -671,6 +932,16 @@ class ReconciliationController:
             try:
                 raw_bytes = await f.read()
                 huella = _file_hash(raw_bytes)
+                mime = _mime_de(f.filename, f.content_type)
+
+                # El archivo se guarda apenas se sube, para poder abrirlo
+                # despues desde la pantalla de Registros.
+                if mgr.is_enabled():
+                    try:
+                        mgr.save_uploaded_file(huella, f.filename,
+                                               mime, raw_bytes)
+                    except Exception:  # noqa: BLE001
+                        logger.exception("No se pudo guardar el archivo subido")
 
                 previo = None
                 if mgr.is_enabled():
@@ -693,7 +964,7 @@ class ReconciliationController:
                     results.append(data)
                     continue
 
-                data = _extract_document(raw_bytes, prompt_name)
+                data = _extract_document(raw_bytes, prompt_name, mime)
                 data["_archivo"] = f.filename
                 data["_hash"] = huella
                 data["_duplicado"] = False

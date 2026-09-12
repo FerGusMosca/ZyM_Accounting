@@ -7,6 +7,9 @@
 //   4. Un mismo CUIT sale siempre con el mismo nombre (lo resuelve el backend).
 
 // ── State ──────────────────────────────────────────────────────────
+// Un comprobante puede venir como PDF o como foto sacada del celular.
+const ACEPTADOS = /\.(pdf|jpg|jpeg|png|webp|heic)$/i;
+
 let invoices = [];
 let payments = [];
 let lastResult = null;
@@ -57,7 +60,28 @@ async function checkDb() {
   if (btn) btn.hidden = !dbEnabled;
   const chk = document.getElementById('chkAgrupar');
   if (chk) chk.checked = agrupar;
-  if (dbEnabled) loadGroups();
+  if (dbEnabled) {
+    loadGroups();
+    arrancarEnHoy();
+  }
+}
+
+// Al abrir la pantalla se muestra lo guardado de HOY. Para ver lo de
+// antes se cambian las fechas y se aprieta Traer.
+async function arrancarEnHoy() {
+  const hoy = new Date();
+  const dd  = String(hoy.getDate()).padStart(2, '0');
+  const mm  = String(hoy.getMonth() + 1).padStart(2, '0');
+  const txt = `${dd}/${mm}/${hoy.getFullYear()}`;
+
+  const desde = document.getElementById('dbDesde');
+  const hasta = document.getElementById('dbHasta');
+  if (!desde || !hasta) return;
+  if (desde.value || hasta.value) return;   // si ya eligio fechas, no pisar
+
+  desde.value = txt;
+  hasta.value = txt;
+  await traerDeLaBase({ silencioso: true });
 }
 
 async function loadGroups() {
@@ -120,8 +144,8 @@ function bindDrop(dropId, inputId, handler) {
 }
 
 async function uploadFiles(fileList, kind) {
-  const files = [...fileList].filter(f => f.name.toLowerCase().endsWith('.pdf'));
-  if (!files.length) { toast('⚠️ Solo se aceptan PDF'); return; }
+  const files = [...fileList].filter(f => ACEPTADOS.test(f.name));
+  if (!files.length) { toast('⚠️ Solo se aceptan PDF o fotos (jpg, png)'); return; }
 
   const isInv  = kind === 'invoices';
   const target = isInv ? invoices : payments;
@@ -236,6 +260,7 @@ async function runReconcile() {
   if (!invoices.length) { toast('⚠️ Cargá al menos una factura'); showStep(1); return; }
   if (!payments.length) { toast('⚠️ Cargá al menos un comprobante de pago'); showStep(2); return; }
   showStep(3);
+  trabajando(`Cruzando ${invoices.length} factura(s) con ${payments.length} pago(s)…`);
   try {
     const res = await fetch('/reconciliation/reconcile', {
       method: 'POST',
@@ -249,6 +274,8 @@ async function runReconcile() {
     toast(`✅ Conciliado: ${data.resumen.n_matches} cruce(s)`);
   } catch (e) {
     toast(`❌ ${e.message}`);
+  } finally {
+    listo();
   }
 }
 
@@ -263,6 +290,7 @@ async function saveToDb() {
     ok: 'Guardar',
   });
   if (!seguir) return;
+  trabajando('Guardando en la base…');
   try {
     const res = await fetch('/reconciliation/save', {
       method: 'POST',
@@ -275,7 +303,21 @@ async function saveToDb() {
     loadGroups();
   } catch (e) {
     toast(`❌ ${e.message}`);
+  } finally {
+    listo();
   }
+}
+
+// ── Cartel de "esperá" ─────────────────────────────────────────────
+// Tapa la pantalla mientras el servidor trabaja, asi no se aprieta
+// dos veces el mismo boton.
+function trabajando(texto) {
+  document.getElementById('rcBusyText').textContent = texto;
+  document.getElementById('rcBusy').hidden = false;
+}
+
+function listo() {
+  document.getElementById('rcBusy').hidden = true;
 }
 
 // ── Grupos de clientes ─────────────────────────────────────────────
@@ -680,4 +722,75 @@ function toast(msg) {
   t.textContent = msg; t.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.hidden = true, 3200);
+}
+
+
+// ── Traer de la base lo ya guardado ────────────────────────────────
+// Suma a la pantalla las facturas y los cobros de un rango de fechas,
+// para poder cruzarlos con lo que se esta subiendo ahora. Lo que ya
+// estaba en la pantalla no se toca, y lo repetido no se carga dos veces.
+async function traerDeLaBase(opciones = {}) {
+  const silencioso = opciones.silencioso === true;
+  const desde = document.getElementById('dbDesde').value;
+  const hasta = document.getElementById('dbHasta').value;
+  if (!desde && !hasta) { toast('⚠️ Elegí al menos una fecha'); return; }
+
+  if (!silencioso) trabajando('Buscando lo guardado…');
+  try {
+    const res = await fetch('/reconciliation/load_from_db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ desde, hasta })
+    });
+    const data = await res.json();
+    if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+
+    let nuevasInv = 0, nuevosPay = 0;
+    (data.invoices || []).forEach(d => {
+      if (!invoices.some(x => x._hash === d._hash)) { invoices.push(d); nuevasInv++; }
+    });
+    (data.payments || []).forEach(d => {
+      if (!payments.some(x => x._hash === d._hash)) { payments.push(d); nuevosPay++; }
+    });
+
+    if (nuevasInv || nuevosPay) { lastResult = null; persist(); renderAll(); }
+    if (!silencioso || nuevasInv || nuevosPay) {
+      toast(`↓ ${nuevasInv} factura(s) y ${nuevosPay} cobro(s) traídos de la base`);
+    }
+  } catch (e) {
+    if (!silencioso) toast(`❌ ${e.message}`);
+  } finally {
+    listo();
+  }
+}
+
+
+// ── Fecha en formato argentino ─────────────────────────────────────
+// El calendario del navegador muestra el formato del idioma de la
+// compu, que a veces es el de Estados Unidos. Por eso la fecha se
+// escribe a mano, siempre dd/mm/aaaa, y el sistema la entiende asi.
+function formatearFecha(input) {
+  const n = (input.value || '').replace(/\D/g, '').slice(0, 8);
+  if (n.length <= 2) { input.value = n; return; }
+  if (n.length <= 4) { input.value = `${n.slice(0, 2)}/${n.slice(2)}`; return; }
+  input.value = `${n.slice(0, 2)}/${n.slice(2, 4)}/${n.slice(4)}`;
+}
+
+
+// ── Calendarito ────────────────────────────────────────────────────
+// El campo se escribe siempre dd/mm/aaaa. El boton abre el calendario
+// del navegador y lo que se elige vuelve escrito en ese mismo formato.
+function abrirCalendario(id) {
+  const campo = document.getElementById(id);
+  const cal   = document.getElementById(id + '_cal');
+  const m = (campo.value || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  cal.value = m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+  if (cal.showPicker) { cal.showPicker(); } else { cal.click(); }
+}
+
+function desdeCalendario(id) {
+  const cal = document.getElementById(id + '_cal');
+  if (!cal.value) return;
+  const [a, me, d] = cal.value.split('-');
+  document.getElementById(id).value = `${d}/${me}/${a}`;
 }

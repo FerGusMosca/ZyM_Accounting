@@ -39,6 +39,10 @@
         <span class="dash-nav-icon">🔗</span>
         <span>Conciliación</span>
       </a>
+      <a href="/reconciliation/registros" class="dash-nav-item">
+        <span class="dash-nav-icon">🗂️</span>
+        <span>Registros</span>
+      </a>
     </nav>
     <div class="dash-sidebar-footer">
       <div class="dash-version">v1.0.0</div>
@@ -78,15 +82,46 @@
       </div>
     </div>
 
+    <div class="rc-fromdb">
+      <span class="rc-fromdb-title">Traer lo que ya está guardado</span>
+      <label>Desde
+        <span class="rc-fecha-wrap">
+          <input type="text" id="dbDesde" class="rc-fecha" maxlength="10"
+                 inputmode="numeric" placeholder="dd/mm/aaaa"
+                 oninput="formatearFecha(this)">
+          <button type="button" class="rc-cal-btn" title="Elegir del calendario"
+                  onclick="abrirCalendario('dbDesde')">📅</button>
+          <input type="date" id="dbDesde_cal" class="rc-cal-oculto" tabindex="-1"
+                 aria-hidden="true" onchange="desdeCalendario('dbDesde')"
+                 style="position:absolute;right:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;">
+        </span>
+      </label>
+      <label>Hasta
+        <span class="rc-fecha-wrap">
+          <input type="text" id="dbHasta" class="rc-fecha" maxlength="10"
+                 inputmode="numeric" placeholder="dd/mm/aaaa"
+                 oninput="formatearFecha(this)">
+          <button type="button" class="rc-cal-btn" title="Elegir del calendario"
+                  onclick="abrirCalendario('dbHasta')">📅</button>
+          <input type="date" id="dbHasta_cal" class="rc-cal-oculto" tabindex="-1"
+                 aria-hidden="true" onchange="desdeCalendario('dbHasta')"
+                 style="position:absolute;right:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;">
+        </span>
+      </label>
+      <button class="btn btn-ghost" onclick="traerDeLaBase()"
+              title="Suma a esta pantalla las facturas y los cobros guardados en ese rango de fechas">↓ Traer</button>
+      <span class="rc-fromdb-hint">Arranca mostrando lo de hoy. Cambiá las fechas para ver lo de antes. Solo lee: no borra ni cambia nada.</span>
+    </div>
+
     <p class="rc-hint" id="rcHint"></p>
 
     <!-- ── Paso 1: Facturas ── -->
     <section class="rc-panel" id="panel1">
       <div class="rc-drop" id="dropInv">
         <div class="rc-drop-icon">🧾</div>
-        <div class="rc-drop-title">Arrastrá acá los PDF de las facturas emitidas</div>
+        <div class="rc-drop-title">Arrastrá acá las facturas emitidas (PDF o foto)</div>
         <div class="rc-drop-sub">o hacé clic para elegirlos — se pueden subir varios a la vez, en distintas tandas</div>
-        <input type="file" id="fileInv" accept=".pdf" multiple hidden>
+        <input type="file" id="fileInv" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic" multiple hidden>
       </div>
       <div class="rc-loading" id="loadInv" hidden>
         <div class="rc-progress">
@@ -120,9 +155,9 @@
     <section class="rc-panel" id="panel2" hidden>
       <div class="rc-drop" id="dropPay">
         <div class="rc-drop-icon">💸</div>
-        <div class="rc-drop-title">Arrastrá acá los PDF de los comprobantes de transferencia</div>
+        <div class="rc-drop-title">Arrastrá acá los comprobantes de pago (PDF o foto)</div>
         <div class="rc-drop-sub">o hacé clic para elegirlos — Banco Ciudad, Santander, Mercado Pago, etc.</div>
-        <input type="file" id="filePay" accept=".pdf" multiple hidden>
+        <input type="file" id="filePay" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic" multiple hidden>
       </div>
       <div class="rc-loading" id="loadPay" hidden>
         <div class="rc-progress">
@@ -215,7 +250,7 @@
 
         <div class="rc-panel-foot">
           <button class="btn btn-ghost" onclick="exportCSV()">⬇ Exportar CSV</button>
-          <button class="btn btn-ghost" id="btnSaveDb" onclick="saveToDb()" hidden
+          <button class="btn btn-primary rc-btn-save" id="btnSaveDb" onclick="saveToDb()" hidden
                   title="Guarda facturas, cobros y cruces en la base. Las facturas cubiertas quedan como pagadas y la próxima vez que subas ese PDF el sistema te avisa">💾 Guardar en base</button>
           <button class="btn btn-primary" onclick="runReconcile()">↺ Re-conciliar</button>
         </div>
@@ -275,5 +310,15 @@
 
 <div id="toast" class="rc-toast" hidden></div>
 <script src="{{ sv('/static/js/reconciliation.js') }}"></script>
+
+<!-- ── Cartel de trabajando ── -->
+<div class="rc-busy" id="rcBusy" hidden>
+  <div class="rc-busy-box">
+    <div class="rc-spinner"></div>
+    <div class="rc-busy-text" id="rcBusyText">Procesando…</div>
+    <div class="rc-busy-sub">Puede tardar unos segundos.</div>
+  </div>
+</div>
+
 </body>
 </html>

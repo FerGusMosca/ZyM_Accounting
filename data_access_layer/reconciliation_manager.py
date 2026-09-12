@@ -344,3 +344,235 @@ class ReconciliationManager:
                     "cobrado":    float(r[_CC_COLLECTED_IDX] or 0),
                     "saldo":      float(r[_CC_BALANCE_IDX]   or 0),
                 } for r in cur.fetchall()]
+
+    # ── Archivos subidos ─────────────────────────────────────────────────────
+
+    def save_uploaded_file(self, file_hash: str, file_name: str | None,
+                           mime_type: str | None, content: bytes) -> None:
+        """
+        Guarda el archivo tal cual se subio, para poder abrirlo mas adelante
+        desde la pantalla de Registros. Si ese mismo archivo ya estaba
+        guardado, la base lo ignora y no pasa nada.
+        """
+        if not self.is_enabled() or not content:
+            return
+        import psycopg2
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT save_uploaded_file(%s::CHAR(64), %s::VARCHAR,
+                                              %s::VARCHAR, %s::BYTEA)
+                """, (file_hash, file_name, mime_type, psycopg2.Binary(content)))
+                conn.commit()
+
+    def get_uploaded_file(self, file_hash: str) -> dict | None:
+        """El archivo guardado, o None si no esta."""
+        if not self.is_enabled():
+            return None
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM get_uploaded_file(%s::CHAR(64))",
+                            (file_hash,))
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return {
+                    "nombre":    row[0],
+                    "tipo":      row[1] or "application/pdf",
+                    "contenido": bytes(row[2]),
+                }
+
+    # ── Listados para la pantalla de Registros ───────────────────────────────
+
+    def list_invoices(self) -> list[dict]:
+        """Todas las facturas guardadas."""
+        if not self.is_enabled():
+            return []
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM list_invoices()")
+                return [{
+                    "id":          r[0],
+                    "cliente":     r[1],
+                    "cuit":        r[2],
+                    "comprobante": r[3],
+                    "fecha":       r[4].strftime("%d/%m/%Y") if r[4] else None,
+                    "importe":     float(r[5] or 0),
+                    "imputado":    float(r[6] or 0),
+                    "estado":      r[7],
+                    "descripcion": r[8],
+                    "archivo":     r[9],
+                    "huella":      (r[10] or "").strip(),
+                    "tiene_archivo": bool(r[11]),
+                } for r in cur.fetchall()]
+
+    def list_payments(self) -> list[dict]:
+        """Todos los cobros guardados."""
+        if not self.is_enabled():
+            return []
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM list_payments()")
+                return [{
+                    "id":         r[0],
+                    "originante": r[1],
+                    "cuit":       r[2],
+                    "fecha":      r[3].strftime("%d/%m/%Y") if r[3] else None,
+                    "importe":    float(r[4] or 0),
+                    "imputado":   float(r[5] or 0),
+                    "banco":      r[6],
+                    "referencia": r[7],
+                    "archivo":    r[8],
+                    "huella":     (r[9] or "").strip(),
+                    "tiene_archivo": bool(r[10]),
+                } for r in cur.fetchall()]
+
+    def list_matches(self) -> list[dict]:
+        """Los cruces guardados, con los datos de la factura y del cobro."""
+        if not self.is_enabled():
+            return []
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM list_matches()")
+                return [{
+                    "id":              r[0],
+                    "invoice_id":      r[1],
+                    "comprobante":     r[2],
+                    "cliente":         r[3],
+                    "fecha_factura":   r[4].strftime("%d/%m/%Y") if r[4] else None,
+                    "importe_factura": float(r[5] or 0),
+                    "payment_id":      r[6],
+                    "fecha_pago":      r[7].strftime("%d/%m/%Y") if r[7] else None,
+                    "banco":           r[8],
+                    "originante":      r[9],
+                    "importe":         float(r[10] or 0),
+                    "confianza":       r[11],
+                } for r in cur.fetchall()]
+
+    # ── Cobros cargados a mano ───────────────────────────────────────────────
+
+    def persist_manual_payment(self, pay: dict) -> int:
+        """
+        Alta de un cobro sin comprobante. Si ese mismo cobro ya se habia
+        cargado a mano, devuelve el que ya estaba.
+        """
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT persist_manual_payment(
+                        %s::VARCHAR, %s::VARCHAR, %s::DATE,
+                        %s::NUMERIC, %s::VARCHAR, %s::VARCHAR)
+                """, (
+                    pay.get("cuit_originante"),
+                    pay.get("originante"),
+                    pay.get("fecha_iso"),
+                    pay.get("importe"),
+                    pay.get("banco"),
+                    pay.get("referencia"),
+                ))
+                payment_id = cur.fetchone()[0]
+                conn.commit()
+                return payment_id
+
+    def delete_payment(self, payment_id: int) -> None:
+        """Baja del cobro. Las facturas que cubria vuelven a quedar pendientes."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT delete_payment(%s::INT)", (payment_id,))
+                conn.commit()
+
+    # ── Clientes ─────────────────────────────────────────────────────────────
+
+    def list_clients(self) -> list[dict]:
+        """Clientes con su nombre actual, para poder corregirlo."""
+        if not self.is_enabled():
+            return []
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM list_clients()")
+                return [{
+                    "id":         r[0],
+                    "cuit":       r[1],
+                    "nombre":     r[2],
+                    "grupo":      r[3],
+                    "n_facturas": r[4],
+                    "facturado":  float(r[5] or 0),
+                } for r in cur.fetchall()]
+
+    # ── Cruces ───────────────────────────────────────────────────────────────
+    # No hay ningun metodo que borre cruces en tanda, a proposito.
+    # Se saca de a uno, y solo cuando la persona lo pide en pantalla.
+
+    def delete_match(self, match_id: int) -> None:
+        """Saca un cruce puntual y recalcula si la factura sigue pagada."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT delete_match(%s::INT)", (match_id,))
+                conn.commit()
+
+    # ── Comprobante de un cobro cargado a mano ───────────────────────────────
+
+    def set_payment_file(self, payment_id: int, file_hash: str,
+                         file_name: str | None) -> None:
+        """Le engancha el comprobante a un cobro que ya estaba cargado."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT set_payment_file(%s::INT, %s::CHAR(64), %s::VARCHAR)
+                """, (payment_id, file_hash, file_name))
+                conn.commit()
+
+    # ── Traer lo guardado a la pantalla de Conciliacion ──────────────────────
+
+    def get_invoices_between(self, desde: str | None, hasta: str | None) -> list[dict]:
+        """
+        Facturas ya guardadas en ese rango de fechas, con el MISMO formato que
+        devuelve el extractor, para que la pantalla no note la diferencia.
+        """
+        if not self.is_enabled():
+            return []
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM get_invoices_between(%s::DATE, %s::DATE)",
+                            (desde, hasta))
+                salida = []
+                for r in cur.fetchall():
+                    punto_venta, comp_nro = _split_comprobante(r[5])
+                    salida.append({
+                        "_id_bd":               r[0],
+                        "_client_id":           r[1],
+                        "_estado":              r[8],
+                        "razon_social_cliente": r[2],
+                        "cuit_cliente":         r[3],
+                        "cuit_emisor":          r[4],
+                        "punto_venta":          punto_venta,
+                        "comp_nro":             comp_nro,
+                        "fecha_emision":        r[6].strftime("%d/%m/%Y") if r[6] else None,
+                        "importe_total":        float(r[7] or 0),
+                        "descripcion":          r[9],
+                        "_archivo":             r[10],
+                        "_hash":                (r[11] or "").strip(),
+                        "_de_la_base":          True,
+                    })
+                return salida
+
+    def get_payments_between(self, desde: str | None, hasta: str | None) -> list[dict]:
+        """Cobros ya guardados en ese rango, con el formato de la pantalla."""
+        if not self.is_enabled():
+            return []
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM get_payments_between(%s::DATE, %s::DATE)",
+                            (desde, hasta))
+                return [{
+                    "_id_bd":          r[0],
+                    "cuit_originante": r[1],
+                    "originante":      r[2],
+                    "fecha":           r[3].strftime("%d/%m/%Y") if r[3] else None,
+                    "importe":         float(r[4] or 0),
+                    "banco":           r[5],
+                    "referencia":      r[6],
+                    "_archivo":        r[7],
+                    "_hash":           (r[8] or "").strip(),
+                    "_de_la_base":     True,
+                } for r in cur.fetchall()]

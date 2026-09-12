@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registros de Cobranzas — MOSCA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ sv('/static/css/main.css') }}">
+  <link rel="stylesheet" href="{{ sv('/static/css/main_dashboard.css') }}">
+  <link rel="stylesheet" href="{{ sv('/static/css/reconciliation.css') }}">
+  <link rel="stylesheet" href="{{ sv('/static/css/records.css') }}">
+  <link rel="stylesheet" href="{{ sv('/static/css/theme.css') }}">
+</head>
+<body>
+
+<div class="dash-root">
+
+  <!-- ── Sidebar ── -->
+  <aside class="dash-sidebar">
+    <div class="dash-brand">
+      <div class="dash-brand-icon">M</div>
+      <div class="dash-brand-text">
+        <span class="dash-brand-name">MOSCA</span>
+        <span class="dash-brand-sub"></span>
+      </div>
+    </div>
+    <nav class="dash-nav">
+      <div class="dash-nav-section">Módulos</div>
+      <a href="/billing_extractor_n_generator" class="dash-nav-item">
+        <span class="dash-nav-icon">🧾</span>
+        <span>Generar factura</span>
+      </a>
+      <a href="/invoice_history" class="dash-nav-item">
+        <span class="dash-nav-icon">📋</span>
+        <span>Facturas Enviadas</span>
+      </a>
+      <a href="/reconciliation" class="dash-nav-item">
+        <span class="dash-nav-icon">🔗</span>
+        <span>Conciliación</span>
+      </a>
+      <a href="/reconciliation/registros" class="dash-nav-item active">
+        <span class="dash-nav-icon">🗂️</span>
+        <span>Registros</span>
+      </a>
+    </nav>
+    <div class="dash-sidebar-footer">
+      <div class="dash-version">v1.0.0</div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="rc-main">
+
+    <div class="rc-header">
+      <div>
+        <div class="rc-eyebrow">Cobranzas</div>
+        <h1 class="rc-title">Registros <em>guardados</em></h1>
+        <p class="rc-subtitle">Todo lo que ya está en la base — facturas, cobros y cruces, con el archivo original de cada uno</p>
+      </div>
+      <div class="rc-header-actions">
+        <input type="search" id="rgSearch" class="rg-search" placeholder="Buscar…" oninput="renderAll()">
+        <button class="btn btn-ghost" onclick="cargar()" title="Vuelve a leer los registros de la base">↻ Actualizar</button>
+        <a class="btn btn-primary" href="/reconciliation" title="Ir a subir una nueva tanda de facturas y cobros">+ Nueva tanda</a>
+      </div>
+    </div>
+
+    <!-- ── Tabs ── -->
+    <div class="rc-steps">
+      <div class="rc-step active" id="tab1" onclick="showTab(1)">
+        <span class="rc-step-num">1</span> Facturas
+        <span class="rc-step-count" id="cntInv">0</span>
+      </div>
+      <div class="rc-step" id="tab2" onclick="showTab(2)">
+        <span class="rc-step-num">2</span> Cobros
+        <span class="rc-step-count" id="cntPay">0</span>
+      </div>
+      <div class="rc-step" id="tab3" onclick="showTab(3)">
+        <span class="rc-step-num">3</span> Cruces
+        <span class="rc-step-count" id="cntMat">0</span>
+      </div>
+      <div class="rc-step" id="tab4" onclick="showTab(4)">
+        <span class="rc-step-num">4</span> Clientes
+        <span class="rc-step-count" id="cntCli">0</span>
+      </div>
+    </div>
+
+    <p class="rc-hint" id="rgHint">Cargando…</p>
+
+    <!-- ── Facturas ── -->
+    <section class="rc-panel" id="panel1">
+      <div class="rc-table-wrap">
+        <table class="rc-table">
+          <thead>
+            <tr>
+              <th>Comprobante</th><th>Fecha</th><th>Cliente</th><th>CUIT</th>
+              <th class="num">Importe</th><th class="num">Imputado</th>
+              <th>Estado</th><th>Archivo</th>
+            </tr>
+          </thead>
+          <tbody id="invBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Cobros ── -->
+    <section class="rc-panel" id="panel2" hidden>
+      <div class="rg-panel-actions">
+        <button class="btn btn-primary" onclick="abrirAltaPago()"
+                title="Para los cobros en efectivo o los que no tienen comprobante">+ Cargar pago a mano</button>
+      </div>
+      <div class="rc-table-wrap">
+        <table class="rc-table">
+          <thead>
+            <tr>
+              <th>Fecha</th><th>Originante</th><th>CUIT</th><th>Banco</th>
+              <th class="num">Importe</th><th class="num">Imputado</th>
+              <th>Archivo</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="payBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Cruces ── -->
+    <section class="rc-panel" id="panel3" hidden>
+      <div class="rc-table-wrap">
+        <table class="rc-table">
+          <thead>
+            <tr>
+              <th>Comprobante</th><th>Cliente</th><th>Pago</th>
+              <th class="num">Importe</th><th>Confianza</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="matBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Clientes ── -->
+    <section class="rc-panel" id="panel4" hidden>
+      <div class="rc-table-wrap">
+        <table class="rc-table">
+          <thead>
+            <tr>
+              <th>Cliente</th><th>CUIT</th><th>Grupo</th>
+              <th class="num">Facturas</th><th class="num">Facturado</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="cliBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ── Alta de pago a mano ── -->
+<div class="rg-modal" id="rgAlta" hidden onclick="cerrarAltaPago(event)">
+  <div class="rg-modal-box" onclick="event.stopPropagation()">
+    <div class="rg-modal-head">
+      <h3>Cargar un pago a mano</h3>
+      <button class="btn btn-ghost" onclick="cerrarAltaPago()">✕</button>
+    </div>
+    <div class="rg-form">
+      <label>Fecha del pago
+        <span class="rc-fecha-wrap">
+          <input type="text" id="apFecha" maxlength="10" inputmode="numeric"
+                 placeholder="dd/mm/aaaa" oninput="formatearFecha(this)">
+          <button type="button" class="rc-cal-btn" title="Elegir del calendario"
+                  onclick="abrirCalendario('apFecha')">📅</button>
+          <input type="date" id="apFecha_cal" class="rc-cal-oculto" tabindex="-1"
+                 aria-hidden="true" onchange="desdeCalendario('apFecha')"
+                 style="position:absolute;right:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;">
+        </span>
+      </label>
+      <label>Importe
+        <input type="text" id="apImporte" inputmode="decimal" placeholder="0,00"
+               oninput="formatearImporte(this)">
+      </label>
+      <label>Quién pagó
+        <input type="text" id="apOriginante" list="apClientes" autocomplete="off"
+               placeholder="Escribí para buscar, o poné uno nuevo"
+               oninput="completarCliente()">
+        <datalist id="apClientes"></datalist>
+        <span class="rg-form-hint" id="apClienteHint">Si el cliente no está en la lista, escribilo igual y se carga como nuevo.</span>
+      </label>
+      <label>CUIT
+        <input type="text" id="apCuit" inputmode="numeric" maxlength="13"
+               placeholder="30-12345678-9" oninput="formatearCuit(this)">
+      </label>
+      <label>Medio
+        <input type="text" id="apBanco" placeholder="Efectivo, banco, etc.">
+      </label>
+      <label>Referencia
+        <input type="text" id="apReferencia" placeholder="Nº de operación, comentario…">
+      </label>
+    </div>
+    <p class="rg-form-error" id="apError" hidden></p>
+    <div class="rg-form-actions">
+      <button class="btn btn-ghost" onclick="cerrarAltaPago()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarPagoManual()">Guardar el pago</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Detalle ── -->
+<div class="rg-modal" id="rgModal" hidden onclick="cerrarDetalle(event)">
+  <div class="rg-modal-box" onclick="event.stopPropagation()">
+    <div class="rg-modal-head">
+      <h3 id="rgModalTitle">Detalle</h3>
+      <button class="btn btn-ghost" onclick="cerrarDetalle()">✕</button>
+    </div>
+    <div id="rgModalBody"></div>
+  </div>
+</div>
+
+<input type="file" id="rgPayFile" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic" hidden
+       onchange="subirComprobante(this)">
+
+<script src="{{ sv('/static/js/records.js') }}"></script>
+
+<!-- ── Cambiar el nombre del cliente ── -->
+<div class="rg-modal" id="rgRename" hidden onclick="cerrarRename(event)">
+  <div class="rg-modal-box rg-modal-chico" onclick="event.stopPropagation()">
+    <div class="rg-modal-head">
+      <h3>Cambiar el nombre del cliente</h3>
+      <button class="btn btn-ghost" onclick="cerrarRename()">✕</button>
+    </div>
+
+    <div class="rg-rename-cliente">
+      <span class="rg-rename-cuit mono" id="rnCuit"></span>
+      <span class="rg-rename-actual" id="rnActual"></span>
+    </div>
+
+    <div class="rg-form rg-form-1col">
+      <label>Nombre con el que lo querés ver
+        <input type="text" id="rnNombre" autocomplete="off"
+               onkeydown="if (event.key === 'Enter') guardarNombre()">
+      </label>
+    </div>
+
+    <p class="rg-form-hint">Se cambia en toda la app: pantallas, cuenta corriente y el CSV.</p>
+    <p class="rg-form-error" id="rnError" hidden></p>
+
+    <div class="rg-form-actions">
+      <button class="btn btn-ghost" onclick="cerrarRename()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarNombre()">Guardar el nombre</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

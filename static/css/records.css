@@ -1,0 +1,104 @@
+/* records.css — Registros guardados de Cobranzas
+   Reusa casi todo de reconciliation.css; aca solo va lo propio. */
+
+/* ── Buscador del encabezado ── */
+.rg-search {
+  height: 34px; padding: 0 12px; box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--text);
+  font-family: 'Outfit', sans-serif; font-size: 13px; min-width: 220px;
+}
+.rg-search:focus { outline: none; border-color: var(--violet); }
+
+/* ── Filas que se pueden abrir ── */
+.rg-row { cursor: pointer; }
+.rg-row:hover td { background: var(--violet-bg); }
+
+.rg-empty { color: var(--text-muted); font-family: 'Outfit', sans-serif;
+            font-size: 13px; padding: 14px 10px; }
+
+.rg-file { color: var(--violet-dark); text-decoration: none; font-weight: 600;
+           font-family: 'Outfit', sans-serif; font-size: 13px; white-space: nowrap; }
+.rg-file:hover { text-decoration: underline; }
+
+.rg-nofile { color: var(--text-muted); font-family: 'Outfit', sans-serif;
+             font-size: 12px; font-style: italic; }
+
+/* ── Ficha de detalle ── */
+.rg-modal {
+  position: fixed; inset: 0; background: rgba(20, 12, 40, .45);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; z-index: 60;
+}
+.rg-modal[hidden] { display: none !important; }
+
+.rg-modal-box {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 22px 24px; width: min(560px, 100%); max-height: 82vh; overflow-y: auto;
+  box-shadow: 0 18px 50px rgba(20, 12, 40, .25);
+}
+.rg-modal-head { display: flex; align-items: center; justify-content: space-between;
+                 gap: 12px; margin-bottom: 14px; }
+.rg-modal-head h3 { font-family: 'DM Serif Display', serif; font-size: 22px;
+                    font-weight: 400; color: var(--text); margin: 0; }
+
+.rg-detail { display: flex; flex-direction: column; gap: 2px; }
+.rg-detail-row { display: flex; justify-content: space-between; gap: 16px;
+                 padding: 7px 0; border-bottom: 1px solid var(--border);
+                 font-family: 'Outfit', sans-serif; font-size: 13px; }
+.rg-detail-label { color: var(--text-muted); }
+.rg-detail-value { color: var(--text); text-align: right; word-break: break-word; }
+
+.rg-detail-sub { font-family: 'Outfit', sans-serif; font-size: 12px;
+                 text-transform: uppercase; letter-spacing: .1em;
+                 color: var(--violet-dark); margin: 18px 0 8px; }
+
+.rg-list { margin: 0 0 16px; padding-left: 18px; font-family: 'Outfit', sans-serif;
+           font-size: 13px; color: var(--text); }
+.rg-list li { margin-bottom: 4px; }
+
+/* ── Acciones arriba de una solapa ── */
+.rg-panel-actions { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 4px; }
+
+/* ── Formulario de alta a mano ── */
+.rg-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-bottom: 6px; }
+.rg-form label { display: flex; flex-direction: column; gap: 5px;
+                 font-family: 'Outfit', sans-serif; font-size: 12px; color: var(--text-muted); }
+.rg-form input {
+  height: 34px; padding: 0 10px; box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--text);
+  font-family: 'Outfit', sans-serif; font-size: 13px;
+}
+.rg-form input:focus { outline: none; border-color: var(--violet); }
+
+.rg-form-error { font-family: 'Outfit', sans-serif; font-size: 13px;
+                 color: #a93226; margin: 8px 0 0; }
+.rg-form-error[hidden] { display: none !important; }
+
+.rg-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+@media (max-width: 620px) {
+  .rg-form { grid-template-columns: 1fr; }
+}
+
+/* ── Ficha chica (cambiar el nombre) ── */
+.rg-modal-chico { width: min(440px, 100%); }
+.rg-form-1col { grid-template-columns: 1fr; }
+
+.rg-rename-cliente { display: flex; flex-direction: column; gap: 2px;
+                     background: var(--bg-muted); border: 1px solid var(--border);
+                     border-radius: 10px; padding: 10px 12px; margin-bottom: 16px; }
+.rg-rename-cuit   { font-size: 12px; color: var(--text-muted); }
+.rg-rename-actual { font-family: 'Outfit', sans-serif; font-size: 14px;
+                    font-weight: 600; color: var(--text); }
+
+/* ── Ayuda debajo de un campo ── */
+.rg-form-hint { font-family: 'Outfit', sans-serif; font-size: 11px;
+                color: var(--text-muted); margin: 0; line-height: 1.4; }
+.rg-form-hint.ok { color: var(--violet-dark); font-weight: 600; }
+
+/* ── El campo de fecha con calendarito ocupa todo el ancho de la ficha ── */
+.rg-form .rc-fecha-wrap { width: 100%; }
+.rg-form .rc-fecha-wrap input[type="text"] { flex: 1; }
+.rg-form .rc-cal-btn { height: 34px; }

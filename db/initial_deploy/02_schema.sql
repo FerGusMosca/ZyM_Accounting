@@ -138,3 +138,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_invoice_payments
 
 CREATE INDEX IF NOT EXISTS ix_invoice_payments_invoice ON invoice_payments (invoice_id);
 CREATE INDEX IF NOT EXISTS ix_invoice_payments_payment ON invoice_payments (payment_id);
+
+
+-- ============================================================
+-- ARCHIVOS SUBIDOS
+-- Guarda el archivo tal cual se subio (PDF de factura o de
+-- comprobante de pago), para poder abrirlo despues desde la
+-- pantalla de Registros.
+-- La huella es la misma que ya llevan invoices y payments, asi
+-- el mismo archivo no se guarda dos veces.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS uploaded_files (
+    file_hash   CHAR(64)     PRIMARY KEY,
+    file_name   VARCHAR(400) NULL,
+    mime_type   VARCHAR(120) NULL,
+    byte_size   INT          NULL,
+    content     BYTEA        NOT NULL,
+    created_at  TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_uploaded_files_created
+    ON uploaded_files (created_at DESC);
