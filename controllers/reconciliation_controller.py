@@ -11,6 +11,20 @@ Tanda 2 / Funcionalidades #3 y #4 (spec Nati):
       * Sin match:   factura pendiente / pago sin imputar
   - Cuenta corriente por cliente (saldos, como pidió Nati) + detalle imputado
 
+Tanda 4 (pedidos del 20/09/2026):
+  1. Cruce manual: un cobro contra varias facturas, elegidas en pantalla.
+  2. Si el cobro sobra, lo que sobra queda como un cobro aparte (remanente),
+     que se puede volver a cruzar.
+  3. Lo ya conciliado y guardado se recupera: al conciliar, los cruces
+     guardados de lo que esta en pantalla vuelven tal cual, sin recalcular.
+
+Tanda 5 (pedidos del 20/09/2026):
+  1. Desarmar cruces de a uno o el grupo entero (factura/s con pago/s).
+     Lo ya guardado se saca de a uno, como dice la regla.
+  2. Facturas y cobros se guardan solos al pasar de un paso al otro; el
+     boton "Guardar en base" guarda los cruces.
+  Ademas: un documento sin marca de identidad ya no corta el guardado.
+
 Tanda 3 (pedidos del 29/08/2026):
   1. Aviso de factura duplicada al subir: se calcula la huella del PDF y se
      consulta la base ANTES de llamar al LLM. Si ya está, se devuelve lo que
@@ -34,6 +48,7 @@ Routes:
     POST /reconciliation/groups         → crear o renombrar grupo
     POST /reconciliation/groups/delete  → borrar grupo
     POST /reconciliation/assign_group   → asignar un CUIT a un grupo
+    POST /reconciliation/save_docs      → guardar solo facturas y pagos (al pasar de paso)
     POST /reconciliation/save           → guardar facturas, pagos y cruces
     GET  /reconciliation/registros      → pantalla de registros guardados
     GET  /reconciliation/registros/data → facturas, cobros y cruces guardados
@@ -249,6 +264,85 @@ def _file_hash(pdf_bytes: bytes) -> str:
     return hashlib.sha256(pdf_bytes).hexdigest()
 
 
+def _completar_marcas(invoices: list[dict], payments: list[dict]) -> None:
+    """
+    Toda factura y todo cobro tiene que llegar con su marca de identidad,
+    porque la base no guarda nada sin ella.
+
+    Una factura que viene de una sesion vieja o importada puede no traerla
+    (caso de la factura 00001-00000621). En vez de que la base corte todo el
+    guardado, la marca se arma con los propios datos del documento: emisor +
+    numero para la factura, y los datos del cobro para el pago. Siempre da la
+    misma marca para el mismo documento, asi no se duplica.
+    """
+    for inv in invoices:
+        if (inv.get("_hash") or "").strip():
+            continue
+        base = "|".join([
+            "sin_archivo", "factura",
+            _norm_cuit(inv.get("cuit_emisor")),
+            f"{inv.get('punto_venta', '')}-{inv.get('comp_nro', '')}",
+            str(_round2(inv.get("importe_total"))),
+        ])
+        inv["_hash"] = hashlib.sha256(base.encode("utf-8")).hexdigest()
+    for pay in payments:
+        if (pay.get("_hash") or "").strip():
+            continue
+        base = "|".join([
+            "sin_archivo", "pago",
+            _norm_cuit(pay.get("cuit_originante")),
+            str(pay.get("fecha") or ""),
+            str(_round2(pay.get("importe"))),
+            str(pay.get("banco") or "").strip().lower(),
+            str(pay.get("referencia") or "").strip().lower(),
+        ])
+        pay["_hash"] = hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+
+def _persist_docs(mgr: ReconciliationManager, invoices: list[dict],
+                  payments: list[dict]) -> tuple[dict, dict]:
+    """
+    Guarda facturas y cobros. No toca cruces. Si ya estaban guardados, la
+    base devuelve el que ya estaba: no duplica y no borra nada.
+    Devuelve (marca de factura -> id, marca de cobro -> id).
+    """
+    _completar_marcas(invoices, payments)
+    nombres = canonical_names(invoices, mgr.get_canonical_names())
+
+    inv_ids = {}
+    for i, inv in enumerate(invoices):
+        cuit = _norm_cuit(inv.get("cuit_cliente"))
+        comp = f"{inv.get('punto_venta', '')}-{inv.get('comp_nro', '')}"
+        inv_ids[_inv_key(inv, i)] = mgr.persist_invoice({
+            "cuit_cliente": cuit,
+            "razon_social_cliente": nombres.get(cuit)
+                                    or inv.get("razon_social_cliente"),
+            "cuit_emisor": _norm_cuit(inv.get("cuit_emisor")),
+            "comprobante": comp,
+            "fecha_emision_iso": _iso_date(inv.get("fecha_emision")),
+            "importe_total": _round2(inv.get("importe_total")),
+            "descripcion": inv.get("descripcion"),
+            "archivo": inv.get("_archivo"),
+            "file_hash": inv.get("_hash"),
+            "raw": inv,
+        })
+
+    pay_ids = {}
+    for j, pay in enumerate(payments):
+        pay_ids[_pay_key(pay, j)] = mgr.persist_payment({
+            "cuit_originante": _norm_cuit(pay.get("cuit_originante")),
+            "originante": pay.get("originante"),
+            "fecha_iso": _iso_date(pay.get("fecha")),
+            "importe": _round2(pay.get("importe")),
+            "banco": pay.get("banco") or pay.get("banco_destino"),
+            "referencia": pay.get("referencia") or pay.get("concepto"),
+            "archivo": pay.get("_archivo"),
+            "file_hash": pay.get("_hash"),
+            "raw": pay,
+        })
+    return inv_ids, pay_ids
+
+
 # ── Motor de conciliación (determinístico, sin LLM) ────────────────────────────
 
 def _norm_cuit(cuit) -> str:
@@ -335,17 +429,61 @@ def canonical_names(invoices: list[dict], from_db: dict | None = None) -> dict:
     return elegido
 
 
+_CENT = 0.005   # por debajo de medio centavo se considera cero
+
+
+def _inv_key(inv: dict, i: int) -> str:
+    """Con que se identifica una factura en pantalla: la huella del archivo."""
+    return (inv.get("_hash") or "").strip() or f"inv:{i}"
+
+
+def _pay_key(pay: dict, j: int) -> str:
+    """Con que se identifica un cobro en pantalla: la huella del archivo."""
+    return (pay.get("_hash") or "").strip() or f"pay:{j}"
+
+
+def _saldo(inv: dict) -> float:
+    """Lo que le falta cobrar a la factura."""
+    return _round2(inv["importe"] - inv["pagado"])
+
+
+def _libre(pay: dict) -> float:
+    """Lo que le queda al cobro sin imputar (el remanente)."""
+    return _round2(pay["importe"] - pay["aplicado"])
+
+
+def _aplicar(inv: dict | None, pay: dict | None, monto: float) -> None:
+    if inv is not None:
+        inv["pagado"] = _round2(inv["pagado"] + monto)
+    if pay is not None:
+        pay["aplicado"] = _round2(pay["aplicado"] + monto)
+
+
 def reconcile(invoices: list[dict], payments: list[dict],
               nombres_db: dict | None = None,
-              grupos: dict | None = None) -> dict:
+              grupos: dict | None = None,
+              manuales: list[dict] | None = None,
+              guardados: list[dict] | None = None,
+              descartados: list[dict] | None = None) -> dict:
     """
-    Pasada 1: CUIT cliente == CUIT originante  +  importe exacto      → 'alta'
-    Pasada 2: importe exacto + pago posterior a factura (ventana)     → 'media'
-    Resto:    facturas pendientes / pagos sin imputar.
-    Cuenta corriente por cliente: facturado, cobrado (imputado + a cuenta), saldo.
+    Paso 0: cruces YA GUARDADOS en la base               → 'guardado'
+    Paso 1: cruces MANUALES hechos en pantalla            → 'manual'
+            Un cobro contra varias facturas. Si el cobro sobra, lo que sobra
+            queda como remanente, disponible para otro cruce.
+    Paso 2: CUIT cliente == CUIT originante + importe exacto → 'alta'
+    Paso 3: importe exacto + pago posterior a factura     → 'media'
+    Resto:  facturas con saldo / cobros con plata libre.
+
+    Los importes de los pasos 2 y 3 se comparan contra lo que le QUEDA a
+    cada uno, no contra el total: asi un remanente puede cruzar solo con
+    otra factura del mismo importe.
 
     nombres_db: mapa CUIT → nombre guardado en la base.
     grupos:     mapa CUIT → {group_id, group_name}.
+    manuales:   [{pago: key, facturas: [key, ...]}]
+    guardados:  cruces que devuelve get_saved_matches.
+    descartados: [{factura: key, pago: key}] cruces automaticos que se
+                 desarmaron en pantalla: el motor no los vuelve a armar.
     """
     grupos = grupos or {}
     nombres = canonical_names(invoices, nombres_db)
@@ -355,6 +493,7 @@ def reconcile(invoices: list[dict], payments: list[dict],
         cuit = _norm_cuit(inv.get("cuit_cliente"))
         invs.append({
             "idx": i,
+            "key": _inv_key(inv, i),
             "cuit": cuit,
             "cliente": nombres.get(cuit) or inv.get("razon_social_cliente") or "(sin nombre)",
             "comp": f"{inv.get('punto_venta', '')}-{inv.get('comp_nro', '')}",
@@ -363,7 +502,7 @@ def reconcile(invoices: list[dict], payments: list[dict],
             "importe": _round2(inv.get("importe_total")),
             "descripcion": inv.get("descripcion") or "",
             "archivo": inv.get("_archivo") or "",
-            "matched": False,
+            "pagado": 0.0,
         })
     # Si el pagador de un cobro es el propio emisor, el extractor lo dio vuelta.
     emisores = _emisor_cuits(invoices)
@@ -376,6 +515,7 @@ def reconcile(invoices: list[dict], payments: list[dict],
     for j, pay in enumerate(payments):
         pays.append({
             "idx": j,
+            "key": _pay_key(pay, j),
             "cuit": _norm_cuit(pay.get("cuit_originante")),
             "originante": pay.get("originante") or "(sin nombre)",
             "banco": pay.get("banco") or pay.get("banco_destino") or "-",
@@ -385,48 +525,102 @@ def reconcile(invoices: list[dict], payments: list[dict],
             "referencia": pay.get("referencia") or pay.get("concepto") or "",
             "archivo": pay.get("_archivo") or "",
             "corregido": pay.get("_corregido"),
-            "matched": False,
+            "aplicado": 0.0,
         })
 
+    no_cruzar = {(d.get("factura"), d.get("pago")) for d in (descartados or [])}
+    inv_by_key = {inv["key"]: inv for inv in invs}
+    pay_by_key = {p["key"]: p for p in pays}
     matches = []
 
-    # Pasada 1 — CUIT + importe exacto
+    # Paso 0 — lo que ya estaba conciliado y guardado. No se recalcula.
+    for g in guardados or []:
+        inv = inv_by_key.get(g.get("inv_hash"))
+        pay = pay_by_key.get(g.get("pay_hash"))
+        if inv is None and pay is None:
+            continue
+        monto = _round2(g.get("monto"))
+        _aplicar(inv, pay, monto)
+        matches.append({
+            "confianza": g.get("confianza") or "alta",
+            "motivo": "Ya estaba conciliado y guardado",
+            "monto": monto,
+            "guardado": True,
+            "match_id": g.get("match_id"),
+            "factura": _inv_out(inv) if inv else _inv_guardada(g, nombres),
+            "pago": _pay_out(pay) if pay else _pay_guardado(g),
+        })
+
+    # Paso 1 — cruces manuales: un cobro contra una o varias facturas.
+    for grupo in manuales or []:
+        pay = pay_by_key.get(grupo.get("pago"))
+        if pay is None:
+            continue
+        for key in grupo.get("facturas") or []:
+            inv = inv_by_key.get(key)
+            if inv is None:
+                continue
+            saldo, libre = _saldo(inv), _libre(pay)
+            monto = _round2(min(saldo, libre))
+            if monto <= _CENT:
+                continue
+            _aplicar(inv, pay, monto)
+            motivo = "Cruce manual"
+            if monto < saldo - _CENT:
+                motivo += " — cubre una parte de la factura"
+            matches.append(_match(inv, pay, "manual", motivo, monto))
+
+    # Paso 2 — CUIT + importe exacto
     for p in pays:
-        if p["matched"]:
+        if _libre(p) <= _CENT or not p["cuit"]:
             continue
         for inv in invs:
-            if inv["matched"] or not inv["cuit"] or not p["cuit"]:
+            if not inv["cuit"] or _saldo(inv) <= _CENT:
                 continue
-            if inv["cuit"] == p["cuit"] and inv["importe"] == p["importe"]:
-                inv["matched"] = p["matched"] = True
-                matches.append(_match(inv, p, "alta", "CUIT + importe exacto"))
+            if (inv["key"], p["key"]) in no_cruzar:
+                continue
+            if inv["cuit"] == p["cuit"] and _saldo(inv) == _libre(p):
+                monto = _libre(p)
+                _aplicar(inv, p, monto)
+                matches.append(_match(inv, p, "alta", "CUIT + importe exacto", monto))
                 break
 
-    # Pasada 2 — importe exacto + fecha compatible
+    # Paso 3 — importe exacto + fecha compatible
     for p in pays:
-        if p["matched"]:
+        libre = _libre(p)
+        if libre <= _CENT:
             continue
         candidates = [
             inv for inv in invs
-            if not inv["matched"] and inv["importe"] == p["importe"]
+            if _saldo(inv) > _CENT and _saldo(inv) == libre
+            and (inv["key"], p["key"]) not in no_cruzar
             and _date_ok(inv["fecha_dt"], p["fecha_dt"])
         ]
         if len(candidates) == 1:
             inv = candidates[0]
-            inv["matched"] = p["matched"] = True
+            _aplicar(inv, p, libre)
             matches.append(_match(inv, p, "media",
-                                  "Importe exacto + fecha compatible (CUIT del pagador ≠ CUIT del cliente)"))
+                                  "Importe exacto + fecha compatible (CUIT del pagador ≠ CUIT del cliente)",
+                                  libre))
         elif len(candidates) > 1:
             # Ambiguo: elegir la factura más antigua, marcar para revisión
             inv = sorted(candidates, key=lambda x: x["fecha_dt"] or datetime.max)[0]
-            inv["matched"] = p["matched"] = True
+            _aplicar(inv, p, libre)
             matches.append(_match(inv, p, "revisar",
-                                  f"Importe coincide con {len(candidates)} facturas — se imputó la más antigua"))
+                                  f"Importe coincide con {len(candidates)} facturas — se imputó la más antigua",
+                                  libre))
 
-    pendientes = [_inv_out(i) for i in invs if not i["matched"]]
+    pendientes = []
+    for inv in invs:
+        if _saldo(inv) > _CENT:
+            out = _inv_out(inv)
+            out["saldo"] = _saldo(inv)
+            out["pagado"] = inv["pagado"]
+            pendientes.append(out)
 
     # Cuenta corriente por cliente (clave: CUIT del cliente)
     cc = {}
+    pagos_de = defaultdict(set)
     for inv in invs:
         key = inv["cuit"] or f"SIN_CUIT::{inv['cliente']}"
         c = cc.setdefault(key, {"cuit": inv["cuit"], "cliente": inv["cliente"],
@@ -434,25 +628,43 @@ def reconcile(invoices: list[dict], payments: list[dict],
                                 "n_facturas": 0, "n_pagos": 0})
         c["facturado"] = _round2(c["facturado"] + inv["importe"])
         c["n_facturas"] += 1
+    total_imputado = 0.0
     for m in matches:
+        if m["factura"].get("fuera_de_pantalla"):
+            continue
         key = m["factura"]["cuit"] or f"SIN_CUIT::{m['factura']['cliente']}"
         if key in cc:
-            cc[key]["cobrado"] = _round2(cc[key]["cobrado"] + m["pago"]["importe"])
-            cc[key]["n_pagos"] += 1
-    # Pagos sin imputar cuyo CUIT coincide con un cliente → "a cuenta" (saldos, como pidió Nati)
+            cc[key]["cobrado"] = _round2(cc[key]["cobrado"] + m["monto"])
+            pagos_de[key].add(m["pago"]["key"])
+            total_imputado = _round2(total_imputado + m["monto"])
+    # Plata libre de un cobro cuyo CUIT coincide con un cliente → "a cuenta"
+    total_a_cuenta = 0.0
     for p in pays:
-        if p["matched"] or not p["cuit"] or p["cuit"] not in cc:
+        libre = _libre(p)
+        if libre <= _CENT or not p["cuit"] or p["cuit"] not in cc:
             continue
-        cc[p["cuit"]]["cobrado"] = _round2(cc[p["cuit"]]["cobrado"] + p["importe"])
-        cc[p["cuit"]]["n_pagos"] += 1
+        cc[p["cuit"]]["cobrado"] = _round2(cc[p["cuit"]]["cobrado"] + libre)
+        pagos_de[p["cuit"]].add(p["key"])
+        total_a_cuenta = _round2(total_a_cuenta + libre)
         p["a_cuenta"] = True
-    for c in cc.values():
+    for key, c in cc.items():
+        c["n_pagos"] = len(pagos_de[key])
         c["saldo"] = _round2(c["facturado"] - c["cobrado"])
         g = grupos.get(c["cuit"]) or {}
         c["group_id"] = g.get("group_id")
         c["grupo"] = g.get("group_name") or "Sin grupo"
 
-    sin_imputar = [_pay_out(p) for p in pays if not p["matched"]]  # refleja flag a_cuenta
+    sin_imputar = []
+    for p in pays:
+        libre = _libre(p)
+        if libre <= _CENT:
+            continue
+        out = _pay_out(p)
+        out["libre"] = libre
+        # Si ya se uso una parte, lo que queda es el cobro "clonado" por el
+        # remanente: se muestra como una linea aparte y se puede cruzar.
+        out["remanente"] = p["aplicado"] > _CENT
+        sin_imputar.append(out)
 
     cuentas = sorted(cc.values(), key=lambda c: -c["saldo"])
 
@@ -467,10 +679,31 @@ def reconcile(invoices: list[dict], payments: list[dict],
             "n_pagos": len(pays),
             "n_matches": len(matches),
             "total_facturado": _round2(sum(i["importe"] for i in invs)),
-            "total_cobrado": _round2(sum(p["importe"] for p in pays if p["matched"] or p.get("a_cuenta"))),
-            "total_pendiente": _round2(sum(i["importe"] for i in invs if not i["matched"])),
+            "total_cobrado": _round2(total_imputado + total_a_cuenta),
+            "total_pendiente": _round2(sum(_saldo(i) for i in invs if _saldo(i) > _CENT)),
         },
     }
+
+
+def _inv_guardada(g: dict, nombres: dict) -> dict:
+    """Factura de un cruce guardado que no esta en la pantalla."""
+    cuit = _norm_cuit(g.get("cuit"))
+    return {"key": g.get("inv_hash"), "cuit": cuit,
+            "cliente": nombres.get(cuit) or g.get("cliente") or "(sin nombre)",
+            "comp": g.get("comprobante") or "", "fecha": g.get("fecha_factura"),
+            "importe": _round2(g.get("importe_factura")),
+            "descripcion": g.get("descripcion") or "", "archivo": "",
+            "fuera_de_pantalla": True}
+
+
+def _pay_guardado(g: dict) -> dict:
+    """Cobro de un cruce guardado que no esta en la pantalla."""
+    return {"key": g.get("pay_hash"), "cuit": _norm_cuit(g.get("cuit_pagador")),
+            "originante": g.get("originante") or "(sin nombre)",
+            "banco": g.get("banco") or "-", "fecha": g.get("fecha_pago"),
+            "importe": _round2(g.get("importe_pago")),
+            "referencia": g.get("referencia") or "", "archivo": "",
+            "corregido": None, "a_cuenta": False, "fuera_de_pantalla": True}
 
 
 def _group_totals(cuentas: list[dict]) -> list[dict]:
@@ -500,19 +733,20 @@ def _date_ok(inv_dt, pay_dt) -> bool:
     return 0 <= delta <= _DATE_WINDOW_DAYS
 
 
-def _match(inv, p, confianza, motivo) -> dict:
-    return {"confianza": confianza, "motivo": motivo,
+def _match(inv, p, confianza, motivo, monto) -> dict:
+    return {"confianza": confianza, "motivo": motivo, "monto": _round2(monto),
+            "guardado": False, "match_id": None,
             "factura": _inv_out(inv), "pago": _pay_out(p)}
 
 
 def _inv_out(inv) -> dict:
     return {k: inv[k] for k in
-            ("cuit", "cliente", "comp", "fecha", "importe", "descripcion", "archivo")}
+            ("key", "cuit", "cliente", "comp", "fecha", "importe", "descripcion", "archivo")}
 
 
 def _pay_out(p) -> dict:
     out = {k: p[k] for k in
-           ("cuit", "originante", "banco", "fecha", "importe", "referencia", "archivo")}
+           ("key", "cuit", "originante", "banco", "fecha", "importe", "referencia", "archivo")}
     out["corregido"] = p.get("corregido")
     out["a_cuenta"] = p.get("a_cuenta", False)
     return out
@@ -729,16 +963,33 @@ class ReconciliationController:
             body = await request.json()
             invoices = body.get("invoices") or []
             payments = body.get("payments") or []
+            manuales = body.get("manuales") or []
+            descartados = body.get("descartados") or []
+            sacar = {int(x) for x in (body.get("sacar") or [])}
+            _completar_marcas(invoices, payments)
             try:
                 mgr = _get_manager()
-                nombres_db, grupos = {}, {}
+                nombres_db, grupos, guardados = {}, {}, []
                 if mgr.is_enabled():
                     try:
                         nombres_db = mgr.get_canonical_names()
                         grupos = mgr.get_cuit_group_map()
                     except Exception:  # noqa: BLE001
                         logger.exception("No se pudo leer clientes y grupos de la base")
-                result = reconcile(invoices, payments, nombres_db, grupos)
+                    # Lo que ya estaba conciliado se recupera tal cual,
+                    # en vez de volver a calcularlo.
+                    try:
+                        guardados = mgr.get_saved_matches(
+                            [_inv_key(x, i) for i, x in enumerate(invoices)],
+                            [_pay_key(x, j) for j, x in enumerate(payments)])
+                    except Exception:  # noqa: BLE001
+                        logger.exception("No se pudieron leer los cruces guardados")
+                    # Los guardados que se desarmaron en pantalla no cuentan
+                    # (en la base se sacan recien al guardar).
+                    guardados = [g for g in guardados
+                                 if g.get("match_id") not in sacar]
+                result = reconcile(invoices, payments, nombres_db, grupos,
+                                   manuales, guardados, descartados)
                 return JSONResponse({"status": "ok", **result})
             except Exception as e:  # noqa: BLE001
                 logger.exception("Error en conciliación")
@@ -826,6 +1077,29 @@ class ReconciliationController:
                 return JSONResponse({"status": "error", "message": str(e)},
                                     status_code=500)
 
+        @self.router.post("/save_docs")
+        async def save_docs(request: Request):
+            """
+            Guarda SOLO facturas y cobros, sin cruces. La pantalla lo llama al
+            pasar de un paso al otro, para que lo subido no se pierda si nadie
+            aprieta "Guardar en base". Los cruces se guardan solo con ese boton.
+            """
+            body = await request.json()
+            invoices = body.get("invoices") or []
+            payments = body.get("payments") or []
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                inv_ids, pay_ids = _persist_docs(mgr, invoices, payments)
+                return JSONResponse({"status": "ok",
+                                     "n_facturas": len(inv_ids),
+                                     "n_pagos": len(pay_ids)})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudieron guardar facturas y cobros")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
         @self.router.post("/save")
         async def save(request: Request):
             """
@@ -844,57 +1118,40 @@ class ReconciliationController:
                                      "message": "Sin DATABASE_URL no se puede guardar"},
                                     status_code=400)
             try:
-                nombres = canonical_names(invoices, mgr.get_canonical_names())
+                # Cruces guardados que se desarmaron en pantalla, uno por uno,
+                # cada uno elegido a mano con su ✕. Es lo unico que se saca.
+                sacar = [int(x) for x in (body.get("sacar") or [])]
+                for match_id in sacar:
+                    mgr.delete_match(match_id)
 
-                # Facturas: la clave para volver a encontrarlas es la huella
-                inv_ids = {}
-                for inv in invoices:
-                    cuit = _norm_cuit(inv.get("cuit_cliente"))
-                    comp = f"{inv.get('punto_venta', '')}-{inv.get('comp_nro', '')}"
-                    inv_id = mgr.persist_invoice({
-                        "cuit_cliente": cuit,
-                        "razon_social_cliente": nombres.get(cuit)
-                                                or inv.get("razon_social_cliente"),
-                        "cuit_emisor": _norm_cuit(inv.get("cuit_emisor")),
-                        "comprobante": comp,
-                        "fecha_emision_iso": _iso_date(inv.get("fecha_emision")),
-                        "importe_total": _round2(inv.get("importe_total")),
-                        "descripcion": inv.get("descripcion"),
-                        "archivo": inv.get("_archivo"),
-                        "file_hash": inv.get("_hash"),
-                        "raw": inv,
-                    })
-                    inv_ids[comp] = inv_id
-
-                # Cobros: la clave es la huella del comprobante
-                pay_ids = {}
-                for pay in payments:
-                    pay_id = mgr.persist_payment({
-                        "cuit_originante": _norm_cuit(pay.get("cuit_originante")),
-                        "originante": pay.get("originante"),
-                        "fecha_iso": _iso_date(pay.get("fecha")),
-                        "importe": _round2(pay.get("importe")),
-                        "banco": pay.get("banco") or pay.get("banco_destino"),
-                        "referencia": pay.get("referencia") or pay.get("concepto"),
-                        "archivo": pay.get("_archivo"),
-                        "file_hash": pay.get("_hash"),
-                        "raw": pay,
-                    })
-                    pay_ids[pay.get("_archivo")] = pay_id
+                # Facturas y cobros (si ya se guardaron al pasar de paso, la
+                # base devuelve los mismos, sin duplicar)
+                inv_ids, pay_ids = _persist_docs(mgr, invoices, payments)
 
                 # Cruces
-                # REGLA: guardar NUNCA borra nada. Un cruce que ya estaba se
-                # pisa solo si vuelve a salir el MISMO par factura-cobro; los
-                # demas quedan intactos. Para sacar un cruce hay que borrarlo
-                # a mano, de a uno, desde la pantalla de Registros.
-                n_matches = 0
+                # REGLA: guardar no borra nada por su cuenta. Solo saca los
+                # cruces que la persona desarmo a mano, de a uno, con su ✕ en
+                # pantalla (lista "sacar", arriba). Un cruce que ya estaba se
+                # pisa solo si vuelve a salir el MISMO par factura-cobro.
+                # Se guarda lo imputado en cada cruce (monto), que puede ser
+                # una parte del cobro cuando un cobro paga varias facturas.
+                # Si el mismo par factura-cobro ya tenia un cruce guardado y se
+                # le suma uno nuevo, se guarda el total, para no perder lo que
+                # ya estaba imputado.
+                por_par, nuevos = {}, {}
                 for m in result.get("matches") or []:
-                    comp = m["factura"]["comp"]
-                    archivo_pago = m["pago"].get("archivo")
-                    if comp in inv_ids and archivo_pago in pay_ids:
-                        mgr.persist_match(inv_ids[comp], pay_ids[archivo_pago],
-                                          _round2(m["pago"]["importe"]),
-                                          m["confianza"], "zym")
+                    par = (m["factura"].get("key"), m["pago"].get("key"))
+                    monto = _round2(m.get("monto") or m["pago"]["importe"])
+                    por_par[par] = _round2(por_par.get(par, 0.0) + monto)
+                    if not m.get("guardado"):
+                        nuevos[par] = m["confianza"]
+
+                n_matches = 0
+                for (k_inv, k_pay), confianza in nuevos.items():
+                    if k_inv in inv_ids and k_pay in pay_ids:
+                        mgr.persist_match(inv_ids[k_inv], pay_ids[k_pay],
+                                          por_par[(k_inv, k_pay)], confianza,
+                                          "manual" if confianza == "manual" else "zym")
                         n_matches += 1
 
                 return JSONResponse({
@@ -902,6 +1159,7 @@ class ReconciliationController:
                     "n_facturas": len(inv_ids),
                     "n_pagos": len(pay_ids),
                     "n_matches": n_matches,
+                    "n_sacados": len(sacar),
                 })
             except Exception as e:  # noqa: BLE001
                 logger.exception("Error guardando en la base")

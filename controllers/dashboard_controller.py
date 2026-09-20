@@ -17,6 +17,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from common.util.std_in_out.root_locator import RootLocator
 from common.util.templates import templates
@@ -118,7 +119,9 @@ class DashboardController:
             except Exception:  # pragma: no cover
                 ArcaUnavailableError = ArcaAuthError = ArcaConfigError = ()  # type: ignore
 
-            client, err = _get_arca_client()
+            # La consulta a ARCA corre aparte: mientras espera, el resto de
+            # las pantallas sigue respondiendo al instante.
+            client, err = await run_in_threadpool(_get_arca_client)
             if err:
                 return JSONResponse({
                     "status":   "not_configured",
@@ -128,7 +131,7 @@ class DashboardController:
                 })
 
             try:
-                invoices = client.get_recent_invoices(limit=limit)
+                invoices = await run_in_threadpool(client.get_recent_invoices, limit=limit)
                 from common.config.settings import get_settings
                 s = get_settings()
                 return JSONResponse({

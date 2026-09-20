@@ -109,8 +109,8 @@
         </span>
       </label>
       <button class="btn btn-ghost" onclick="traerDeLaBase()"
-              title="Suma a esta pantalla las facturas y los cobros guardados en ese rango de fechas">↓ Traer</button>
-      <span class="rc-fromdb-hint">Arranca mostrando lo de hoy. Cambiá las fechas para ver lo de antes. Solo lee: no borra ni cambia nada.</span>
+              title="Suma a esta pantalla las facturas y los cobros guardados en ese rango de fechas, con lo que ya estaba conciliado">↓ Traer</button>
+      <span class="rc-fromdb-hint">Arranca mostrando el último año. Cambiá las fechas para ver otro período. Trae también lo ya conciliado. Solo lee: no borra ni cambia nada.</span>
     </div>
 
     <p class="rc-hint" id="rcHint"></p>
@@ -217,20 +217,24 @@
         <div class="rc-table-wrap">
           <table class="rc-table">
             <thead>
-              <tr><th>Estado</th><th>Factura</th><th>Cliente</th><th class="num">Importe</th>
-                  <th>Pago</th><th>Motivo</th></tr>
+              <tr><th>Estado</th><th>Factura</th><th>Cliente</th><th class="num">Imputado</th>
+                  <th>Pago</th><th></th></tr>
             </thead>
             <tbody id="matchBody"></tbody>
           </table>
         </div>
+
+        <!-- Cruce a mano -->
+        <p class="rc-manual-help">✋ <b>Cruce a mano:</b> marcá una o varias facturas pendientes y un pago sin imputar, y apretá “Cruzar”.
+           Si el pago sobra, lo que sobra queda como un pago aparte para cruzarlo después.</p>
 
         <!-- Pendientes -->
         <h2 class="rc-h2">Facturas pendientes de cobro</h2>
         <div class="rc-table-wrap">
           <table class="rc-table">
             <thead>
-              <tr><th>Comprobante</th><th>Fecha</th><th>Cliente</th>
-                  <th class="num">Importe</th><th>Descripción</th></tr>
+              <tr><th></th><th>Comprobante</th><th>Fecha</th><th>Cliente</th>
+                  <th class="num">Saldo</th><th>Descripción</th></tr>
             </thead>
             <tbody id="pendBody"></tbody>
           </table>
@@ -241,14 +245,25 @@
         <div class="rc-table-wrap">
           <table class="rc-table">
             <thead>
-              <tr><th>Banco</th><th>Fecha</th><th>Originante</th>
-                  <th class="num">Importe</th><th>Estado</th></tr>
+              <tr><th></th><th>Banco</th><th>Fecha</th><th>Originante</th>
+                  <th class="num">Libre</th><th>Estado</th></tr>
             </thead>
             <tbody id="unassBody"></tbody>
           </table>
         </div>
 
+        <!-- Barra del cruce a mano: aparece al elegir facturas o un pago -->
+        <div class="rc-manual-bar" id="rcManualBar" hidden>
+          <div class="rc-manual-info" id="rcManualInfo"></div>
+          <div class="rc-manual-actions">
+            <button class="btn btn-ghost" onclick="limpiarSeleccion()">Limpiar</button>
+            <button class="btn btn-primary" id="btnCruzar" onclick="cruzarManual()" disabled>↔ Cruzar</button>
+          </div>
+        </div>
+
         <div class="rc-panel-foot">
+          <button class="btn btn-ghost rc-btn-cancelar" onclick="cancelarCambios()"
+                  title="Anula todas las acciones hechas en esta pantalla que no se guardaron">✕ Cancelar cambios</button>
           <button class="btn btn-ghost" onclick="exportCSV()">⬇ Exportar CSV</button>
           <button class="btn btn-primary rc-btn-save" id="btnSaveDb" onclick="saveToDb()" hidden
                   title="Guarda facturas, cobros y cruces en la base. Las facturas cubiertas quedan como pagadas y la próxima vez que subas ese PDF el sistema te avisa">💾 Guardar en base</button>

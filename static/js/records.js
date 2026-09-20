@@ -132,7 +132,10 @@ function estado(e) {
 }
 
 function confianza(c) {
-  const cls = c === 'alta' ? 'alta' : (c === 'media' ? 'media' : 'revisar');
+  const cls = c === 'alta' ? 'alta'
+            : c === 'media' ? 'media'
+            : c === 'manual' ? 'manual'
+            : 'revisar';
   return `<span class="rc-badge ${cls}">${esc(c)}</span>`;
 }
 

@@ -576,3 +576,42 @@ class ReconciliationManager:
                     "_hash":           (r[8] or "").strip(),
                     "_de_la_base":     True,
                 } for r in cur.fetchall()]
+
+    # ── Cruces ya guardados de lo que esta en pantalla ───────────────────────
+
+    def get_saved_matches(self, invoice_hashes: list[str],
+                          payment_hashes: list[str]) -> list[dict]:
+        """
+        Los cruces ya guardados de las facturas y cobros que estan en la
+        pantalla de Conciliacion. Es lo que permite recuperar lo conciliado
+        sin volver a calcularlo. Solo lee.
+        """
+        if not self.is_enabled():
+            return []
+        inv = [h for h in (invoice_hashes or []) if h]
+        pay = [h for h in (payment_hashes or []) if h]
+        if not inv and not pay:
+            return []
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM get_saved_matches(%s::TEXT[], %s::TEXT[])",
+                            (inv, pay))
+                return [{
+                    "match_id":       r[0],
+                    "monto":          float(r[1] or 0),
+                    "confianza":      r[2],
+                    "inv_hash":       (r[3] or "").strip(),
+                    "comprobante":    r[4],
+                    "cliente":        r[5],
+                    "cuit":           r[6],
+                    "fecha_factura":  r[7].strftime("%d/%m/%Y") if r[7] else None,
+                    "importe_factura": float(r[8] or 0),
+                    "descripcion":    r[9],
+                    "pay_hash":       (r[10] or "").strip(),
+                    "originante":     r[11],
+                    "cuit_pagador":   r[12],
+                    "fecha_pago":     r[13].strftime("%d/%m/%Y") if r[13] else None,
+                    "importe_pago":   float(r[14] or 0),
+                    "banco":          r[15],
+                    "referencia":     r[16],
+                } for r in cur.fetchall()]

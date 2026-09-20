@@ -18,6 +18,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
 from common.util.std_in_out.root_locator import RootLocator
 from common.util.templates import templates
 
@@ -99,7 +100,9 @@ class InvoiceHistoryController:
             from_date = from_date or params.get("from")
             to_date   = to_date   or params.get("to")
 
-            client, err = _get_arca_client()
+            # La consulta a ARCA corre aparte: mientras espera, el resto de
+            # las pantallas sigue respondiendo al instante.
+            client, err = await run_in_threadpool(_get_arca_client)
             if err:
                 return JSONResponse(
                     {"status": "not_configured", "message": err, "invoices": []},
@@ -107,7 +110,8 @@ class InvoiceHistoryController:
                 )
 
             try:
-                invoices = client.get_invoices(
+                invoices = await run_in_threadpool(
+                    client.get_invoices,
                     from_date    = from_date,
                     to_date      = to_date,
                     sales_points = [1, 2],   # extend if more sales points are added

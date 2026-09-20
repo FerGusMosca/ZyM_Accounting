@@ -844,3 +844,66 @@ $$;
 -- pantalla, con delete_match.
 -- ============================================================
 DROP FUNCTION IF EXISTS clear_matches(INT[], INT[]);
+
+
+-- ============================================================
+-- get_saved_matches
+-- Los cruces YA GUARDADOS de las facturas y los cobros que estan
+-- en la pantalla de Conciliacion. Se buscan por la huella del
+-- archivo, que es lo que identifica a cada uno en pantalla.
+-- Trae los datos de las dos puntas, porque una de ellas puede no
+-- estar en pantalla (por ejemplo, un cobro de otra fecha).
+-- Solo lee: no cambia nada.
+-- ============================================================
+DROP FUNCTION IF EXISTS get_saved_matches(TEXT[], TEXT[]);
+
+CREATE FUNCTION get_saved_matches(
+    p_invoice_hashes TEXT[],
+    p_payment_hashes TEXT[]
+)
+RETURNS TABLE (
+    id             INT,
+    amount         NUMERIC,
+    confidence     VARCHAR,
+    invoice_hash   TEXT,
+    invoice_number VARCHAR,
+    client_name    VARCHAR,
+    client_cuit    VARCHAR,
+    issue_date     DATE,
+    invoice_amount NUMERIC,
+    description    TEXT,
+    payment_hash   TEXT,
+    payer_name     VARCHAR,
+    payer_cuit     VARCHAR,
+    payment_date   DATE,
+    payment_amount NUMERIC,
+    bank           VARCHAR,
+    reference      VARCHAR
+)
+LANGUAGE sql
+AS $$
+    SELECT  ip.id,
+            ip.amount,
+            ip.confidence,
+            TRIM(i.file_hash),
+            i.invoice_number,
+            c.name,
+            c.cuit,
+            i.issue_date,
+            i.amount,
+            i.description,
+            TRIM(p.file_hash),
+            p.payer_name,
+            p.payer_cuit,
+            p.payment_date,
+            p.amount,
+            p.bank,
+            p.reference
+    FROM invoice_payments ip
+    JOIN invoices i ON i.id = ip.invoice_id
+    JOIN clients  c ON c.id = i.client_id
+    JOIN payments p ON p.id = ip.payment_id
+    WHERE TRIM(i.file_hash) = ANY (COALESCE(p_invoice_hashes, ARRAY[]::TEXT[]))
+       OR TRIM(p.file_hash) = ANY (COALESCE(p_payment_hashes, ARRAY[]::TEXT[]))
+    ORDER BY ip.id;
+$$;

@@ -37,7 +37,9 @@ import socket
 import ssl
 import subprocess
 import tempfile
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -65,6 +67,17 @@ _TOKEN_CACHE_DIR = Path(__file__).parent / ".token_cache"
 _WSAA_RETRY_ATTEMPTS = 3
 _WSAA_RETRY_BACKOFF  = 1.2   # seconds; doubled each attempt (1.2s, 2.4s, 4.8s)
 _SOAP_TIMEOUT_SEC    = 30
+
+# ── Consulta de facturas ya emitidas ──────────────────────────────────────────
+# ARCA no tiene una consulta por fecha: hay que pedir las facturas de a una.
+# Para que las pantallas no tarden:
+#   - se piden varias a la vez, en paralelo
+#   - una factura ya emitida no cambia nunca, asi que se guarda en memoria y la
+#     proxima vez no se vuelve a pedir
+_WSFE_PARALLEL      = 6     # consultas simultaneas a ARCA
+_WSFE_BLOCK         = 12    # facturas que se piden por tanda al ir hacia atras
+_INVOICE_CACHE: dict = {}   # (cuit, homo, pv, numero) -> factura
+_INVOICE_CACHE_LOCK = threading.Lock()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -531,15 +544,43 @@ def wsfe_query_invoices_range(
     """
     Fetch a range of invoices for one sales point.
     Silently skips numbers that return errors (gaps are normal).
+
+    Las consultas salen en paralelo y lo ya consultado sale de la memoria,
+    sin volver a llamar a ARCA.
     """
-    invoices = []
-    for n in range(from_number, to_number + 1):
+    numeros = list(range(from_number, to_number + 1))
+    if not numeros:
+        return []
+
+    def _una(n: int) -> Optional[dict]:
+        clave = (cuit, homo, punto_venta, n)
+        with _INVOICE_CACHE_LOCK:
+            guardada = _INVOICE_CACHE.get(clave)
+        if guardada is not None:
+            return dict(guardada)
         try:
             inv = wsfe_query_invoice(token, sign, cuit, punto_venta, n, homo)
-            invoices.append(inv)
         except Exception as exc:
             logger.debug("WSFE: skip PV=%s NRO=%s — %s", punto_venta, n, exc)
-    return invoices
+            return None
+        # Solo se guarda en memoria lo que ARCA dio por aprobado
+        if inv.get("resultado") == "A" and inv.get("fecha_emision"):
+            with _INVOICE_CACHE_LOCK:
+                _INVOICE_CACHE[clave] = dict(inv)
+        return inv
+
+    with ThreadPoolExecutor(max_workers=min(_WSFE_PARALLEL, len(numeros))) as pool:
+        resultados = list(pool.map(_una, numeros))
+    return [r for r in resultados if r is not None]
+
+
+def _fecha_de(inv: dict):
+    """dd/mm/aaaa -> date, o None si no se puede leer."""
+    try:
+        d, m, y = (inv.get("fecha_emision") or "").split("/")
+        return datetime(int(y), int(m), int(d)).date()
+    except Exception:
+        return None
 
 
 def wsfe_request_cae(
@@ -760,7 +801,8 @@ class ARCAClient:
 
         Strategy:
           1. For each sales point, get the last invoice number.
-          2. Fetch every invoice from 1 → last via FECompConsultar.
+          2. Walk backwards from the last one, in parallel blocks, and stop at
+             the first block that reaches a date before from_date.
           3. Filter client-side by date (AFIP's FECompConsultar has no date param).
 
         The AFIP response will NOT contain razon_social_cliente or descripcion
@@ -783,19 +825,29 @@ class ARCAClient:
                 if last == 0:
                     logger.info("WSFE: PV=%s has no invoices yet", pv)
                     continue
-                logger.info("WSFE: fetching PV=%s invoices 1..%s", pv, last)
-                invoices = wsfe_query_invoices_range(
-                    t["token"], t["sign"], self.cuit, pv, 1, last, self.homo
-                )
-                for inv in invoices:
-                    fecha_str = inv.get("fecha_emision", "")
-                    try:
-                        d, m, y  = fecha_str.split("/")
-                        inv_date = datetime(int(y), int(m), int(d)).date()
-                        if date_from <= inv_date <= date_to:
+                # Los numeros van en orden de fecha: se recorre desde la ultima
+                # factura hacia atras, de a tandas, y se corta apenas aparece
+                # una anterior a la fecha Desde. Antes se pedian TODAS, desde
+                # la numero 1, y por eso la pantalla tardaba cada vez mas.
+                logger.info("WSFE: fetching PV=%s backwards from %s", pv, last)
+                hasta_n = last
+                while hasta_n >= 1:
+                    desde_n = max(1, hasta_n - _WSFE_BLOCK + 1)
+                    tanda = wsfe_query_invoices_range(
+                        t["token"], t["sign"], self.cuit, pv, desde_n, hasta_n, self.homo
+                    )
+                    alguna_anterior = False
+                    for inv in tanda:
+                        inv_date = _fecha_de(inv)
+                        if inv_date is None:
+                            all_invoices.append(inv)   # include if date is unparseable
+                        elif inv_date < date_from:
+                            alguna_anterior = True
+                        elif inv_date <= date_to:
                             all_invoices.append(inv)
-                    except Exception:
-                        all_invoices.append(inv)   # include if date is unparseable
+                    if alguna_anterior:
+                        break
+                    hasta_n = desde_n - 1
             except Exception as exc:
                 logger.warning("WSFE: error fetching invoices for PV=%s: %s", pv, exc)
 
