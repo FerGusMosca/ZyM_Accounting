@@ -747,6 +747,36 @@ $$;
 
 
 -- ============================================================
+-- delete_invoice
+-- Baja de una factura. Solo se borra si NO tiene cruces: si
+-- tiene aunque sea uno, corta y avisa, asi nadie se lleva por
+-- delante una imputacion sin darse cuenta. Los cruces se sacan
+-- de a uno desde la pantalla, con delete_match.
+-- ============================================================
+DROP FUNCTION IF EXISTS delete_invoice(INT);
+
+CREATE FUNCTION delete_invoice(p_invoice_id INT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_cruces INT;
+BEGIN
+    SELECT COUNT(*) INTO v_cruces
+    FROM invoice_payments WHERE invoice_id = p_invoice_id;
+
+    IF v_cruces > 0 THEN
+        RAISE EXCEPTION
+            'La factura tiene % cruce(s): hay que sacarlos antes de borrarla',
+            v_cruces;
+    END IF;
+
+    DELETE FROM invoices WHERE id = p_invoice_id;
+END;
+$$;
+
+
+-- ============================================================
 -- set_payment_file
 -- Le engancha el comprobante a un cobro que se habia cargado a
 -- mano. No pisa nada mas del cobro.

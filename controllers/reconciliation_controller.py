@@ -312,7 +312,7 @@ def _persist_docs(mgr: ReconciliationManager, invoices: list[dict],
     inv_ids = {}
     for i, inv in enumerate(invoices):
         cuit = _norm_cuit(inv.get("cuit_cliente"))
-        comp = f"{inv.get('punto_venta', '')}-{inv.get('comp_nro', '')}"
+        comp = _comprobante(inv)
         inv_ids[_inv_key(inv, i)] = mgr.persist_invoice({
             "cuit_cliente": cuit,
             "razon_social_cliente": nombres.get(cuit)
@@ -347,6 +347,29 @@ def _persist_docs(mgr: ReconciliationManager, invoices: list[dict],
 
 def _norm_cuit(cuit) -> str:
     return re.sub(r"\D", "", str(cuit or ""))
+
+
+def _parte_comp(v) -> str:
+    """
+    Un pedazo del numero de comprobante, limpio.
+
+    Cuando el documento que se subio no es una factura (un estado de cuenta,
+    por ejemplo), el extractor no encuentra ni punto de venta ni numero y
+    devuelve vacio. Armar el texto de cualquier manera dejaba el comprobante
+    escrito como "None-None", que despues quedaba guardado asi y volvia a la
+    pantalla como si fuera una factura de verdad.
+    """
+    t = str(v if v is not None else "").strip()
+    return "" if t.lower() in ("", "none", "null", "nan") else t
+
+
+def _comprobante(inv: dict) -> str:
+    """Numero de comprobante de la factura, o vacio si no lo tiene."""
+    pv  = _parte_comp(inv.get("punto_venta"))
+    nro = _parte_comp(inv.get("comp_nro"))
+    if not pv and not nro:
+        return ""
+    return f"{pv}-{nro}"
 
 
 def _parse_date(s: str) -> Optional[datetime]:
@@ -853,6 +876,43 @@ class ReconciliationController:
                 return JSONResponse({"status": "error", "message": str(e)},
                                     status_code=500)
 
+        @self.router.post("/registros/invoice_delete")
+        async def registros_invoice_delete(request: Request):
+            """
+            Baja de una factura guardada.
+
+            Solo si no tiene cruces. Si los tiene, no se borra nada y se
+            avisa cuantos hay: primero se sacan de a uno desde la pantalla
+            de cruces, como dice la regla de siempre.
+            """
+            body = await request.json()
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                invoice_id = int(body.get("invoice_id"))
+            except (TypeError, ValueError):
+                return JSONResponse({"status": "error",
+                                     "message": "Falta la factura"},
+                                    status_code=400)
+            try:
+                cruces = [m for m in mgr.list_matches()
+                          if m.get("invoice_id") == invoice_id]
+                if cruces:
+                    return JSONResponse({
+                        "status": "con_cruces",
+                        "n_cruces": len(cruces),
+                        "message": (f"La factura tiene {len(cruces)} cruce(s). "
+                                    f"Hay que sacarlos primero, en la solapa de "
+                                    f"cruces, y despues se puede borrar."),
+                    }, status_code=409)
+                mgr.delete_invoice(invoice_id)
+                return JSONResponse({"status": "ok"})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudo borrar la factura")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
         @self.router.get("/registros/clients")
         async def registros_clients():
             """Clientes con su nombre actual."""
@@ -1232,11 +1292,11 @@ class ReconciliationController:
                 # la factura quedaba cargada dos veces, una como pendiente y
                 # otra como cancelada.
                 if es_factura and mgr.is_enabled():
-                    numero = (f"{data.get('punto_venta', '')}-"
-                              f"{data.get('comp_nro', '')}")
+                    numero = _comprobante(data)
                     try:
-                        mismo_numero = mgr.find_invoice_by_number(
+                        mismo_numero = (mgr.find_invoice_by_number(
                             data.get("cuit_emisor") or "", numero)
+                            if numero else None)
                     except Exception:  # noqa: BLE001
                         logger.exception(
                             "No se pudo consultar el numero de comprobante")

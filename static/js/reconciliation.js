@@ -303,10 +303,14 @@ async function aceptarDoc(d, target, isInv, errEl) {
   return true;
 }
 
-/** Numero de comprobante de una factura: "00002-00000222". */
+/** Numero de comprobante de una factura: "00002-00000222", o vacio. */
 function numeroDeFactura(inv) {
-  const pv  = String(inv.punto_venta || '').trim();
-  const nro = String(inv.comp_nro || '').trim();
+  const limpio = v => {
+    const t = String(v === null || v === undefined ? '' : v).trim();
+    return ['', 'none', 'null', 'nan'].includes(t.toLowerCase()) ? '' : t;
+  };
+  const pv  = limpio(inv.punto_venta);
+  const nro = limpio(inv.comp_nro);
   if (!pv && !nro) return '';
   return `${pv}-${nro}`;
 }
@@ -846,7 +850,7 @@ function renderInvTable() {
   t.hidden = !invoices.length;
   b.innerHTML = facturasOrdenadas().map(({ inv, i }) => `
     <tr class="${inv._duplicado ? 'dupe' : ''}">
-      <td class="mono">${esc(inv.punto_venta)}-${esc(inv.comp_nro)}${inv._duplicado ? ' <span class="rc-badge media" title="Ya estaba registrada — la cargaste igual">repetida</span>' : ''}</td>
+      <td class="mono">${esc(numeroDeFactura(inv))}${inv._duplicado ? ' <span class="rc-badge media" title="Ya estaba registrada — la cargaste igual">repetida</span>' : ''}</td>
       <td class="mono">${esc(inv.fecha_emision)}</td>
       <td>${esc(inv.razon_social_cliente)}</td>
       <td class="mono">${esc(inv.cuit_cliente)}</td>

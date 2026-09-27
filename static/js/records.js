@@ -77,7 +77,9 @@ function renderAll() {
       <td class="num">${money(f.imputado)}</td>
       <td>${estado(f.estado)}</td>
       <td>${archivo(f)}</td>
-    </tr>`).join('') : vacio(8, 'No hay facturas guardadas.');
+      <td><button class="rc-del" title="Borrar esta factura de la base"
+                  onclick="event.stopPropagation(); borrarFactura(${f.id})">✕</button></td>
+    </tr>`).join('') : vacio(9, 'No hay facturas guardadas.');
 
   document.getElementById('payBody').innerHTML = ps.length ? ps.map(p => `
     <tr class="rg-row" onclick="verPago(${p.id})">
@@ -288,6 +290,41 @@ async function guardarPagoManual() {
   } catch (e) {
     mostrarError(err, `No se pudo guardar: ${e.message}`);
   }
+}
+
+async function borrarFactura(id) {
+  const f = facturas.find(x => x.id === id);
+  if (!f) return;
+
+  // Si ya tiene plata imputada, ni se pregunta: primero van los cruces.
+  const cruces = cruces_de(id);
+  if (cruces.length) {
+    alert(`Esta factura tiene ${cruces.length} cruce(s) con cobros.\n\n` +
+          `Primero hay que sacarlos en la solapa de cruces, y después se puede borrar.`);
+    return;
+  }
+
+  const nombre = f.comprobante ? `la factura ${f.comprobante}` : 'esta factura';
+  if (!confirm(`¿Borrar ${nombre} de la base?\n\nNo se puede deshacer.`)) return;
+
+  try {
+    const res  = await fetch('/reconciliation/registros/invoice_delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoice_id: id }),
+    });
+    const data = await res.json();
+    if (data.status === 'con_cruces') { alert(data.message); return; }
+    if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+    await cargar();
+  } catch (e) {
+    alert(`No se pudo borrar: ${e.message}`);
+  }
+}
+
+/** Los cruces guardados de esa factura. */
+function cruces_de(invoiceId) {
+  return cruces.filter(c => c.invoice_id === invoiceId);
 }
 
 async function borrarPago(id) {

@@ -474,6 +474,16 @@ class ReconciliationManager:
                 conn.commit()
                 return payment_id
 
+    def delete_invoice(self, invoice_id: int) -> None:
+        """
+        Baja de una factura. La base corta con un error si tiene cruces:
+        primero hay que sacarlos de a uno.
+        """
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT delete_invoice(%s::INT)", (invoice_id,))
+                conn.commit()
+
     def delete_payment(self, payment_id: int) -> None:
         """Baja del cobro. Las facturas que cubria vuelven a quedar pendientes."""
         with self._connect() as conn:
