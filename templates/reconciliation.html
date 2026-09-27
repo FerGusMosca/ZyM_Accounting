@@ -135,11 +135,28 @@
         </div>
       </div>
       <div id="invErrors"></div>
+
+      <!-- ── Totales facturados por mes ── -->
+      <div class="rc-mensual" id="rcMensual" hidden>
+        <div class="rc-mensual-head" onclick="toggleMensual()">
+          <span class="rc-mensual-title">Facturado por mes</span>
+          <span class="rc-mensual-sub" id="rcMensualSub"></span>
+          <span class="rc-mensual-toggle" id="rcMensualToggle">▾</span>
+        </div>
+        <div class="rc-mensual-body" id="rcMensualBody"></div>
+      </div>
+
       <div class="rc-table-wrap">
         <table class="rc-table" id="invTable" hidden>
           <thead>
             <tr>
-              <th>Comprobante</th><th>Fecha</th><th>Cliente</th><th>CUIT</th>
+              <th class="rc-sortable" onclick="ordenarInv('comp')"
+                  title="Clic para ordenar por número de comprobante">Comprobante <span class="rc-sort" id="rcSortComp"></span></th>
+              <th class="rc-sortable" onclick="ordenarInv('fecha')"
+                  title="Clic para ordenar por fecha">Fecha <span class="rc-sort" id="rcSortFecha"></span></th>
+              <th class="rc-sortable" onclick="ordenarInv('cliente')"
+                  title="Clic para ordenar por cliente">Cliente <span class="rc-sort" id="rcSortCliente"></span></th>
+              <th>CUIT</th>
               <th class="num">Importe</th><th>Descripción</th><th></th>
             </tr>
           </thead>

@@ -1226,6 +1226,34 @@ class ReconciliationController:
                 data["_archivo"] = f.filename
                 data["_hash"] = huella
                 data["_duplicado"] = False
+
+                # La misma factura puede venir en otro archivo: el archivo es
+                # distinto, pero el numero de comprobante es el mismo. Sin esto
+                # la factura quedaba cargada dos veces, una como pendiente y
+                # otra como cancelada.
+                if es_factura and mgr.is_enabled():
+                    numero = (f"{data.get('punto_venta', '')}-"
+                              f"{data.get('comp_nro', '')}")
+                    try:
+                        mismo_numero = mgr.find_invoice_by_number(
+                            data.get("cuit_emisor") or "", numero)
+                    except Exception:  # noqa: BLE001
+                        logger.exception(
+                            "No se pudo consultar el numero de comprobante")
+                        mismo_numero = None
+
+                    if mismo_numero:
+                        aviso = (f"La factura {numero} ya está registrada "
+                                 f"(el archivo es otro)")
+                        if mismo_numero.get("_estado") == "paid":
+                            aviso = (f"La factura {numero} ya está registrada "
+                                     f"como PAGADA (el archivo es otro)")
+                        data["_id_bd"] = mismo_numero.get("_id_bd")
+                        data["_client_id"] = mismo_numero.get("_client_id")
+                        data["_estado"] = mismo_numero.get("_estado")
+                        data["_duplicado"] = True
+                        data["_aviso"] = aviso
+
                 results.append(data)
             except Exception as e:  # noqa: BLE001
                 logger.exception("Error extrayendo %s", f.filename)

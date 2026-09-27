@@ -17,6 +17,13 @@
 //      guardado se saca de a uno, como dice la regla.
 //   2. Facturas y pagos se guardan solos al pasar de paso. "Guardar en base"
 //      guarda los cruces. Si se cierra con cruces sin guardar, avisa.
+//
+// Tanda 6 (pedidos del 25/09/2026):
+//   1. La grilla de facturas emitidas se ordena por comprobante, fecha o
+//      cliente, para arriba o para abajo, haciendo clic en el titulo.
+//   2. La misma factura no se sube dos veces: ahora se mira tambien el
+//      numero de comprobante, no solo el archivo.
+//   3. Bloque de facturado por mes, con el mes en curso sumandose solo.
 
 // ── State ──────────────────────────────────────────────────────────
 // Un comprobante puede venir como PDF o como foto sacada del celular.
@@ -36,6 +43,10 @@ let dbEnabled = false;      // hay base configurada y respondiendo
 let agrupar = false;        // vista agrupada de la cuenta corriente
 let grupos = [];            // [{id, nombre}]
 let asignaciones = {};      // cuit -> {group_id, group_name}
+
+// Tanda 6 — pedidos del 25/09/2026
+let ordenInv = { campo: null, asc: true };   // orden de la grilla de facturas
+let mensualAbierto = true;                   // bloque de facturado por mes
 
 const SS_KEY = 'zym_reconciliation_v1';
 
@@ -225,17 +236,48 @@ async function uploadFiles(fileList, kind) {
  * Decide si el documento se carga o se descarta.
  *
  * Hay dos formas de que esté repetido:
- *   - ya se subió en esta misma pantalla (se compara la huella del archivo)
+ *   - ya se subió en esta misma pantalla (se compara la huella del archivo,
+ *     y en las facturas también el número de comprobante)
  *   - ya está guardado en la base, quizá de otro día (lo avisa el backend)
- * En los dos casos se pregunta antes de cargarlo, nunca se bloquea solo.
+ *
+ * En las FACTURAS la repetida no entra: no hay "Cargar igual". Si entraba,
+ * la misma factura se contaba dos veces en los totales y en la cuenta
+ * corriente, y se le podían imputar dos pagos, mientras que en la base
+ * seguía habiendo una sola. Si ya está en la pantalla, se avisa y no se
+ * carga. Si está guardada pero no está en la pantalla, entra: es la misma
+ * factura guardada, no una copia nueva.
+ *
+ * En los COBROS se sigue preguntando: dos transferencias distintas pueden
+ * tener el mismo comprobante y ahí sí hace falta cargar las dos.
  */
 async function aceptarDoc(d, target, isInv, errEl) {
-  const queEs = isInv ? 'factura' : 'comprobante';
 
+  // ── Facturas: repetida no entra ──────────────────────────────────
+  if (isInv) {
+    const nro = numeroDeFactura(d);
+    const porArchivo = d._hash && target.some(x => x._hash === d._hash);
+    const porNumero  = nro && target.some(x => numeroDeFactura(x) === nro);
+
+    if (porArchivo || porNumero) {
+      errEl.innerHTML += `<div class="rc-dupe">↩️ ${esc(d._archivo)}: la factura ` +
+        `${esc(nro) || 'de ese archivo'} ya está en la pantalla, no se cargó de nuevo.</div>`;
+      return false;
+    }
+
+    if (d._duplicado) {
+      errEl.innerHTML += `<div class="rc-dupe">ℹ️ ${esc(d._archivo)}: ` +
+        `${esc(d._aviso)}. Se muestra la que ya está guardada, no se crea otra.</div>`;
+      return true;
+    }
+
+    return true;
+  }
+
+  // ── Cobros: se avisa y decide la persona ─────────────────────────
   const yaEnPantalla = d._hash && target.some(x => x._hash === d._hash);
   if (yaEnPantalla) {
     const seguir = await ask({
-      titulo: `Este ${queEs} ya lo subiste`,
+      titulo: 'Este comprobante ya lo subiste',
       mensaje: `Ya está en esta pantalla:\n\n<b>${esc(d._archivo)}</b>\n\n` +
                `Si lo cargás igual va a aparecer dos veces.`,
       cancel: 'No cargar',
@@ -247,11 +289,9 @@ async function aceptarDoc(d, target, isInv, errEl) {
   }
 
   if (d._duplicado) {
-    const pagada = /PAGADA/.test(d._aviso || '');
     const seguir = await ask({
-      titulo: pagada ? `Esta ${queEs} figura pagada` : `Este ${queEs} ya está registrado`,
-      mensaje: `<b>${esc(d._archivo)}</b>\n\n${esc(d._aviso)}.` +
-               (pagada ? '\n\nSi la cargás igual vas a poder imputarle un pago nuevo.' : ''),
+      titulo: 'Este comprobante ya está registrado',
+      mensaje: `<b>${esc(d._archivo)}</b>\n\n${esc(d._aviso)}.`,
       cancel: 'No cargar',
       ok: 'Cargar igual',
     });
@@ -261,6 +301,14 @@ async function aceptarDoc(d, target, isInv, errEl) {
   }
 
   return true;
+}
+
+/** Numero de comprobante de una factura: "00002-00000222". */
+function numeroDeFactura(inv) {
+  const pv  = String(inv.punto_venta || '').trim();
+  const nro = String(inv.comp_nro || '').trim();
+  if (!pv && !nro) return '';
+  return `${pv}-${nro}`;
 }
 
 // ── Barra de progreso ──────────────────────────────────────────────
@@ -748,11 +796,55 @@ function renderHint() {
   else                       hint.textContent = `Conciliado: ${lastResult.resumen.n_matches} cruce(s). Podés cruzar a mano, seguir sumando facturas o pagos y volver a conciliar.`;
 }
 
+// ── Orden de la grilla de facturas ─────────────────────────────────
+// Se hace clic en el título de la columna: la primera vez ordena para
+// arriba, la segunda para abajo. El orden es solo de la pantalla: no
+// cambia nada de lo que está cargado ni guardado.
+function ordenarInv(campo) {
+  if (ordenInv.campo === campo) ordenInv.asc = !ordenInv.asc;
+  else { ordenInv.campo = campo; ordenInv.asc = true; }
+  renderInvTable();
+}
+
+/** La fecha dd/mm/aaaa pasada a aaaammdd, para poder compararla como texto. */
+function fechaComparable(f) {
+  const m = String(f || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? `${m[3]}${m[2]}${m[1]}` : '';
+}
+
+function valorDeOrden(inv, campo) {
+  if (campo === 'comp')  return numeroDeFactura(inv);
+  if (campo === 'fecha') return fechaComparable(inv.fecha_emision);
+  return String(inv.razon_social_cliente || '').toLowerCase();
+}
+
+/** Facturas en el orden elegido, sin perder la posición real de cada una. */
+function facturasOrdenadas() {
+  const filas = invoices.map((inv, i) => ({ inv, i }));
+  if (!ordenInv.campo) return filas;
+  filas.sort((a, b) => {
+    const va = valorDeOrden(a.inv, ordenInv.campo);
+    const vb = valorDeOrden(b.inv, ordenInv.campo);
+    if (va === vb) return a.i - b.i;
+    return (va < vb ? -1 : 1) * (ordenInv.asc ? 1 : -1);
+  });
+  return filas;
+}
+
+function renderFlechasOrden() {
+  const flechas = { comp: 'rcSortComp', fecha: 'rcSortFecha', cliente: 'rcSortCliente' };
+  Object.entries(flechas).forEach(([campo, id]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = ordenInv.campo === campo ? (ordenInv.asc ? '▲' : '▼') : '';
+  });
+}
+
 function renderInvTable() {
   const t = document.getElementById('invTable');
   const b = document.getElementById('invBody');
   t.hidden = !invoices.length;
-  b.innerHTML = invoices.map((inv, i) => `
+  b.innerHTML = facturasOrdenadas().map(({ inv, i }) => `
     <tr class="${inv._duplicado ? 'dupe' : ''}">
       <td class="mono">${esc(inv.punto_venta)}-${esc(inv.comp_nro)}${inv._duplicado ? ' <span class="rc-badge media" title="Ya estaba registrada — la cargaste igual">repetida</span>' : ''}</td>
       <td class="mono">${esc(inv.fecha_emision)}</td>
@@ -762,6 +854,76 @@ function renderInvTable() {
       <td>${esc(trunc(inv.descripcion, 70))}</td>
       <td><button class="rc-del" onclick="delDoc('invoices', ${i})" title="Quitar">✕</button></td>
     </tr>`).join('');
+  renderFlechasOrden();
+  renderMensual();
+}
+
+// ── Facturado por mes ──────────────────────────────────────────────
+// Suma lo facturado de cada mes con las facturas que hay en la pantalla.
+// El mes en curso se va sumando solo a medida que se cargan facturas.
+function toggleMensual() {
+  mensualAbierto = !mensualAbierto;
+  renderMensual();
+}
+
+/** [{mes: '2026-09', etiqueta: 'sep-26', total, n}] del más nuevo al más viejo. */
+function totalesPorMes() {
+  const NOMBRES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
+                   'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const porMes = {};
+  invoices.forEach(inv => {
+    const m = String(inv.fecha_emision || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return;
+    const clave = `${m[3]}-${m[2]}`;
+    if (!porMes[clave]) {
+      porMes[clave] = {
+        mes: clave,
+        etiqueta: `${NOMBRES[Number(m[2]) - 1]}-${m[3].slice(2)}`,
+        total: 0,
+        n: 0,
+      };
+    }
+    porMes[clave].total += Number(inv.importe_total || 0);
+    porMes[clave].n += 1;
+  });
+  return Object.values(porMes).sort((a, b) => (a.mes < b.mes ? 1 : -1));
+}
+
+function renderMensual() {
+  const caja = document.getElementById('rcMensual');
+  if (!caja) return;
+
+  const meses = totalesPorMes();
+  caja.hidden = !meses.length;
+  if (!meses.length) return;
+
+  const total = meses.reduce((a, m) => a + m.total, 0);
+  const hoy = new Date();
+  const mesEnCurso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+  const actual = meses.find(m => m.mes === mesEnCurso);
+  const mayor = Math.max(...meses.map(m => m.total), 1);
+
+  document.getElementById('rcMensualSub').textContent =
+    (actual ? `Este mes ${money(actual.total)} · ` : '') +
+    `${meses.length} mes(es) · Total ${money(total)}`;
+  document.getElementById('rcMensualToggle').textContent = mensualAbierto ? '▾' : '▸';
+
+  const cuerpo = document.getElementById('rcMensualBody');
+  cuerpo.hidden = !mensualAbierto;
+  cuerpo.innerHTML = meses.map(m => `
+    <div class="rc-mes-row ${m.mes === mesEnCurso ? 'en-curso' : ''}">
+      <span class="rc-mes-label">${esc(m.etiqueta)}${m.mes === mesEnCurso ? ' <span class="rc-badge cuenta">en curso</span>' : ''}</span>
+      <span class="rc-mes-barra"><span style="width:${(m.total / mayor * 100).toFixed(1)}%"></span></span>
+      <span class="rc-mes-n">${m.n} fact.</span>
+      <span class="rc-mes-total">${money(m.total)}</span>
+    </div>`).join('') + `
+    <div class="rc-mes-row rc-mes-total-row">
+      <span class="rc-mes-label">Total del período</span>
+      <span class="rc-mes-barra"></span>
+      <span class="rc-mes-n">${invoices.length} fact.</span>
+      <span class="rc-mes-total">${money(total)}</span>
+    </div>
+    <div class="rc-mes-hint">Se suma lo que hay en esta pantalla: cambiá las fechas de arriba y apretá “Traer” para ver otro período.</div>`;
 }
 
 function renderPayTable() {
