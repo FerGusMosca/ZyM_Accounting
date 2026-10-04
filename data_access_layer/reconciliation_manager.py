@@ -28,6 +28,8 @@ _INV_AMOUNT_IDX         = 7
 _INV_STATUS_IDX         = 8
 _INV_DESCRIPTION_IDX    = 9
 _INV_FILE_NAME_IDX      = 10
+_INV_DOC_TYPE_IDX       = 11
+_INV_ADJUSTS_IDX        = 12
 
 # ── Column indexes devueltos por get_client_account ──────────────────────────
 _CC_CLIENT_ID_IDX       = 0
@@ -76,6 +78,119 @@ def _row_to_invoice(row) -> dict:
                                 if row[_INV_ISSUE_DATE_IDX] else None,
         "importe_total":        float(row[_INV_AMOUNT_IDX]) if row[_INV_AMOUNT_IDX] else 0.0,
         "descripcion":          row[_INV_DESCRIPTION_IDX],
+        "tipo_comprobante":     row[_INV_DOC_TYPE_IDX] or "FACTURA",
+        "comp_ajustado":        row[_INV_ADJUSTS_IDX],
+    }
+
+
+
+# ── Mapeo de filas (las comparten Conciliacion y Registros) ───────────────────
+
+def _escape_like(texto: str | None) -> str:
+    """El texto buscado, sin que % ni _ valgan como comodines."""
+    t = (texto or "").strip()
+    return t.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _fila_a_factura_pantalla(r) -> dict:
+    """Fila de get_invoices_between / get_invoices_by_ids -> factura de pantalla."""
+    punto_venta, comp_nro = _split_comprobante(r[5])
+    return {
+        "_id_bd":               r[0],
+        "_client_id":           r[1],
+        "_estado":              r[8],
+        "razon_social_cliente": r[2],
+        "cuit_cliente":         r[3],
+        "cuit_emisor":          r[4],
+        "punto_venta":          punto_venta,
+        "comp_nro":             comp_nro,
+        "fecha_emision":        r[6].strftime("%d/%m/%Y") if r[6] else None,
+        "importe_total":        float(r[7] or 0),
+        "descripcion":          r[9],
+        "_archivo":             r[10],
+        "_hash":                (r[11] or "").strip(),
+        "tipo_comprobante":     r[12] or "FACTURA",
+        "comp_ajustado":        r[13],
+        "_de_la_base":          True,
+    }
+
+
+def _fila_a_pago_pantalla(r) -> dict:
+    """Fila de get_payments_between / get_payments_by_ids -> cobro de pantalla."""
+    return {
+        "_id_bd":          r[0],
+        "cuit_originante": r[1],
+        "originante":      r[2],
+        "fecha":           r[3].strftime("%d/%m/%Y") if r[3] else None,
+        "importe":         float(r[4] or 0),
+        "banco":           r[5],
+        "referencia":      r[6],
+        "_archivo":        r[7],
+        "_hash":           (r[8] or "").strip(),
+        "_de_la_base":     True,
+    }
+
+
+def _fila_a_factura_registro(r) -> dict:
+    return {
+        "id":          r[0],
+        "cliente":     r[1],
+        "cuit":        r[2],
+        "comprobante": r[3],
+        "fecha":       r[4].strftime("%d/%m/%Y") if r[4] else None,
+        "importe":     float(r[5] or 0),
+        "imputado":    float(r[6] or 0),
+        "estado":      r[7],
+        "descripcion": r[8],
+        "archivo":     r[9],
+        "huella":      (r[10] or "").strip(),
+        "tiene_archivo": bool(r[11]),
+        "tipo":        r[13] or "FACTURA",
+        "ajusta":      r[14],
+    }
+
+
+def _fila_a_pago_registro(r) -> dict:
+    return {
+        "id":         r[0],
+        "originante": r[1],
+        "cuit":       r[2],
+        "fecha":      r[3].strftime("%d/%m/%Y") if r[3] else None,
+        "importe":    float(r[4] or 0),
+        "imputado":   float(r[5] or 0),
+        "banco":      r[6],
+        "referencia": r[7],
+        "archivo":    r[8],
+        "huella":     (r[9] or "").strip(),
+        "tiene_archivo": bool(r[10]),
+    }
+
+
+def _fila_a_cruce_registro(r) -> dict:
+    return {
+        "id":              r[0],
+        "invoice_id":      r[1],
+        "comprobante":     r[2],
+        "cliente":         r[3],
+        "fecha_factura":   r[4].strftime("%d/%m/%Y") if r[4] else None,
+        "importe_factura": float(r[5] or 0),
+        "payment_id":      r[6],
+        "fecha_pago":      r[7].strftime("%d/%m/%Y") if r[7] else None,
+        "banco":           r[8],
+        "originante":      r[9],
+        "importe":         float(r[10] or 0),
+        "confianza":       r[11],
+    }
+
+
+def _fila_a_cliente_registro(r) -> dict:
+    return {
+        "id":         r[0],
+        "cuit":       r[1],
+        "nombre":     r[2],
+        "grupo":      r[3],
+        "n_facturas": r[4],
+        "facturado":  float(r[5] or 0),
     }
 
 
@@ -84,7 +199,7 @@ def _row_to_invoice(row) -> dict:
 _INVOICE_SELECT = """
     SELECT i.id, i.client_id, c.name, c.cuit, i.issuer_cuit,
            i.invoice_number, i.issue_date, i.amount, i.status,
-           i.description, i.file_name
+           i.description, i.file_name, i.doc_type, i.adjusts_number
     FROM invoices i
     JOIN clients  c ON c.id = i.client_id
 """
@@ -131,16 +246,23 @@ class ReconciliationManager:
                 row = cur.fetchone()
                 return _row_to_invoice(row) if row else None
 
-    def find_invoice_by_number(self, issuer_cuit: str, invoice_number: str) -> dict | None:
-        """La misma factura aunque el archivo PDF sea otro, o None."""
+    def find_invoice_by_number(self, issuer_cuit: str, invoice_number: str,
+                               doc_type: str = "FACTURA") -> dict | None:
+        """
+        El mismo comprobante aunque el archivo PDF sea otro, o None.
+
+        El tipo entra en la busqueda: una nota de credito lleva su propia
+        numeracion y puede repetir el numero de una factura.
+        """
         if not self.is_enabled():
             return None
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     _INVOICE_SELECT +
-                    " WHERE i.issuer_cuit = %s AND i.invoice_number = %s",
-                    (issuer_cuit, invoice_number))
+                    " WHERE i.issuer_cuit = %s AND i.invoice_number = %s"
+                    "   AND i.doc_type = %s",
+                    (issuer_cuit, invoice_number, doc_type or "FACTURA"))
                 row = cur.fetchone()
                 return _row_to_invoice(row) if row else None
 
@@ -182,7 +304,7 @@ class ReconciliationManager:
                     SELECT persist_invoice(
                         %s::VARCHAR, %s::VARCHAR, %s::VARCHAR, %s::VARCHAR,
                         %s::DATE, %s::NUMERIC, %s::TEXT, %s::VARCHAR,
-                        %s::CHAR(64), %s::JSONB)
+                        %s::CHAR(64), %s::JSONB, %s::VARCHAR, %s::VARCHAR)
                 """, (
                     inv.get("cuit_cliente"),
                     inv.get("razon_social_cliente"),
@@ -194,6 +316,8 @@ class ReconciliationManager:
                     inv.get("archivo"),
                     inv.get("file_hash"),
                     json.dumps(inv.get("raw") or {}),
+                    inv.get("tipo_comprobante") or "FACTURA",
+                    inv.get("comp_ajustado"),
                 ))
                 invoice_id = cur.fetchone()[0]
                 conn.commit()
@@ -382,72 +506,57 @@ class ReconciliationManager:
                     "contenido": bytes(row[2]),
                 }
 
-    # ── Listados para la pantalla de Registros ───────────────────────────────
+    # ── Pantalla de Registros: todo paginado, todo leido de la base ──────────
+    # Cada pedido va a la base. No se guarda nada en memoria entre pedidos.
 
-    def list_invoices(self) -> list[dict]:
-        """Todas las facturas guardadas."""
+    def count_records(self, q: str | None = None) -> dict:
+        """Cuantos registros hay en cada solapa, con el filtro de busqueda."""
+        if not self.is_enabled():
+            return {"facturas": 0, "cobros": 0, "cruces": 0, "clientes": 0}
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM count_records(%s::TEXT)",
+                            (_escape_like(q),))
+                r = cur.fetchone()
+                return {"facturas": int(r[0]), "cobros": int(r[1]),
+                        "cruces": int(r[2]), "clientes": int(r[3])}
+
+    def _page(self, sql_fn: str, mapper, q: str | None,
+              limit: int, offset: int) -> list[dict]:
         if not self.is_enabled():
             return []
         with self._connect() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT * FROM list_invoices()")
-                return [{
-                    "id":          r[0],
-                    "cliente":     r[1],
-                    "cuit":        r[2],
-                    "comprobante": r[3],
-                    "fecha":       r[4].strftime("%d/%m/%Y") if r[4] else None,
-                    "importe":     float(r[5] or 0),
-                    "imputado":    float(r[6] or 0),
-                    "estado":      r[7],
-                    "descripcion": r[8],
-                    "archivo":     r[9],
-                    "huella":      (r[10] or "").strip(),
-                    "tiene_archivo": bool(r[11]),
-                } for r in cur.fetchall()]
+                cur.execute(f"SELECT * FROM {sql_fn}(%s::TEXT, %s::INT, %s::INT)",
+                            (_escape_like(q), limit, offset))
+                return [mapper(r) for r in cur.fetchall()]
 
-    def list_payments(self) -> list[dict]:
-        """Todos los cobros guardados."""
+    def page_invoices(self, q, limit, offset) -> list[dict]:
+        """Una pagina de facturas guardadas."""
+        return self._page("page_invoices", _fila_a_factura_registro, q, limit, offset)
+
+    def page_payments(self, q, limit, offset) -> list[dict]:
+        """Una pagina de cobros guardados."""
+        return self._page("page_payments", _fila_a_pago_registro, q, limit, offset)
+
+    def page_matches(self, q, limit, offset) -> list[dict]:
+        """Una pagina de cruces guardados."""
+        return self._page("page_matches", _fila_a_cruce_registro, q, limit, offset)
+
+    def page_clients(self, q, limit, offset) -> list[dict]:
+        """Una pagina de clientes."""
+        return self._page("page_clients", _fila_a_cliente_registro, q, limit, offset)
+
+    def list_matches_of(self, invoice_id: int | None = None,
+                        payment_id: int | None = None) -> list[dict]:
+        """Los cruces de UNA factura o de UN cobro (el otro va en None)."""
         if not self.is_enabled():
             return []
         with self._connect() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT * FROM list_payments()")
-                return [{
-                    "id":         r[0],
-                    "originante": r[1],
-                    "cuit":       r[2],
-                    "fecha":      r[3].strftime("%d/%m/%Y") if r[3] else None,
-                    "importe":    float(r[4] or 0),
-                    "imputado":   float(r[5] or 0),
-                    "banco":      r[6],
-                    "referencia": r[7],
-                    "archivo":    r[8],
-                    "huella":     (r[9] or "").strip(),
-                    "tiene_archivo": bool(r[10]),
-                } for r in cur.fetchall()]
-
-    def list_matches(self) -> list[dict]:
-        """Los cruces guardados, con los datos de la factura y del cobro."""
-        if not self.is_enabled():
-            return []
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT * FROM list_matches()")
-                return [{
-                    "id":              r[0],
-                    "invoice_id":      r[1],
-                    "comprobante":     r[2],
-                    "cliente":         r[3],
-                    "fecha_factura":   r[4].strftime("%d/%m/%Y") if r[4] else None,
-                    "importe_factura": float(r[5] or 0),
-                    "payment_id":      r[6],
-                    "fecha_pago":      r[7].strftime("%d/%m/%Y") if r[7] else None,
-                    "banco":           r[8],
-                    "originante":      r[9],
-                    "importe":         float(r[10] or 0),
-                    "confianza":       r[11],
-                } for r in cur.fetchall()]
+                cur.execute("SELECT * FROM list_matches_of(%s::INT, %s::INT)",
+                            (invoice_id, payment_id))
+                return [_fila_a_cruce_registro(r) for r in cur.fetchall()]
 
     # ── Cobros cargados a mano ───────────────────────────────────────────────
 
@@ -474,40 +583,32 @@ class ReconciliationManager:
                 conn.commit()
                 return payment_id
 
-    def delete_invoice(self, invoice_id: int) -> None:
+    def delete_invoice(self, invoice_id: int) -> int:
         """
-        Baja de una factura. La base corta con un error si tiene cruces:
-        primero hay que sacarlos de a uno.
+        Baja de una factura. Si tenia cruces, se sacan junto con ella.
+        Devuelve cuantos cruces se sacaron, para poder avisarlo.
         """
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT delete_invoice(%s::INT)", (invoice_id,))
+                n_cruces = cur.fetchone()[0]
                 conn.commit()
+                return int(n_cruces or 0)
 
-    def delete_payment(self, payment_id: int) -> None:
-        """Baja del cobro. Las facturas que cubria vuelven a quedar pendientes."""
+    def delete_payment(self, payment_id: int) -> int:
+        """
+        Baja del cobro. Si tenia cruces, se sacan junto con el y las
+        facturas que cubria vuelven a quedar pendientes.
+        Devuelve cuantos cruces se sacaron, para poder avisarlo.
+        """
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT delete_payment(%s::INT)", (payment_id,))
+                n_cruces = cur.fetchone()[0]
                 conn.commit()
+                return int(n_cruces or 0)
 
     # ── Clientes ─────────────────────────────────────────────────────────────
-
-    def list_clients(self) -> list[dict]:
-        """Clientes con su nombre actual, para poder corregirlo."""
-        if not self.is_enabled():
-            return []
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT * FROM list_clients()")
-                return [{
-                    "id":         r[0],
-                    "cuit":       r[1],
-                    "nombre":     r[2],
-                    "grupo":      r[3],
-                    "n_facturas": r[4],
-                    "facturado":  float(r[5] or 0),
-                } for r in cur.fetchall()]
 
     # ── Cruces ───────────────────────────────────────────────────────────────
     # No hay ningun metodo que borre cruces en tanda, a proposito.
@@ -545,26 +646,7 @@ class ReconciliationManager:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM get_invoices_between(%s::DATE, %s::DATE)",
                             (desde, hasta))
-                salida = []
-                for r in cur.fetchall():
-                    punto_venta, comp_nro = _split_comprobante(r[5])
-                    salida.append({
-                        "_id_bd":               r[0],
-                        "_client_id":           r[1],
-                        "_estado":              r[8],
-                        "razon_social_cliente": r[2],
-                        "cuit_cliente":         r[3],
-                        "cuit_emisor":          r[4],
-                        "punto_venta":          punto_venta,
-                        "comp_nro":             comp_nro,
-                        "fecha_emision":        r[6].strftime("%d/%m/%Y") if r[6] else None,
-                        "importe_total":        float(r[7] or 0),
-                        "descripcion":          r[9],
-                        "_archivo":             r[10],
-                        "_hash":                (r[11] or "").strip(),
-                        "_de_la_base":          True,
-                    })
-                return salida
+                return [_fila_a_factura_pantalla(r) for r in cur.fetchall()]
 
     def get_payments_between(self, desde: str | None, hasta: str | None) -> list[dict]:
         """Cobros ya guardados en ese rango, con el formato de la pantalla."""
@@ -574,18 +656,30 @@ class ReconciliationManager:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM get_payments_between(%s::DATE, %s::DATE)",
                             (desde, hasta))
-                return [{
-                    "_id_bd":          r[0],
-                    "cuit_originante": r[1],
-                    "originante":      r[2],
-                    "fecha":           r[3].strftime("%d/%m/%Y") if r[3] else None,
-                    "importe":         float(r[4] or 0),
-                    "banco":           r[5],
-                    "referencia":      r[6],
-                    "_archivo":        r[7],
-                    "_hash":           (r[8] or "").strip(),
-                    "_de_la_base":     True,
-                } for r in cur.fetchall()]
+                return [_fila_a_pago_pantalla(r) for r in cur.fetchall()]
+
+    def get_invoices_by_ids(self, ids: list[int]) -> dict[int, dict]:
+        """
+        Relee de la base estas facturas. Devuelve {id: factura de pantalla}.
+        Las que ya no existen no vuelven: asi se detecta que alguien las borro.
+        """
+        ids = [int(i) for i in ids if i is not None]
+        if not self.is_enabled() or not ids:
+            return {}
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM get_invoices_by_ids(%s::INT[])", (ids,))
+                return {r[0]: _fila_a_factura_pantalla(r) for r in cur.fetchall()}
+
+    def get_payments_by_ids(self, ids: list[int]) -> dict[int, dict]:
+        """Lo mismo que get_invoices_by_ids, para cobros."""
+        ids = [int(i) for i in ids if i is not None]
+        if not self.is_enabled() or not ids:
+            return {}
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM get_payments_by_ids(%s::INT[])", (ids,))
+                return {r[0]: _fila_a_pago_pantalla(r) for r in cur.fetchall()}
 
     # ── Cruces ya guardados de lo que esta en pantalla ───────────────────────
 

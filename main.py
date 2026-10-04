@@ -17,6 +17,17 @@ app = FastAPI()
 
 app.add_middleware(SessionMiddleware, secret_key=settings.session_key)
 
+
+# Ninguna respuesta se puede guardar en el navegador: ni paginas, ni datos, ni
+# archivos. Cada vez que se abre una pantalla o se pide un dato, sale de la base.
+@app.middleware("http")
+async def no_guardar_en_el_navegador(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
 # Static folder
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

@@ -81,13 +81,17 @@ $$;
 
 -- ============================================================
 -- find_invoice_by_number
--- Misma factura aunque el archivo PDF sea otro.
+-- Mismo comprobante aunque el archivo PDF sea otro. El tipo
+-- entra en la busqueda porque una nota de credito puede tener
+-- el mismo numero que una factura.
 -- ============================================================
 DROP FUNCTION IF EXISTS find_invoice_by_number(VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS find_invoice_by_number(VARCHAR, VARCHAR, VARCHAR);
 
 CREATE FUNCTION find_invoice_by_number(
     p_issuer_cuit    VARCHAR,
-    p_invoice_number VARCHAR
+    p_invoice_number VARCHAR,
+    p_doc_type       VARCHAR DEFAULT 'FACTURA'
 )
 RETURNS TABLE (
     id              INT,
@@ -114,16 +118,21 @@ AS $$
     FROM invoices i
     JOIN clients  c ON c.id = i.client_id
     WHERE i.issuer_cuit    = p_issuer_cuit
-      AND i.invoice_number = p_invoice_number;
+      AND i.invoice_number = p_invoice_number
+      AND i.doc_type       = COALESCE(NULLIF(p_doc_type, ''), 'FACTURA');
 $$;
 
 
 -- ============================================================
 -- persist_invoice
--- Guarda la factura. Si el PDF ya estaba cargado, o si ya
--- existe esa numeracion, no duplica: devuelve el id existente.
+-- Guarda el comprobante (factura o nota). Si el PDF ya estaba
+-- cargado, o si ya existe esa numeracion para ese tipo, no
+-- duplica: devuelve el id existente.
+-- La nota de credito llega con el importe en NEGATIVO y se
+-- guarda con status 'nota': no es algo que haya que cobrar.
 -- ============================================================
 DROP FUNCTION IF EXISTS persist_invoice(VARCHAR, VARCHAR, VARCHAR, VARCHAR, DATE, NUMERIC, TEXT, VARCHAR, CHAR, JSONB);
+DROP FUNCTION IF EXISTS persist_invoice(VARCHAR, VARCHAR, VARCHAR, VARCHAR, DATE, NUMERIC, TEXT, VARCHAR, CHAR, JSONB, VARCHAR, VARCHAR);
 
 CREATE FUNCTION persist_invoice(
     p_client_cuit    VARCHAR,
@@ -135,7 +144,9 @@ CREATE FUNCTION persist_invoice(
     p_description    TEXT,
     p_file_name      VARCHAR,
     p_file_hash      CHAR,
-    p_raw_json       JSONB
+    p_raw_json       JSONB,
+    p_doc_type       VARCHAR DEFAULT 'FACTURA',
+    p_adjusts_number VARCHAR DEFAULT NULL
 )
 RETURNS INT
 LANGUAGE plpgsql
@@ -143,7 +154,12 @@ AS $$
 DECLARE
     v_client_id  INT;
     v_invoice_id INT;
+    v_doc_type   VARCHAR;
+    v_status     VARCHAR;
 BEGIN
+    v_doc_type := COALESCE(NULLIF(p_doc_type, ''), 'FACTURA');
+    v_status   := CASE WHEN v_doc_type = 'FACTURA' THEN 'pending' ELSE 'nota' END;
+
     SELECT id INTO v_invoice_id FROM invoices WHERE file_hash = p_file_hash;
     IF v_invoice_id IS NOT NULL THEN
         RETURN v_invoice_id;
@@ -151,7 +167,9 @@ BEGIN
 
     SELECT id INTO v_invoice_id
     FROM invoices
-    WHERE issuer_cuit = p_issuer_cuit AND invoice_number = p_invoice_number;
+    WHERE issuer_cuit    = p_issuer_cuit
+      AND doc_type       = v_doc_type
+      AND invoice_number = p_invoice_number;
     IF v_invoice_id IS NOT NULL THEN
         RETURN v_invoice_id;
     END IF;
@@ -160,11 +178,13 @@ BEGIN
 
     INSERT INTO invoices (
         client_id, issuer_cuit, invoice_number, issue_date,
-        amount, description, file_name, file_hash, raw_json
+        amount, description, file_name, file_hash, raw_json,
+        doc_type, adjusts_number, status
     )
     VALUES (
         v_client_id, p_issuer_cuit, p_invoice_number, p_issue_date,
-        p_amount, p_description, p_file_name, p_file_hash, p_raw_json
+        p_amount, p_description, p_file_name, p_file_hash, p_raw_json,
+        v_doc_type, p_adjusts_number, v_status
     )
     RETURNING id INTO v_invoice_id;
 
@@ -250,10 +270,12 @@ BEGIN
 
     SELECT amount INTO v_amount FROM invoices WHERE id = p_invoice_id;
 
+    -- Las notas de credito/debito no se cobran: su estado no se toca.
     UPDATE invoices
     SET status     = CASE WHEN v_total_paid >= v_amount THEN 'paid' ELSE 'pending' END,
         updated_at = NOW()
-    WHERE id = p_invoice_id;
+    WHERE id = p_invoice_id
+      AND doc_type = 'FACTURA';
 
     RETURN v_match_id;
 END;
@@ -443,7 +465,9 @@ RETURNS TABLE (
     file_name      VARCHAR,
     file_hash      CHAR,
     has_file       BOOLEAN,
-    created_at     TIMESTAMP
+    created_at     TIMESTAMP,
+    doc_type       VARCHAR,
+    adjusts_number VARCHAR
 )
 LANGUAGE sql
 AS $$
@@ -461,7 +485,9 @@ AS $$
             i.file_name,
             i.file_hash,
             EXISTS (SELECT 1 FROM uploaded_files f WHERE f.file_hash = i.file_hash),
-            i.created_at
+            i.created_at,
+            i.doc_type,
+            i.adjusts_number
     FROM invoices i
     JOIN clients  c ON c.id = i.client_id
     ORDER BY i.issue_date DESC NULLS LAST, i.id DESC;
@@ -609,25 +635,31 @@ $$;
 
 -- ============================================================
 -- delete_payment
--- Baja de un cobro. Los cruces que tenia se borran solos y las
--- facturas que quedaban cubiertas por ese cobro vuelven a
--- quedar pendientes.
+-- Baja de un cobro. Los cruces que tenia se borran con el y las
+-- facturas que quedaban cubiertas por ese cobro vuelven a quedar
+-- pendientes. Devuelve cuantos cruces se sacaron, para poder
+-- avisarlo en pantalla.
 -- ============================================================
 DROP FUNCTION IF EXISTS delete_payment(INT);
 
 CREATE FUNCTION delete_payment(p_payment_id INT)
-RETURNS VOID
+RETURNS INT
 LANGUAGE plpgsql
 AS $$
 DECLARE
     v_invoice_ids INT[];
+    v_cruces      INT;
 BEGIN
-    SELECT ARRAY_AGG(DISTINCT invoice_id) INTO v_invoice_ids
+    SELECT ARRAY_AGG(DISTINCT invoice_id), COUNT(*)
+      INTO v_invoice_ids, v_cruces
     FROM invoice_payments WHERE payment_id = p_payment_id;
 
-    DELETE FROM payments WHERE id = p_payment_id;
+    DELETE FROM invoice_payments WHERE payment_id = p_payment_id;
+    DELETE FROM payments         WHERE id = p_payment_id;
 
     PERFORM refresh_invoice_status(v_invoice_ids);
+
+    RETURN COALESCE(v_cruces, 0);
 END;
 $$;
 
@@ -748,15 +780,16 @@ $$;
 
 -- ============================================================
 -- delete_invoice
--- Baja de una factura. Solo se borra si NO tiene cruces: si
--- tiene aunque sea uno, corta y avisa, asi nadie se lleva por
--- delante una imputacion sin darse cuenta. Los cruces se sacan
--- de a uno desde la pantalla, con delete_match.
+-- Baja de una factura. Si tenia cruces, se sacan junto con ella
+-- (los cobros quedan en la base, libres para volver a cruzarse).
+-- Devuelve cuantos cruces se sacaron, para poder avisarlo en
+-- pantalla. Todo ocurre en una sola operacion: o sale todo o no
+-- sale nada.
 -- ============================================================
 DROP FUNCTION IF EXISTS delete_invoice(INT);
 
 CREATE FUNCTION delete_invoice(p_invoice_id INT)
-RETURNS VOID
+RETURNS INT
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -765,13 +798,10 @@ BEGIN
     SELECT COUNT(*) INTO v_cruces
     FROM invoice_payments WHERE invoice_id = p_invoice_id;
 
-    IF v_cruces > 0 THEN
-        RAISE EXCEPTION
-            'La factura tiene % cruce(s): hay que sacarlos antes de borrarla',
-            v_cruces;
-    END IF;
+    DELETE FROM invoice_payments WHERE invoice_id = p_invoice_id;
+    DELETE FROM invoices         WHERE id = p_invoice_id;
 
-    DELETE FROM invoices WHERE id = p_invoice_id;
+    RETURN v_cruces;
 END;
 $$;
 
@@ -823,13 +853,16 @@ RETURNS TABLE (
     status         VARCHAR,
     description    TEXT,
     file_name      VARCHAR,
-    file_hash      CHAR
+    file_hash      CHAR,
+    doc_type       VARCHAR,
+    adjusts_number VARCHAR
 )
 LANGUAGE sql
 AS $$
     SELECT  i.id, i.client_id, c.name, c.cuit, i.issuer_cuit,
             i.invoice_number, i.issue_date, i.amount, i.status,
-            i.description, i.file_name, i.file_hash
+            i.description, i.file_name, i.file_hash,
+            i.doc_type, i.adjusts_number
     FROM invoices i
     JOIN clients  c ON c.id = i.client_id
     WHERE (p_desde IS NULL OR i.issue_date >= p_desde)
@@ -936,4 +969,348 @@ AS $$
     WHERE TRIM(i.file_hash) = ANY (COALESCE(p_invoice_hashes, ARRAY[]::TEXT[]))
        OR TRIM(p.file_hash) = ANY (COALESCE(p_payment_hashes, ARRAY[]::TEXT[]))
     ORDER BY ip.id;
+$$;
+
+
+-- ============================================================
+-- get_invoices_by_ids / get_payments_by_ids
+-- Releen de la base lo que se acaba de guardar (o lo que la
+-- pantalla dice que esta guardado). Lo que ya no existe, no
+-- vuelve: asi la pantalla se entera de que alguien lo borro.
+-- ============================================================
+DROP FUNCTION IF EXISTS get_invoices_by_ids(INT[]);
+
+CREATE FUNCTION get_invoices_by_ids(p_ids INT[])
+RETURNS TABLE (
+    id             INT,
+    client_id      INT,
+    client_name    VARCHAR,
+    client_cuit    VARCHAR,
+    issuer_cuit    VARCHAR,
+    invoice_number VARCHAR,
+    issue_date     DATE,
+    amount         NUMERIC,
+    status         VARCHAR,
+    description    TEXT,
+    file_name      VARCHAR,
+    file_hash      CHAR,
+    doc_type       VARCHAR,
+    adjusts_number VARCHAR
+)
+LANGUAGE sql
+AS $$
+    SELECT  i.id, i.client_id, c.name, c.cuit, i.issuer_cuit,
+            i.invoice_number, i.issue_date, i.amount, i.status,
+            i.description, i.file_name, i.file_hash,
+            i.doc_type, i.adjusts_number
+    FROM invoices i
+    JOIN clients  c ON c.id = i.client_id
+    WHERE i.id = ANY (COALESCE(p_ids, ARRAY[]::INT[]))
+    ORDER BY i.id;
+$$;
+
+
+DROP FUNCTION IF EXISTS get_payments_by_ids(INT[]);
+
+CREATE FUNCTION get_payments_by_ids(p_ids INT[])
+RETURNS TABLE (
+    id           INT,
+    payer_cuit   VARCHAR,
+    payer_name   VARCHAR,
+    payment_date DATE,
+    amount       NUMERIC,
+    bank         VARCHAR,
+    reference    VARCHAR,
+    file_name    VARCHAR,
+    file_hash    CHAR
+)
+LANGUAGE sql
+AS $$
+    SELECT  p.id, p.payer_cuit, p.payer_name, p.payment_date, p.amount,
+            p.bank, p.reference, p.file_name, p.file_hash
+    FROM payments p
+    WHERE p.id = ANY (COALESCE(p_ids, ARRAY[]::INT[]))
+    ORDER BY p.id;
+$$;
+
+
+-- ============================================================
+-- Pantalla de Registros: todo paginado, todo leido de la base
+-- en cada pedido. p_q es el texto de busqueda (vacio = todo).
+-- ============================================================
+
+-- count_records: cuantos registros hay por solapa, con el filtro.
+DROP FUNCTION IF EXISTS count_records(TEXT);
+
+CREATE FUNCTION count_records(p_q TEXT)
+RETURNS TABLE (
+    n_invoices BIGINT,
+    n_payments BIGINT,
+    n_matches  BIGINT,
+    n_clients  BIGINT
+)
+LANGUAGE sql
+AS $$
+    SELECT
+        (SELECT COUNT(*)
+           FROM invoices i JOIN clients c ON c.id = i.client_id
+          WHERE COALESCE(p_q, '') = ''
+             OR c.name ILIKE '%' || p_q || '%'
+             OR c.cuit ILIKE '%' || p_q || '%'
+             OR i.invoice_number ILIKE '%' || p_q || '%'
+             OR i.description ILIKE '%' || p_q || '%'
+             OR i.file_name ILIKE '%' || p_q || '%'),
+        (SELECT COUNT(*)
+           FROM payments p
+          WHERE COALESCE(p_q, '') = ''
+             OR p.payer_name ILIKE '%' || p_q || '%'
+             OR p.payer_cuit ILIKE '%' || p_q || '%'
+             OR p.bank ILIKE '%' || p_q || '%'
+             OR p.reference ILIKE '%' || p_q || '%'
+             OR p.file_name ILIKE '%' || p_q || '%'),
+        (SELECT COUNT(*)
+           FROM invoice_payments ip
+           JOIN invoices i ON i.id = ip.invoice_id
+           JOIN clients  c ON c.id = i.client_id
+           JOIN payments p ON p.id = ip.payment_id
+          WHERE COALESCE(p_q, '') = ''
+             OR i.invoice_number ILIKE '%' || p_q || '%'
+             OR c.name ILIKE '%' || p_q || '%'
+             OR p.bank ILIKE '%' || p_q || '%'
+             OR p.payer_name ILIKE '%' || p_q || '%'),
+        (SELECT COUNT(*)
+           FROM clients c LEFT JOIN client_groups g ON g.id = c.group_id
+          WHERE COALESCE(p_q, '') = ''
+             OR c.name ILIKE '%' || p_q || '%'
+             OR c.cuit ILIKE '%' || p_q || '%'
+             OR g.name ILIKE '%' || p_q || '%');
+$$;
+
+
+-- page_invoices: una pagina de facturas (mismas columnas que list_invoices).
+DROP FUNCTION IF EXISTS page_invoices(TEXT, INT, INT);
+
+CREATE FUNCTION page_invoices(p_q TEXT, p_limit INT, p_offset INT)
+RETURNS TABLE (
+    id             INT,
+    client_name    VARCHAR,
+    client_cuit    VARCHAR,
+    invoice_number VARCHAR,
+    issue_date     DATE,
+    amount         NUMERIC,
+    paid_amount    NUMERIC,
+    status         VARCHAR,
+    description    TEXT,
+    file_name      VARCHAR,
+    file_hash      CHAR,
+    has_file       BOOLEAN,
+    created_at     TIMESTAMP,
+    doc_type       VARCHAR,
+    adjusts_number VARCHAR
+)
+LANGUAGE sql
+AS $$
+    SELECT  i.id,
+            c.name,
+            c.cuit,
+            i.invoice_number,
+            i.issue_date,
+            i.amount,
+            COALESCE((SELECT SUM(ip.amount)
+                      FROM invoice_payments ip
+                      WHERE ip.invoice_id = i.id), 0),
+            i.status,
+            i.description,
+            i.file_name,
+            i.file_hash,
+            EXISTS (SELECT 1 FROM uploaded_files f WHERE f.file_hash = i.file_hash),
+            i.created_at,
+            i.doc_type,
+            i.adjusts_number
+    FROM invoices i
+    JOIN clients  c ON c.id = i.client_id
+    WHERE COALESCE(p_q, '') = ''
+       OR c.name ILIKE '%' || p_q || '%'
+       OR c.cuit ILIKE '%' || p_q || '%'
+       OR i.invoice_number ILIKE '%' || p_q || '%'
+       OR i.description ILIKE '%' || p_q || '%'
+       OR i.file_name ILIKE '%' || p_q || '%'
+    ORDER BY i.issue_date DESC NULLS LAST, i.id DESC
+    LIMIT p_limit OFFSET p_offset;
+$$;
+
+
+-- page_payments: una pagina de cobros (mismas columnas que list_payments).
+DROP FUNCTION IF EXISTS page_payments(TEXT, INT, INT);
+
+CREATE FUNCTION page_payments(p_q TEXT, p_limit INT, p_offset INT)
+RETURNS TABLE (
+    id             INT,
+    payer_name     VARCHAR,
+    payer_cuit     VARCHAR,
+    payment_date   DATE,
+    amount         NUMERIC,
+    applied_amount NUMERIC,
+    bank           VARCHAR,
+    reference      VARCHAR,
+    file_name      VARCHAR,
+    file_hash      CHAR,
+    has_file       BOOLEAN,
+    created_at     TIMESTAMP
+)
+LANGUAGE sql
+AS $$
+    SELECT  p.id,
+            p.payer_name,
+            p.payer_cuit,
+            p.payment_date,
+            p.amount,
+            COALESCE((SELECT SUM(ip.amount)
+                      FROM invoice_payments ip
+                      WHERE ip.payment_id = p.id), 0),
+            p.bank,
+            p.reference,
+            p.file_name,
+            p.file_hash,
+            EXISTS (SELECT 1 FROM uploaded_files f WHERE f.file_hash = p.file_hash),
+            p.created_at
+    FROM payments p
+    WHERE COALESCE(p_q, '') = ''
+       OR p.payer_name ILIKE '%' || p_q || '%'
+       OR p.payer_cuit ILIKE '%' || p_q || '%'
+       OR p.bank ILIKE '%' || p_q || '%'
+       OR p.reference ILIKE '%' || p_q || '%'
+       OR p.file_name ILIKE '%' || p_q || '%'
+    ORDER BY p.payment_date DESC NULLS LAST, p.id DESC
+    LIMIT p_limit OFFSET p_offset;
+$$;
+
+
+-- page_matches: una pagina de cruces (mismas columnas que list_matches).
+DROP FUNCTION IF EXISTS page_matches(TEXT, INT, INT);
+
+CREATE FUNCTION page_matches(p_q TEXT, p_limit INT, p_offset INT)
+RETURNS TABLE (
+    id             INT,
+    invoice_id     INT,
+    invoice_number VARCHAR,
+    client_name    VARCHAR,
+    issue_date     DATE,
+    invoice_amount NUMERIC,
+    payment_id     INT,
+    payment_date   DATE,
+    bank           VARCHAR,
+    payer_name     VARCHAR,
+    amount         NUMERIC,
+    confidence     VARCHAR,
+    created_at     TIMESTAMP
+)
+LANGUAGE sql
+AS $$
+    SELECT  ip.id,
+            i.id,
+            i.invoice_number,
+            c.name,
+            i.issue_date,
+            i.amount,
+            p.id,
+            p.payment_date,
+            p.bank,
+            p.payer_name,
+            ip.amount,
+            ip.confidence,
+            ip.created_at
+    FROM invoice_payments ip
+    JOIN invoices i ON i.id = ip.invoice_id
+    JOIN clients  c ON c.id = i.client_id
+    JOIN payments p ON p.id = ip.payment_id
+    WHERE COALESCE(p_q, '') = ''
+       OR i.invoice_number ILIKE '%' || p_q || '%'
+       OR c.name ILIKE '%' || p_q || '%'
+       OR p.bank ILIKE '%' || p_q || '%'
+       OR p.payer_name ILIKE '%' || p_q || '%'
+    ORDER BY ip.created_at DESC, ip.id DESC
+    LIMIT p_limit OFFSET p_offset;
+$$;
+
+
+-- page_clients: una pagina de clientes (mismas columnas que list_clients).
+DROP FUNCTION IF EXISTS page_clients(TEXT, INT, INT);
+
+CREATE FUNCTION page_clients(p_q TEXT, p_limit INT, p_offset INT)
+RETURNS TABLE (
+    id            INT,
+    cuit          VARCHAR,
+    name          VARCHAR,
+    group_name    VARCHAR,
+    invoice_count BIGINT,
+    invoiced      NUMERIC
+)
+LANGUAGE sql
+AS $$
+    SELECT  c.id,
+            c.cuit,
+            c.name,
+            g.name,
+            COUNT(i.id),
+            COALESCE(SUM(i.amount), 0)
+    FROM clients c
+    LEFT JOIN client_groups g ON g.id = c.group_id
+    LEFT JOIN invoices      i ON i.client_id = c.id
+    WHERE COALESCE(p_q, '') = ''
+       OR c.name ILIKE '%' || p_q || '%'
+       OR c.cuit ILIKE '%' || p_q || '%'
+       OR g.name ILIKE '%' || p_q || '%'
+    GROUP BY c.id, c.cuit, c.name, g.name
+    ORDER BY c.name, c.id
+    LIMIT p_limit OFFSET p_offset;
+$$;
+
+
+-- ============================================================
+-- list_matches_of
+-- Los cruces de UNA factura o de UN cobro (el que no se usa va
+-- en NULL). La pantalla de Registros lo usa para el detalle y
+-- para avisar, antes de borrar, cuantos cruces se van a sacar.
+-- ============================================================
+DROP FUNCTION IF EXISTS list_matches_of(INT, INT);
+
+CREATE FUNCTION list_matches_of(p_invoice_id INT, p_payment_id INT)
+RETURNS TABLE (
+    id             INT,
+    invoice_id     INT,
+    invoice_number VARCHAR,
+    client_name    VARCHAR,
+    issue_date     DATE,
+    invoice_amount NUMERIC,
+    payment_id     INT,
+    payment_date   DATE,
+    bank           VARCHAR,
+    payer_name     VARCHAR,
+    amount         NUMERIC,
+    confidence     VARCHAR,
+    created_at     TIMESTAMP
+)
+LANGUAGE sql
+AS $$
+    SELECT  ip.id,
+            i.id,
+            i.invoice_number,
+            c.name,
+            i.issue_date,
+            i.amount,
+            p.id,
+            p.payment_date,
+            p.bank,
+            p.payer_name,
+            ip.amount,
+            ip.confidence,
+            ip.created_at
+    FROM invoice_payments ip
+    JOIN invoices i ON i.id = ip.invoice_id
+    JOIN clients  c ON c.id = i.client_id
+    JOIN payments p ON p.id = ip.payment_id
+    WHERE (p_invoice_id IS NULL OR ip.invoice_id = p_invoice_id)
+      AND (p_payment_id IS NULL OR ip.payment_id = p_payment_id)
+    ORDER BY ip.created_at DESC, ip.id DESC;
 $$;

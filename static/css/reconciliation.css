@@ -364,3 +364,64 @@
 .rc-mes-total-row .rc-mes-total { font-weight: 600; color: var(--violet-dark); }
 .rc-mes-hint { font-family: 'Outfit', sans-serif; font-size: 11px; color: var(--text-muted);
                margin-top: 9px; }
+
+/* ── Notas de crédito y de débito ───────────────────────────────── */
+.rc-badge.nc { background: #fadbd8; color: #a93226; }
+.rc-badge.nd { background: #e3eefc; color: #1f4f95; }
+
+/* La fila de la nota se distingue de un vistazo del resto de las facturas. */
+.rc-table tr.nota    { background: rgba(169, 50, 38, .035); }
+.rc-table tr.nota td { border-top: 1px solid rgba(169, 50, 38, .14);
+                       border-bottom: 1px solid rgba(169, 50, 38, .14); }
+.rc-table tr.nota:first-child td { border-top: 0; }
+
+/* El importe que resta va en rojo y con el signo adelante. */
+.rc-table td.num.neg,
+.rc-mes-total.neg { color: #a93226; }
+
+.rc-mes-barra > span.neg { background: #e8a9a2; }
+
+/* ── Solapas del paso 3 (cuenta corriente / cruces / pendientes) ── */
+.rc-substeps { margin-top: 4px; }
+
+/* ── Paginador de las tablas de la pantalla ── */
+.rc-pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+            flex-wrap: wrap; margin: 12px 0 18px; font-family: 'Outfit', sans-serif;
+            font-size: 13px; color: var(--text-muted); }
+.rc-pager[hidden] { display: none !important; }
+.rc-pager .btn { padding: 4px 10px; min-width: 34px; }
+.rc-pager .btn[disabled] { opacity: .4; cursor: default; }
+.rc-pager-info { margin-right: auto; }
+.rc-pager-pag  { color: var(--text); font-weight: 600; }
+.rc-pager-size { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
+.rc-pager-size select { font-family: inherit; font-size: 13px; padding: 3px 6px;
+                        border: 1px solid var(--border); border-radius: 8px;
+                        background: var(--bg); color: var(--text); }
+
+/* ── Cartelito de estado del guardado (arriba a la derecha) ── */
+.rc-savepill { position: fixed; top: 14px; right: 22px; z-index: 90;
+               display: inline-flex; align-items: center; gap: 8px;
+               font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600;
+               padding: 8px 14px; border-radius: 999px; background: var(--bg);
+               border: 1px solid var(--violet); color: var(--violet-dark);
+               box-shadow: 0 6px 20px rgba(80, 40, 120, .18); }
+.rc-savepill[hidden] { display: none !important; }
+.rc-savepill.ok { border-color: #2e8b57; color: #1f6b41; }
+.rc-savepill.error, .rc-savepill.sinbase { border-color: #a93226; color: #a93226; }
+.rc-savepill button { font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+                      border: 1px solid currentColor; background: transparent; color: inherit;
+                      border-radius: 999px; padding: 2px 10px; }
+
+/* Spinner chico (cartelito y panel) */
+.rc-spinner-sm { width: 14px; height: 14px; border-radius: 50%; display: inline-block;
+                 border: 2px solid var(--violet-bg); border-top-color: var(--violet);
+                 animation: rcSpin .7s linear infinite; }
+@keyframes rcSpin { to { transform: rotate(360deg); } }
+
+/* Franja de "calculando" adentro del paso 3: no tapa nada */
+.rc-panel-loading { display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+                    padding: 10px 14px; border-radius: 12px; background: var(--violet-bg);
+                    border: 1px solid var(--violet-pale); color: var(--violet-dark);
+                    font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500; }
+.rc-panel-loading[hidden] { display: none !important; }
+

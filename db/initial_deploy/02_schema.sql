@@ -58,12 +58,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_client_name_aliases
 
 
 -- ============================================================
--- FACTURAS EMITIDAS
+-- COMPROBANTES EMITIDOS (facturas y notas de credito/debito)
 -- file_hash: huella del PDF, para detectar que se sube dos
 -- veces el MISMO archivo.
--- (issuer_cuit, invoice_number): la misma factura aunque el
--- PDF sea otro archivo.
--- status: pending / paid
+-- (issuer_cuit, doc_type, invoice_number): el mismo comprobante
+-- aunque el PDF sea otro archivo. El tipo entra en la clave
+-- porque la numeracion de las notas de credito es propia y
+-- puede repetir el numero de una factura.
+-- doc_type: FACTURA / NOTA_CREDITO / NOTA_DEBITO
+-- amount:   la nota de credito se guarda en NEGATIVO, asi resta
+--           sola de lo facturado y del saldo del cliente.
+-- status: pending / paid / nota (las notas no se cobran)
+-- adjusts_number: el comprobante que la nota ajusta, si lo trae.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS invoices (
     id              SERIAL         PRIMARY KEY,
@@ -82,14 +88,24 @@ CREATE TABLE IF NOT EXISTS invoices (
     updated_at      TIMESTAMP      NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE invoices
+    ADD COLUMN IF NOT EXISTS doc_type VARCHAR(20) NOT NULL DEFAULT 'FACTURA';
+
+ALTER TABLE invoices
+    ADD COLUMN IF NOT EXISTS adjusts_number VARCHAR(50) NULL;
+
 CREATE UNIQUE INDEX IF NOT EXISTS ux_invoices_file_hash
     ON invoices (file_hash);
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_invoices_number
-    ON invoices (issuer_cuit, invoice_number);
+-- El indice viejo no contemplaba el tipo: se reemplaza por el nuevo.
+DROP INDEX IF EXISTS ux_invoices_number;
 
-CREATE INDEX IF NOT EXISTS ix_invoices_client ON invoices (client_id);
-CREATE INDEX IF NOT EXISTS ix_invoices_status ON invoices (status);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_invoices_doc_number
+    ON invoices (issuer_cuit, doc_type, invoice_number);
+
+CREATE INDEX IF NOT EXISTS ix_invoices_client   ON invoices (client_id);
+CREATE INDEX IF NOT EXISTS ix_invoices_status   ON invoices (status);
+CREATE INDEX IF NOT EXISTS ix_invoices_doc_type ON invoices (doc_type);
 
 
 -- ============================================================

@@ -35,13 +35,13 @@
         <span class="dash-nav-icon">📋</span>
         <span>Facturas Enviadas</span>
       </a>
-      <a href="/reconciliation" class="dash-nav-item active">
-        <span class="dash-nav-icon">🔗</span>
-        <span>Conciliación</span>
-      </a>
       <a href="/reconciliation/registros" class="dash-nav-item">
         <span class="dash-nav-icon">🗂️</span>
         <span>Registros</span>
+      </a>
+      <a href="/reconciliation" class="dash-nav-item active">
+        <span class="dash-nav-icon">🔗</span>
+        <span>Conciliación</span>
       </a>
     </nav>
     <div class="dash-sidebar-footer">
@@ -59,11 +59,7 @@
         <p class="rc-subtitle">Subí facturas emitidas y comprobantes de pago — el sistema arma el cruce y la cuenta corriente por cliente</p>
       </div>
       <div class="rc-header-actions">
-        <button class="btn btn-ghost" onclick="exportSession()" title="Descarga un archivo .json con las facturas, los pagos y la conciliación de esta pantalla, para retomar el trabajo otro día">⬇ Guardar sesión</button>
-        <label class="btn btn-ghost rc-import-label" title="Vuelve a cargar un .json guardado antes, con todo lo que habías subido">⬆ Cargar sesión
-          <input type="file" accept=".json" id="importSession" hidden>
-        </label>
-        <button class="btn btn-ghost" onclick="resetAll()" title="Borra facturas, pagos y conciliación de esta pantalla y arranca de cero">✕ Limpiar todo</button>
+        <button class="btn btn-ghost" onclick="resetAll()" title="Vacía esta pantalla. Lo que ya está guardado en la base no se toca">✕ Limpiar pantalla</button>
       </div>
     </div>
 
@@ -163,6 +159,7 @@
           <tbody id="invBody"></tbody>
         </table>
       </div>
+      <div class="rc-pager" id="pg_inv" hidden></div>
       <div class="rc-panel-foot">
         <button class="btn btn-primary" id="btnToPay" onclick="showStep(2)" disabled>Continuar → Pagos</button>
       </div>
@@ -199,6 +196,7 @@
           <tbody id="payBody"></tbody>
         </table>
       </div>
+      <div class="rc-pager" id="pg_pay" hidden></div>
       <div class="rc-panel-foot">
         <button class="btn btn-ghost" onclick="showStep(1)">← Facturas</button>
         <button class="btn btn-primary" id="btnReconcile" onclick="runReconcile()" disabled>Conciliar ahora →</button>
@@ -207,6 +205,9 @@
 
     <!-- ── Paso 3: Resultado ── -->
     <section class="rc-panel" id="panel3" hidden>
+      <div class="rc-panel-loading" id="rcPanelLoading" hidden>
+        <span class="rc-spinner-sm"></span> Guardando y calculando la conciliación…
+      </div>
       <div class="rc-empty" id="rcEmpty">
         <div class="rc-drop-icon">🔗</div>
         <div class="rc-drop-title">Todavía no hay conciliación</div>
@@ -217,56 +218,76 @@
         <!-- KPIs -->
         <div class="rc-kpis" id="rcKpis"></div>
 
-        <!-- Cuenta corriente -->
-        <h2 class="rc-h2">Cuenta corriente por cliente</h2>
-        <div class="rc-cc-toolbar">
-          <label class="rc-switch" title="Junta los clientes bajo el grupo que les hayas asignado y muestra el saldo total de cada grupo">
-            <input type="checkbox" id="chkAgrupar" onchange="toggleAgrupar()">
-            <span>Agrupar clientes</span>
-          </label>
-          <button class="btn btn-ghost" onclick="openGroups()" title="Crear grupos y decidir qué cliente va en cada uno">⚙ Editar grupos</button>
-        </div>
-        <div class="rc-cc-grid" id="ccGrid"></div>
-        <div id="ccGrouped" hidden></div>
-
-        <!-- Matches -->
-        <h2 class="rc-h2">Cruce factura ↔ pago</h2>
-        <div class="rc-table-wrap">
-          <table class="rc-table">
-            <thead>
-              <tr><th>Estado</th><th>Factura</th><th>Cliente</th><th class="num">Imputado</th>
-                  <th>Pago</th><th></th></tr>
-            </thead>
-            <tbody id="matchBody"></tbody>
-          </table>
+        <!-- Solapas del paso 3 -->
+        <div class="rc-steps rc-substeps">
+          <div class="rc-step active" id="subTab1" onclick="showSubTab(1)">
+            Cuenta corriente por cliente
+            <span class="rc-step-count" id="subCnt1">0</span>
+          </div>
+          <div class="rc-step" id="subTab2" onclick="showSubTab(2)">
+            Cruce factura ↔ pago
+            <span class="rc-step-count" id="subCnt2">0</span>
+          </div>
+          <div class="rc-step" id="subTab3" onclick="showSubTab(3)">
+            Facturas pendientes de cobro
+            <span class="rc-step-count" id="subCnt3">0</span>
+          </div>
         </div>
 
-        <!-- Cruce a mano -->
-        <p class="rc-manual-help">✋ <b>Cruce a mano:</b> marcá una o varias facturas pendientes y un pago sin imputar, y apretá “Cruzar”.
-           Si el pago sobra, lo que sobra queda como un pago aparte para cruzarlo después.</p>
-
-        <!-- Pendientes -->
-        <h2 class="rc-h2">Facturas pendientes de cobro</h2>
-        <div class="rc-table-wrap">
-          <table class="rc-table">
-            <thead>
-              <tr><th></th><th>Comprobante</th><th>Fecha</th><th>Cliente</th>
-                  <th class="num">Saldo</th><th>Descripción</th></tr>
-            </thead>
-            <tbody id="pendBody"></tbody>
-          </table>
+        <!-- Solapa 1: Cuenta corriente -->
+        <div id="subPanel1">
+          <div class="rc-cc-toolbar">
+            <label class="rc-switch" title="Junta los clientes bajo el grupo que les hayas asignado y muestra el saldo total de cada grupo">
+              <input type="checkbox" id="chkAgrupar" onchange="toggleAgrupar()">
+              <span>Agrupar clientes</span>
+            </label>
+            <button class="btn btn-ghost" onclick="openGroups()" title="Crear grupos y decidir qué cliente va en cada uno">⚙ Editar grupos</button>
+          </div>
+          <div class="rc-cc-grid" id="ccGrid"></div>
+          <div id="ccGrouped" hidden></div>
         </div>
 
-        <!-- Pagos sin imputar -->
-        <h2 class="rc-h2">Pagos sin imputar</h2>
-        <div class="rc-table-wrap">
-          <table class="rc-table">
-            <thead>
-              <tr><th></th><th>Banco</th><th>Fecha</th><th>Originante</th>
-                  <th class="num">Libre</th><th>Estado</th></tr>
-            </thead>
-            <tbody id="unassBody"></tbody>
-          </table>
+        <!-- Solapa 2: Cruce factura ↔ pago -->
+        <div id="subPanel2" hidden>
+          <div class="rc-table-wrap">
+            <table class="rc-table">
+              <thead>
+                <tr><th>Estado</th><th>Factura</th><th>Cliente</th><th class="num">Imputado</th>
+                    <th>Pago</th><th></th></tr>
+              </thead>
+              <tbody id="matchBody"></tbody>
+            </table>
+          </div>
+          <div class="rc-pager" id="pg_match" hidden></div>
+        </div>
+
+        <!-- Solapa 3: Facturas pendientes de cobro (y pagos sin imputar, para cruzar a mano) -->
+        <div id="subPanel3" hidden>
+          <p class="rc-manual-help">✋ <b>Cruce a mano:</b> marcá una o varias facturas pendientes y un pago sin imputar, y apretá “Cruzar”.
+             Si el pago sobra, lo que sobra queda como un pago aparte para cruzarlo después.</p>
+
+          <div class="rc-table-wrap">
+            <table class="rc-table">
+              <thead>
+                <tr><th></th><th>Comprobante</th><th>Fecha</th><th>Cliente</th>
+                    <th class="num">Saldo</th><th>Descripción</th></tr>
+              </thead>
+              <tbody id="pendBody"></tbody>
+            </table>
+          </div>
+          <div class="rc-pager" id="pg_pend" hidden></div>
+
+          <h2 class="rc-h2">Pagos sin imputar</h2>
+          <div class="rc-table-wrap">
+            <table class="rc-table">
+              <thead>
+                <tr><th></th><th>Banco</th><th>Fecha</th><th>Originante</th>
+                    <th class="num">Libre</th><th>Estado</th></tr>
+              </thead>
+              <tbody id="unassBody"></tbody>
+            </table>
+          </div>
+          <div class="rc-pager" id="pg_unass" hidden></div>
         </div>
 
         <!-- Barra del cruce a mano: aparece al elegir facturas o un pago -->
@@ -280,10 +301,10 @@
 
         <div class="rc-panel-foot">
           <button class="btn btn-ghost rc-btn-cancelar" onclick="cancelarCambios()"
-                  title="Anula todas las acciones hechas en esta pantalla que no se guardaron">✕ Cancelar cambios</button>
+                  title="Vuelve a leer todo de la base y anula los cruces propuestos por el sistema que se desarmaron sin guardar">✕ Cancelar cambios</button>
           <button class="btn btn-ghost" onclick="exportCSV()">⬇ Exportar CSV</button>
           <button class="btn btn-primary rc-btn-save" id="btnSaveDb" onclick="saveToDb()" hidden
-                  title="Guarda facturas, cobros y cruces en la base. Las facturas cubiertas quedan como pagadas y la próxima vez que subas ese PDF el sistema te avisa">💾 Guardar en base</button>
+                  title="Guarda todos los cruces de la pantalla, también los que propuso el sistema. Las facturas cubiertas quedan como pagadas y la próxima vez que subas ese PDF el sistema te avisa">💾 Guardar en base</button>
           <button class="btn btn-primary" onclick="runReconcile()">↺ Re-conciliar</button>
         </div>
       </div>
@@ -339,6 +360,9 @@
     </div>
   </div>
 </div>
+
+<!-- Estado del guardado: Guardando… / Guardado / error -->
+<div class="rc-savepill" id="rcSave" hidden></div>
 
 <div id="toast" class="rc-toast" hidden></div>
 <script src="{{ sv('/static/js/reconciliation.js') }}"></script>

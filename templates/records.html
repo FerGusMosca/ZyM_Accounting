@@ -36,13 +36,13 @@
         <span class="dash-nav-icon">📋</span>
         <span>Facturas Enviadas</span>
       </a>
-      <a href="/reconciliation" class="dash-nav-item">
-        <span class="dash-nav-icon">🔗</span>
-        <span>Conciliación</span>
-      </a>
       <a href="/reconciliation/registros" class="dash-nav-item active">
         <span class="dash-nav-icon">🗂️</span>
         <span>Registros</span>
+      </a>
+      <a href="/reconciliation" class="dash-nav-item">
+        <span class="dash-nav-icon">🔗</span>
+        <span>Conciliación</span>
       </a>
     </nav>
     <div class="dash-sidebar-footer">
@@ -60,9 +60,9 @@
         <p class="rc-subtitle">Todo lo que ya está en la base — facturas, cobros y cruces, con el archivo original de cada uno</p>
       </div>
       <div class="rc-header-actions">
-        <input type="search" id="rgSearch" class="rg-search" placeholder="Buscar…" oninput="renderAll()">
-        <button class="btn btn-ghost" onclick="cargar()" title="Vuelve a leer los registros de la base">↻ Actualizar</button>
-        <a class="btn btn-primary" href="/reconciliation" title="Ir a subir una nueva tanda de facturas y cobros">+ Nueva tanda</a>
+        <input type="search" id="rgSearch" class="rg-search" placeholder="Buscar…" oninput="buscar()">
+        <button class="btn btn-ghost" onclick="cargar()" title="Vuelve a leer de la base la página que estás viendo">↻ Actualizar</button>
+        <a class="btn btn-primary" href="/reconciliation" title="Ir directo a la pantalla de Conciliación">Ir a Conciliación →</a>
       </div>
     </div>
 
@@ -102,6 +102,7 @@
           <tbody id="invBody"></tbody>
         </table>
       </div>
+      <div class="rg-pager" id="pager1"></div>
     </section>
 
     <!-- ── Cobros ── -->
@@ -122,6 +123,7 @@
           <tbody id="payBody"></tbody>
         </table>
       </div>
+      <div class="rg-pager" id="pager2"></div>
     </section>
 
     <!-- ── Cruces ── -->
@@ -137,6 +139,7 @@
           <tbody id="matBody"></tbody>
         </table>
       </div>
+      <div class="rg-pager" id="pager3"></div>
     </section>
 
     <!-- ── Clientes ── -->
@@ -152,6 +155,7 @@
           <tbody id="cliBody"></tbody>
         </table>
       </div>
+      <div class="rg-pager" id="pager4"></div>
     </section>
 
   </main>
@@ -183,7 +187,7 @@
       <label>Quién pagó
         <input type="text" id="apOriginante" list="apClientes" autocomplete="off"
                placeholder="Escribí para buscar, o poné uno nuevo"
-               oninput="completarCliente()">
+               oninput="sugerirClientes(); completarCliente()">
         <datalist id="apClientes"></datalist>
         <span class="rg-form-hint" id="apClienteHint">Si el cliente no está en la lista, escribilo igual y se carga como nuevo.</span>
       </label>
@@ -216,6 +220,23 @@
     <div id="rgModalBody"></div>
   </div>
 </div>
+
+<!-- ── Cuadro de confirmar / avisar (reemplaza confirm() y alert()) ── -->
+<div class="rg-modal" id="rgConfirm" hidden>
+  <div class="rg-modal-box rg-modal-chico" onclick="event.stopPropagation()">
+    <div class="rg-modal-head">
+      <h3 id="cfTitulo"></h3>
+      <button class="btn btn-ghost" onclick="confirmarResolver(false)">✕</button>
+    </div>
+    <div class="rg-confirm-msg" id="cfMensaje"></div>
+    <div class="rg-form-actions">
+      <button class="btn btn-ghost" id="cfCancel" onclick="confirmarResolver(false)"></button>
+      <button class="btn btn-primary" id="cfOk" onclick="confirmarResolver(true)"></button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="rc-toast" hidden></div>
 
 <input type="file" id="rgPayFile" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic" hidden
        onchange="subirComprobante(this)">

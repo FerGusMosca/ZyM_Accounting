@@ -1,10 +1,11 @@
-Sos un extractor de datos de facturas electrónicas argentinas (ARCA/AFIP).
+Sos un extractor de datos de comprobantes electrónicos argentinos (ARCA/AFIP):
+facturas, notas de crédito y notas de débito.
 
-Te paso el texto crudo extraído de un PDF de factura. Tu tarea es devolver
+Te paso el texto crudo extraído de un PDF. Tu tarea es devolver
 EXCLUSIVAMENTE un objeto JSON válido, sin markdown, sin backticks, sin texto
 adicional antes o después.
 
-TEXTO DE LA FACTURA:
+TEXTO DEL COMPROBANTE:
 ---------------------
 {document_text}
 ---------------------
@@ -23,8 +24,34 @@ Devolvé este JSON exacto (usá null si un campo no aparece):
   "razon_social_cliente": "string",
   "importe_total": 0.0,
   "cae": "string",
+  "comp_ajustado": "00001-00000652 o null",
   "descripcion": "el servicio facturado, máx 140 caracteres"
 }
+
+════════════════════════════════════════════════════════════════════════
+QUÉ COMPROBANTE ES — LEÉ ESTO PRIMERO
+════════════════════════════════════════════════════════════════════════
+"tipo_comprobante" tiene SOLO uno de estos tres valores, en mayúsculas y
+tal cual están escritos acá:
+
+  "FACTURA"         → el título grande dice FACTURA
+  "NOTA_CREDITO"    → el título grande dice NOTA DE CRÉDITO (código 013,
+                      008 o 003 según la letra). Resta de la deuda.
+  "NOTA_DEBITO"     → el título grande dice NOTA DE DÉBITO (código 012,
+                      007 o 002). Suma a la deuda.
+
+El título está arriba a la derecha, al lado de la letra (C, A, B) y del
+"COD. XXX". Es el dato que manda: no lo deduzcas del nombre del archivo
+ni del texto del detalle.
+
+"importe_total" va SIEMPRE POSITIVO, tal cual está impreso en el papel,
+también en las notas de crédito. El signo lo pone el sistema después.
+
+"comp_ajustado" es el comprobante que la nota de crédito o de débito
+corrige. En el papel aparece arriba de la tabla de ítems, con una
+etiqueta tipo "Fac. C:" o "Comprobante asociado", por ejemplo
+"Fac. C: 00001-00000652". Va con el mismo formato "puntoventa-numero".
+En una FACTURA siempre es null.
 
 ════════════════════════════════════════════════════════════════════════
 EMISOR vs CLIENTE
@@ -56,6 +83,10 @@ el arranque real del texto y cualquier marca de estado que traiga al final
 (ADELANTO, SALDO, CUOTA 1/2, etc.), porque sirven para la conciliación.
 Si hay varios ítems, concatenalos separados por " | ".
 
+En las notas de crédito y de débito el detalle suele decir a qué comprobante
+ajustan, por ejemplo "Ajusta a la factura emitida con fecha 21/09/2026 número
+C00001-00000652.". Ese texto va tal cual en "descripcion".
+
 NO incluyas en la descripción los valores de las otras columnas de la tabla.
 Frases como "1,00 unidades 495000,00" o "0,00 0,00" son cantidad, unidad de
 medida, precio y bonificación — son columnas vecinas que se mezclan al extraer
@@ -69,6 +100,6 @@ FORMATO
   El formato argentino "632.500,00" se convierte a 632500.00.
 - "punto_venta" y "comp_nro" conservan los ceros a la izquierda como strings.
 - Las fechas siempre en formato DD/MM/AAAA.
-- Si el PDF trae ORIGINAL, DUPLICADO y TRIPLICADO de la misma factura,
-  devolvé UN solo JSON (es una sola factura).
+- Si el PDF trae ORIGINAL, DUPLICADO y TRIPLICADO del mismo comprobante,
+  devolvé UN solo JSON (es un solo comprobante).
 - Respondé SOLO el JSON. Nada más.

@@ -1,24 +1,80 @@
 /* records.js — Registros guardados de Cobranzas
  *
- * Muestra lo que ya esta en la base: facturas, cobros y cruces.
- * De cada factura y cada cobro se puede abrir el archivo original,
- * porque desde esta tanda el archivo queda guardado al subirlo.
+ * Muestra lo que ya esta en la base: facturas, cobros, cruces y clientes.
+ * De cada factura y cada cobro se puede abrir el archivo original.
+ *
+ * Tanda 7 (pedidos del 04/10/2026):
+ *   - Todo paginado: cada pagina se lee de la base en el momento. No se
+ *     guarda ninguna lista en el navegador ni se la reutiliza.
+ *   - Borrar pide confirmacion en un cuadro propio.
+ *   - Si la factura o el cobro tiene cruces, se avisa antes cuantos son y al
+ *     borrar se eliminan tambien los cruces.
  */
 
+const TABS = { 1: 'facturas', 2: 'cobros', 3: 'cruces', 4: 'clientes' };
+
+let tabActual = 1;
+const paginaDe = { 1: 1, 2: 1, 3: 1, 4: 1 };   // pagina que se esta viendo en cada solapa
+let tamano = 25;                              // registros por pagina
+let totalesTabs = { facturas: 0, cobros: 0, cruces: 0, clientes: 0 };
+
+// Solo lo de la pagina que se esta viendo, recien leido de la base.
 let facturas = [];
 let pagos    = [];
 let cruces   = [];
 let clientes = [];
 
-document.addEventListener('DOMContentLoaded', cargar);
+let temporizadorBusqueda = null;
+
+document.addEventListener('DOMContentLoaded', () => cargar());
+
+// Todos los pedidos van con la orden de no usar nada guardado.
+function pedir(url, opciones = {}) {
+  return fetch(url, { ...opciones, cache: 'no-store' });
+}
 
 /* ── Datos ─────────────────────────────────────────────────────── */
 
+function textoBusqueda() {
+  return (document.getElementById('rgSearch').value || '').trim();
+}
+
+// Spinner sobre la tabla mientras se lee de la base (cambio de pagina, de
+// solapa, busqueda, Actualizar, despues de borrar o guardar): asi se ve que
+// la pantalla esta trabajando y no colgada. Mientras tanto el paginador
+// queda deshabilitado para no pedir dos veces.
+let lecturas = 0;
+function mostrarCargando(si) {
+  lecturas += si ? 1 : -1;
+  const activo = lecturas > 0;
+  document.querySelectorAll('.rc-panel').forEach(panel => {
+    let capa = panel.querySelector('.rg-loading');
+    if (!capa) {
+      capa = document.createElement('div');
+      capa.className = 'rg-loading';
+      capa.innerHTML = '<div class="rg-loading-box"><span class="rg-loading-spin"></span><span>Cargando…</span></div>';
+      panel.appendChild(capa);
+    }
+    capa.hidden = !activo;
+  });
+  // Se apagan solo los que estaban prendidos, y se vuelven a prender esos
+  // mismos al terminar (si la lectura fallo, el paginador sigue usable).
+  document.querySelectorAll('.rg-pager button, .rg-pager select').forEach(el => {
+    if (activo && !el.disabled) { el.disabled = true; el.dataset.bloq = '1'; }
+    if (!activo && el.dataset.bloq) { el.disabled = false; delete el.dataset.bloq; }
+  });
+}
+
+// Lee de la base la pagina de la solapa que se esta viendo.
 async function cargar() {
   const hint = document.getElementById('rgHint');
   hint.textContent = 'Cargando…';
+  mostrarCargando(true);
   try {
-    const res  = await fetch('/reconciliation/registros/data');
+    const url = `/reconciliation/registros/page?tab=${TABS[tabActual]}` +
+                `&page=${paginaDe[tabActual]}&size=${tamano}` +
+                `&q=${encodeURIComponent(textoBusqueda())}`;
+    const res  = await pedir(url);
     const data = await res.json();
 
     if (data.status === 'no_db') {
@@ -27,61 +83,110 @@ async function cargar() {
     }
     if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
 
-    facturas = data.facturas || [];
-    pagos    = data.pagos    || [];
-    cruces   = data.cruces   || [];
+    paginaDe[tabActual] = data.page;     // el servidor corrige si la pagina ya no existe
+    totalesTabs = data.totales;
+    if (tabActual === 1) facturas = data.items;
+    if (tabActual === 2) pagos    = data.items;
+    if (tabActual === 3) cruces   = data.items;
+    if (tabActual === 4) clientes = data.items;
 
-    const resCli = await fetch('/reconciliation/registros/clients');
-    const dataCli = await resCli.json();
-    clientes = dataCli.clientes || [];
-
-    renderAll();
+    renderTab(data);
   } catch (e) {
     hint.textContent = `No se pudieron traer los registros: ${e.message}`;
+  } finally {
+    mostrarCargando(false);
   }
+}
+
+// Buscar: vuelve a la primera pagina de todas las solapas y lee de nuevo.
+function buscar() {
+  clearTimeout(temporizadorBusqueda);
+  temporizadorBusqueda = setTimeout(() => {
+    [1, 2, 3, 4].forEach(i => { paginaDe[i] = 1; });
+    cargar();
+  }, 300);
+}
+
+function irAPagina(n) {
+  paginaDe[tabActual] = Math.max(1, n);
+  cargar();
+}
+
+function cambiarTamano(valor) {
+  tamano = Number(valor) || 25;
+  [1, 2, 3, 4].forEach(i => { paginaDe[i] = 1; });
+  cargar();
 }
 
 /* ── Pantalla ──────────────────────────────────────────────────── */
 
 function showTab(n) {
+  tabActual = n;
   [1, 2, 3, 4].forEach(i => {
     document.getElementById(`tab${i}`).classList.toggle('active', i === n);
     document.getElementById(`panel${i}`).hidden = i !== n;
   });
+  cargar();     // cada vez que se entra a una solapa se lee de la base
 }
 
-function renderAll() {
-  const q = (document.getElementById('rgSearch').value || '').trim().toLowerCase();
-  const hit = (...campos) => !q || campos.some(c => (c || '').toString().toLowerCase().includes(q));
-
-  const fs = facturas.filter(f => hit(f.comprobante, f.cliente, f.cuit, f.descripcion, f.archivo));
-  const ps = pagos.filter(p => hit(p.originante, p.cuit, p.banco, p.referencia, p.archivo));
-  const cs = cruces.filter(c => hit(c.comprobante, c.cliente, c.banco, c.originante));
-  const ks = clientes.filter(k => hit(k.nombre, k.cuit, k.grupo));
-
-  document.getElementById('cntInv').textContent = fs.length;
-  document.getElementById('cntPay').textContent = ps.length;
-  document.getElementById('cntMat').textContent = cs.length;
-  document.getElementById('cntCli').textContent = ks.length;
+function renderTab(data) {
+  const t = totalesTabs;
+  document.getElementById('cntInv').textContent = t.facturas;
+  document.getElementById('cntPay').textContent = t.cobros;
+  document.getElementById('cntMat').textContent = t.cruces;
+  document.getElementById('cntCli').textContent = t.clientes;
 
   document.getElementById('rgHint').textContent =
-    `${facturas.length} factura(s), ${pagos.length} cobro(s) y ${cruces.length} cruce(s) guardados.`;
+    `${t.facturas} factura(s), ${t.cobros} cobro(s), ${t.cruces} cruce(s) y ` +
+    `${t.clientes} cliente(s)` + (textoBusqueda() ? ' que coinciden con la búsqueda.' : ' guardados.');
 
-  document.getElementById('invBody').innerHTML = fs.length ? fs.map(f => `
-    <tr class="rg-row" onclick="verFactura(${f.id})">
-      <td>${esc(f.comprobante)}</td>
+  if (tabActual === 1) renderFacturas();
+  if (tabActual === 2) renderPagos();
+  if (tabActual === 3) renderCruces();
+  if (tabActual === 4) renderClientes();
+  renderPager(data);
+}
+
+function renderPager(data) {
+  const caja = document.getElementById(`pager${tabActual}`);
+  if (!caja) return;
+  const desde = data.total ? (data.page - 1) * data.size + 1 : 0;
+  const hasta = Math.min(data.page * data.size, data.total);
+  caja.innerHTML = `
+    <span class="rg-pager-info">${desde}–${hasta} de ${data.total}</span>
+    <button class="btn btn-ghost" ${data.page <= 1 ? 'disabled' : ''} onclick="irAPagina(1)" title="Primera">«</button>
+    <button class="btn btn-ghost" ${data.page <= 1 ? 'disabled' : ''} onclick="irAPagina(${data.page - 1})" title="Anterior">‹</button>
+    <span class="rg-pager-pag">Página ${data.page} de ${data.pages}</span>
+    <button class="btn btn-ghost" ${data.page >= data.pages ? 'disabled' : ''} onclick="irAPagina(${data.page + 1})" title="Siguiente">›</button>
+    <button class="btn btn-ghost" ${data.page >= data.pages ? 'disabled' : ''} onclick="irAPagina(${data.pages})" title="Última">»</button>
+    <label class="rg-pager-size">Por página
+      <select onchange="cambiarTamano(this.value)">
+        ${[10, 25, 50, 100].map(n => `<option value="${n}" ${n === data.size ? 'selected' : ''}>${n}</option>`).join('')}
+      </select>
+    </label>`;
+}
+
+function renderFacturas() {
+  document.getElementById('invBody').innerHTML = facturas.length ? facturas.map(f => {
+    const sigla = sigla_de(f);
+    const nota  = sigla === 'NC';
+    return `
+    <tr class="rg-row ${sigla ? 'nota' : ''} ${nota ? 'nc' : ''}" onclick="verFactura(${f.id})">
+      <td>${sigla ? `<span class="rc-badge ${nota ? 'nc' : 'nd'}" title="${nota ? 'Nota de crédito: resta de la deuda' : 'Nota de débito: suma a la deuda'}">${sigla}</span> ` : ''}${esc(f.comprobante)}</td>
       <td>${esc(f.fecha) || '—'}</td>
       <td>${esc(f.cliente)}</td>
       <td class="mono">${esc(f.cuit)}</td>
-      <td class="num">${money(f.importe)}</td>
+      <td class="num ${Number(f.importe) < 0 ? 'neg' : ''}">${money(f.importe)}</td>
       <td class="num">${money(f.imputado)}</td>
       <td>${estado(f.estado)}</td>
       <td>${archivo(f)}</td>
-      <td><button class="rc-del" title="Borrar esta factura de la base"
+      <td><button class="rc-del" title="Borrar este comprobante de la base"
                   onclick="event.stopPropagation(); borrarFactura(${f.id})">✕</button></td>
-    </tr>`).join('') : vacio(9, 'No hay facturas guardadas.');
+    </tr>`; }).join('') : vacio(9, 'No hay facturas guardadas.');
+}
 
-  document.getElementById('payBody').innerHTML = ps.length ? ps.map(p => `
+function renderPagos() {
+  document.getElementById('payBody').innerHTML = pagos.length ? pagos.map(p => `
     <tr class="rg-row" onclick="verPago(${p.id})">
       <td>${esc(p.fecha) || '—'}</td>
       <td>${esc(p.originante) || '—'}</td>
@@ -93,8 +198,10 @@ function renderAll() {
       <td><button class="rc-del" title="Borrar este cobro"
                   onclick="event.stopPropagation(); borrarPago(${p.id})">✕</button></td>
     </tr>`).join('') : vacio(8, 'No hay cobros guardados.');
+}
 
-  document.getElementById('matBody').innerHTML = cs.length ? cs.map(c => `
+function renderCruces() {
+  document.getElementById('matBody').innerHTML = cruces.length ? cruces.map(c => `
     <tr>
       <td>${esc(c.comprobante)}</td>
       <td>${esc(c.cliente)}</td>
@@ -104,8 +211,10 @@ function renderAll() {
       <td><button class="rc-del" title="Sacar este cruce"
                   onclick="sacarCruce(${c.id})">✕</button></td>
     </tr>`).join('') : vacio(6, 'No hay cruces guardados.');
+}
 
-  document.getElementById('cliBody').innerHTML = ks.length ? ks.map(k => `
+function renderClientes() {
+  document.getElementById('cliBody').innerHTML = clientes.length ? clientes.map(k => `
     <tr>
       <td>${esc(k.nombre)}</td>
       <td class="mono">${esc(k.cuit)}</td>
@@ -127,7 +236,14 @@ function archivo(d) {
              title="${esc(d.archivo) || 'Abrir'}">📄 Ver</a>`;
 }
 
+/** "NC", "ND" o vacio si es una factura comun. */
+function sigla_de(f) {
+  const t = String(f.tipo || 'FACTURA').toUpperCase();
+  return t === 'NOTA_CREDITO' ? 'NC' : t === 'NOTA_DEBITO' ? 'ND' : '';
+}
+
 function estado(e) {
+  if (e === 'nota') return '<span class="rc-badge nc">— No se cobra</span>';
   return e === 'paid'
     ? '<span class="rc-badge alta">✓ Pagada</span>'
     : '<span class="rc-badge media">~ Pendiente</span>';
@@ -143,26 +259,36 @@ function confianza(c) {
 
 /* ── Detalle ───────────────────────────────────────────────────── */
 
-function verFactura(id) {
+async function verFactura(id) {
   const f = facturas.find(x => x.id === id);
   if (!f) return;
-  const propios = cruces.filter(c => c.invoice_id === id);
-  abrirDetalle(`Factura ${f.comprobante}`, [
+  let propios;
+  try { propios = await crucesDe('invoice', id); }
+  catch (e) { toast(`❌ No se pudieron traer los cruces: ${e.message}`); return; }
+  const sigla = sigla_de(f);
+  const comoSeLlama = sigla === 'NC' ? 'Nota de crédito'
+                    : sigla === 'ND' ? 'Nota de débito'
+                    : 'Factura';
+  abrirDetalle(`${comoSeLlama} ${f.comprobante}`, [
     ['Cliente',     f.cliente],
     ['CUIT',        f.cuit],
     ['Fecha',       f.fecha],
     ['Importe',     money(f.importe)],
     ['Imputado',    money(f.imputado)],
-    ['Estado',      f.estado === 'paid' ? 'Pagada' : 'Pendiente'],
+    ['Estado',      f.estado === 'nota' ? 'No se cobra'
+                  : f.estado === 'paid' ? 'Pagada' : 'Pendiente'],
+    ['Ajusta a',    f.ajusta || '—'],
     ['Descripción', f.descripcion],
     ['Archivo',     f.archivo],
   ], propios.map(c => `${c.fecha_pago || '—'} · ${c.banco || ''} ${c.originante || ''} · ${money(c.importe)}`), f);
 }
 
-function verPago(id) {
+async function verPago(id) {
   const p = pagos.find(x => x.id === id);
   if (!p) return;
-  const propios = cruces.filter(c => c.payment_id === id);
+  let propios;
+  try { propios = await crucesDe('payment', id); }
+  catch (e) { toast(`❌ No se pudieron traer los cruces: ${e.message}`); return; }
   abrirDetalle('Comprobante de pago', [
     ['Fecha',      p.fecha],
     ['Originante', p.originante],
@@ -228,11 +354,32 @@ function abrirAltaPago() {
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('apError').hidden = true;
 
-  // Los clientes que ya existen salen en la lista del campo "Quién pagó".
-  document.getElementById('apClientes').innerHTML =
-    clientes.map(k => `<option value="${esc(k.nombre)}">${esc(k.cuit)}</option>`).join('');
+  // Los clientes que ya existen salen en la lista del campo "Quién pagó":
+  // se buscan en la base a medida que se escribe.
+  clientesSugeridos = [];
+  document.getElementById('apClientes').innerHTML = '';
 
   document.getElementById('rgAlta').hidden = false;
+}
+
+let clientesSugeridos = [];
+let temporizadorClientes = null;
+
+function sugerirClientes() {
+  clearTimeout(temporizadorClientes);
+  temporizadorClientes = setTimeout(async () => {
+    const escrito = document.getElementById('apOriginante').value.trim();
+    if (!escrito) { clientesSugeridos = []; document.getElementById('apClientes').innerHTML = ''; return; }
+    try {
+      const res  = await pedir(`/reconciliation/registros/clients?q=${encodeURIComponent(escrito)}`);
+      const data = await res.json();
+      if (data.status !== 'ok') return;
+      clientesSugeridos = data.clientes || [];
+      document.getElementById('apClientes').innerHTML =
+        clientesSugeridos.map(k => `<option value="${esc(k.nombre)}">${esc(k.cuit)}</option>`).join('');
+      completarCliente();
+    } catch (_) { /* sin sugerencias, se puede escribir igual */ }
+  }, 250);
 }
 
 /* Si lo que escribió coincide con un cliente que ya existe, se le completa
@@ -240,7 +387,7 @@ function abrirAltaPago() {
 function completarCliente() {
   const escrito = document.getElementById('apOriginante').value.trim().toLowerCase();
   const hint    = document.getElementById('apClienteHint');
-  const k = clientes.find(x => (x.nombre || '').toLowerCase() === escrito);
+  const k = clientesSugeridos.find(x => (x.nombre || '').toLowerCase() === escrito);
 
   if (k) {
     document.getElementById('apCuit').value = k.cuit || '';
@@ -277,7 +424,7 @@ async function guardarPagoManual() {
   };
 
   try {
-    const res  = await fetch('/reconciliation/registros/payment_manual', {
+    const res  = await pedir('/reconciliation/registros/payment_manual', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -285,58 +432,107 @@ async function guardarPagoManual() {
     const data = await res.json();
     if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
     cerrarAltaPago();
-    await cargar();
     showTab(2);
   } catch (e) {
     mostrarError(err, `No se pudo guardar: ${e.message}`);
   }
 }
 
+/** Los cruces guardados de una factura o de un cobro, leidos de la base ahora. */
+async function crucesDe(que, id) {
+  const url = que === 'invoice'
+    ? `/reconciliation/registros/invoice_matches?invoice_id=${id}`
+    : `/reconciliation/registros/payment_matches?payment_id=${id}`;
+  const res  = await pedir(url);
+  const data = await res.json();
+  if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+  return data.cruces || [];
+}
+
+/** Hasta 8 lineas de cruces para mostrar en el aviso; el resto va en una sola linea. */
+function listaDeCruces(lineas) {
+  const vistas = lineas.slice(0, 8).map(t => `• ${esc(t)}`);
+  if (lineas.length > 8) vistas.push(`• … y ${lineas.length - 8} más`);
+  return vistas.join('\n');
+}
+
 async function borrarFactura(id) {
   const f = facturas.find(x => x.id === id);
   if (!f) return;
 
-  // Si ya tiene plata imputada, ni se pregunta: primero van los cruces.
-  const cruces = cruces_de(id);
-  if (cruces.length) {
-    alert(`Esta factura tiene ${cruces.length} cruce(s) con cobros.\n\n` +
-          `Primero hay que sacarlos en la solapa de cruces, y después se puede borrar.`);
-    return;
-  }
+  let propios;
+  try { propios = await crucesDe('invoice', id); }
+  catch (e) { toast(`❌ No se pudo revisar la factura: ${e.message}`); return; }
 
-  const nombre = f.comprobante ? `la factura ${f.comprobante}` : 'esta factura';
-  if (!confirm(`¿Borrar ${nombre} de la base?\n\nNo se puede deshacer.`)) return;
+  const nombre = f.comprobante ? `la factura <b>${esc(f.comprobante)}</b>` : 'esta factura';
+  let mensaje = `Se va a borrar ${nombre} de la base.`;
+  if (propios.length) {
+    mensaje += `\n\n⚠️ Tiene <b>${propios.length} cruce(s)</b> con cobros. ` +
+               `Al borrarla <b>se eliminan también esos cruces</b>:\n` +
+               listaDeCruces(propios.map(c =>
+                 `${c.fecha_pago || '—'} · ${c.banco || ''} ${c.originante || ''} · ${money(c.importe)}`)) +
+               `\n\nLos cobros quedan en la base, libres para cruzarlos de nuevo.`;
+  }
+  mensaje += '\n\nNo se puede deshacer.';
+
+  const seguir = await confirmar({
+    titulo: propios.length ? 'Borrar la factura y sus cruces' : 'Borrar la factura',
+    mensaje,
+    ok: propios.length ? 'Borrar factura y cruces' : 'Borrar',
+    cancel: 'Cancelar',
+  });
+  if (!seguir) return;
 
   try {
-    const res  = await fetch('/reconciliation/registros/invoice_delete', {
+    const res  = await pedir('/reconciliation/registros/invoice_delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ invoice_id: id }),
     });
     const data = await res.json();
-    if (data.status === 'con_cruces') { alert(data.message); return; }
     if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
     await cargar();
+    if (data.n_cruces) {
+      await avisar('Factura borrada',
+        `Se borró ${nombre} y se eliminaron <b>${data.n_cruces} cruce(s)</b>.\n\n` +
+        `Los cobros que tenía imputados quedaron libres.`);
+    } else {
+      toast('🗑 Factura borrada');
+    }
   } catch (e) {
-    alert(`No se pudo borrar: ${e.message}`);
+    toast(`❌ No se pudo borrar: ${e.message}`);
   }
-}
-
-/** Los cruces guardados de esa factura. */
-function cruces_de(invoiceId) {
-  return cruces.filter(c => c.invoice_id === invoiceId);
 }
 
 async function borrarPago(id) {
   const p = pagos.find(x => x.id === id);
   if (!p) return;
-  const texto = p.imputado
-    ? 'Ese cobro ya está imputado a una factura. Si lo borrás, la factura vuelve a quedar pendiente. ¿Seguimos?'
-    : '¿Borrar este cobro?';
-  if (!confirm(texto)) return;
+
+  let propios;
+  try { propios = await crucesDe('payment', id); }
+  catch (e) { toast(`❌ No se pudo revisar el cobro: ${e.message}`); return; }
+
+  const quien = p.originante ? `el cobro de <b>${esc(p.originante)}</b> por ${money(p.importe)}` : 'este cobro';
+  let mensaje = `Se va a borrar ${quien} de la base.`;
+  if (propios.length) {
+    mensaje += `\n\n⚠️ Tiene <b>${propios.length} cruce(s)</b> con facturas. ` +
+               `Al borrarlo <b>se eliminan también esos cruces</b>:\n` +
+               listaDeCruces(propios.map(c =>
+                 `${c.comprobante} · ${c.cliente} · ${money(c.importe)}`)) +
+               `\n\nLas facturas que cubría vuelven a quedar pendientes.`;
+  }
+  mensaje += '\n\nNo se puede deshacer.';
+
+  const seguir = await confirmar({
+    titulo: propios.length ? 'Borrar el cobro y sus cruces' : 'Borrar el cobro',
+    mensaje,
+    ok: propios.length ? 'Borrar cobro y cruces' : 'Borrar',
+    cancel: 'Cancelar',
+  });
+  if (!seguir) return;
 
   try {
-    const res  = await fetch('/reconciliation/registros/payment_delete', {
+    const res  = await pedir('/reconciliation/registros/payment_delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ payment_id: id }),
@@ -344,8 +540,15 @@ async function borrarPago(id) {
     const data = await res.json();
     if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
     await cargar();
+    if (data.n_cruces) {
+      await avisar('Cobro borrado',
+        `Se borró ${quien} y se eliminaron <b>${data.n_cruces} cruce(s)</b>.\n\n` +
+        `Las facturas que cubría volvieron a quedar pendientes.`);
+    } else {
+      toast('🗑 Cobro borrado');
+    }
   } catch (e) {
-    alert(`No se pudo borrar: ${e.message}`);
+    toast(`❌ No se pudo borrar: ${e.message}`);
   }
 }
 
@@ -381,7 +584,7 @@ async function guardarNombre() {
   if (nombre === clienteEditando.nombre) { cerrarRename(); return; }
 
   try {
-    const res  = await fetch('/reconciliation/registros/client_name', {
+    const res  = await pedir('/reconciliation/registros/client_name', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_id: clienteEditando.id, nombre: nombre }),
@@ -389,7 +592,6 @@ async function guardarNombre() {
     const data = await res.json();
     if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
     cerrarRename();
-    await cargar();
     showTab(4);
   } catch (e) {
     mostrarError(err, `No se pudo cambiar el nombre: ${e.message}`);
@@ -407,21 +609,27 @@ function mostrarError(el, texto) {
 async function sacarCruce(id) {
   const c = cruces.find(x => x.id === id);
   if (!c) return;
-  if (!confirm(`Sacar la imputación de ${c.comprobante} con el pago de ${money(c.importe)}?\n\n` +
-               'La factura y el pago quedan, solo se deshace el cruce.')) return;
+  const seguir = await confirmar({
+    titulo: 'Sacar el cruce',
+    mensaje: `Se saca la imputación de <b>${esc(c.comprobante)}</b> con el pago de ${money(c.importe)}.\n\n` +
+             'La factura y el pago quedan en la base, solo se deshace el cruce.',
+    ok: 'Sacar el cruce',
+    cancel: 'Cancelar',
+  });
+  if (!seguir) return;
 
   try {
-    const res  = await fetch('/reconciliation/registros/match_delete', {
+    const res  = await pedir('/reconciliation/registros/match_delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ match_id: id }),
     });
     const data = await res.json();
     if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
-    await cargar();
     showTab(3);
+    toast('↩️ Cruce sacado');
   } catch (e) {
-    alert(`No se pudo sacar el cruce: ${e.message}`);
+    toast(`❌ No se pudo sacar el cruce: ${e.message}`);
   }
 }
 
@@ -444,15 +652,14 @@ async function subirComprobante(input) {
   fd.append('file', input.files[0]);
 
   try {
-    const res  = await fetch('/reconciliation/registros/payment_file',
+    const res  = await pedir('/reconciliation/registros/payment_file',
                              { method: 'POST', body: fd });
     const data = await res.json();
     if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
     cerrarDetalle();
-    await cargar();
     showTab(2);
   } catch (e) {
-    alert(`No se pudo subir el comprobante: ${e.message}`);
+    toast(`❌ No se pudo subir el comprobante: ${e.message}`);
   } finally {
     pagoParaComprobante = null;
   }
@@ -503,4 +710,45 @@ function desdeCalendario(id) {
   if (!cal.value) return;
   const [a, me, d] = cal.value.split('-');
   document.getElementById(id).value = `${d}/${me}/${a}`;
+}
+
+
+/* ── Cuadro propio de confirmar / avisar ───────────────────────────
+   Reemplaza al confirm() y al alert() del navegador. Devuelve una promesa:
+   true si se acepta, false si se cancela. Escape y Enter cancelan: la opcion
+   segura es la de salir. */
+let _confirmarResolver = null;
+
+function confirmar({ titulo, mensaje, ok = 'Aceptar', cancel = 'Cancelar', soloAviso = false }) {
+  document.getElementById('cfTitulo').textContent  = titulo;
+  document.getElementById('cfMensaje').innerHTML   = mensaje;
+  document.getElementById('cfOk').textContent      = ok;
+  document.getElementById('cfCancel').textContent  = cancel;
+  document.getElementById('cfCancel').hidden       = soloAviso;
+  document.getElementById('cfOk').classList.toggle('rg-btn-peligro', !soloAviso);
+  document.getElementById('rgConfirm').hidden      = false;
+  return new Promise(res => { _confirmarResolver = res; });
+}
+
+function avisar(titulo, mensaje) {
+  return confirmar({ titulo, mensaje, ok: 'Entendido', soloAviso: true });
+}
+
+function confirmarResolver(acepta) {
+  document.getElementById('rgConfirm').hidden = true;
+  const r = _confirmarResolver; _confirmarResolver = null;
+  if (r) r(acepta);
+}
+
+document.addEventListener('keydown', e => {
+  if (document.getElementById('rgConfirm').hidden) return;
+  if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); confirmarResolver(false); }
+});
+
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.hidden = true, 4500);
 }

@@ -102,3 +102,44 @@
 .rg-form .rc-fecha-wrap { width: 100%; }
 .rg-form .rc-fecha-wrap input[type="text"] { flex: 1; }
 .rg-form .rc-cal-btn { height: 34px; }
+
+/* ── Paginador (Registros) ── */
+.rg-pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+            flex-wrap: wrap; margin-top: 12px; font-family: 'Outfit', sans-serif;
+            font-size: 13px; color: var(--text-muted); }
+.rg-pager .btn { padding: 4px 10px; min-width: 34px; }
+.rg-pager .btn[disabled] { opacity: .4; cursor: default; }
+.rg-pager-info { margin-right: auto; }
+.rg-pager-pag  { color: var(--text); font-weight: 600; }
+.rg-pager-size { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
+.rg-pager-size select { font-family: inherit; font-size: 13px; padding: 3px 6px;
+                        border: 1px solid var(--border); border-radius: 8px;
+                        background: var(--bg); color: var(--text); }
+
+/* ── Cuadro de confirmar / avisar ── */
+.rg-confirm-msg { white-space: pre-line; line-height: 1.5; color: #3a2a50;
+                  font-family: 'Outfit', sans-serif; font-size: 14px; }
+.rg-confirm-msg b { color: #1a0a2e; }
+#rgConfirm { z-index: 60; }
+#rgConfirm .btn.rg-btn-peligro { background: #a93226 !important; border-color: #a93226 !important; color: #fff !important; }
+#rgConfirm .btn.rg-btn-peligro:hover { background: #8e2a20 !important; border-color: #8e2a20 !important; box-shadow: 0 4px 16px rgba(169,50,38,.3) !important; }
+#rgConfirm .rg-modal-head .btn { margin-left: auto; }
+
+/* ── Spinner sobre la tabla mientras se lee de la base ── */
+.rc-panel { position: relative; }
+.rg-loading { position: absolute; inset: 0; z-index: 5; border-radius: inherit;
+              display: flex; align-items: flex-start; justify-content: center;
+              background: rgba(250, 247, 242, .72);
+              font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600;
+              color: var(--violet-dark); }
+/* El cartel queda a la vista aunque la tabla sea larga y se este abajo de todo */
+.rg-loading-box { position: fixed; top: 50%; left: calc(50% + 110px); transform: translate(-50%, -50%);
+                  display: inline-flex; align-items: center; gap: 10px;
+                  padding: 10px 18px; border-radius: 999px; background: var(--bg);
+                  border: 1px solid var(--violet); box-shadow: 0 6px 20px rgba(80, 40, 120, .18); }
+.rg-loading[hidden] { display: none !important; }
+.rg-loading-spin { width: 22px; height: 22px; border-radius: 50%;
+                   border: 3px solid var(--violet-bg); border-top-color: var(--violet);
+                   animation: rgSpin .7s linear infinite; }
+@keyframes rgSpin { to { transform: rotate(360deg); } }
+

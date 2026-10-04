@@ -37,7 +37,6 @@ import socket
 import ssl
 import subprocess
 import tempfile
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 import xml.etree.ElementTree as ET
@@ -72,12 +71,9 @@ _SOAP_TIMEOUT_SEC    = 30
 # ARCA no tiene una consulta por fecha: hay que pedir las facturas de a una.
 # Para que las pantallas no tarden:
 #   - se piden varias a la vez, en paralelo
-#   - una factura ya emitida no cambia nunca, asi que se guarda en memoria y la
-#     proxima vez no se vuelve a pedir
+#   - cada consulta va siempre a ARCA: no se reutilizan respuestas anteriores
 _WSFE_PARALLEL      = 6     # consultas simultaneas a ARCA
 _WSFE_BLOCK         = 12    # facturas que se piden por tanda al ir hacia atras
-_INVOICE_CACHE: dict = {}   # (cuit, homo, pv, numero) -> factura
-_INVOICE_CACHE_LOCK = threading.Lock()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -545,28 +541,19 @@ def wsfe_query_invoices_range(
     Fetch a range of invoices for one sales point.
     Silently skips numbers that return errors (gaps are normal).
 
-    Las consultas salen en paralelo y lo ya consultado sale de la memoria,
-    sin volver a llamar a ARCA.
+    Las consultas salen en paralelo y cada numero se consulta siempre a ARCA,
+    sin reutilizar respuestas anteriores.
     """
     numeros = list(range(from_number, to_number + 1))
     if not numeros:
         return []
 
     def _una(n: int) -> Optional[dict]:
-        clave = (cuit, homo, punto_venta, n)
-        with _INVOICE_CACHE_LOCK:
-            guardada = _INVOICE_CACHE.get(clave)
-        if guardada is not None:
-            return dict(guardada)
         try:
             inv = wsfe_query_invoice(token, sign, cuit, punto_venta, n, homo)
         except Exception as exc:
             logger.debug("WSFE: skip PV=%s NRO=%s — %s", punto_venta, n, exc)
             return None
-        # Solo se guarda en memoria lo que ARCA dio por aprobado
-        if inv.get("resultado") == "A" and inv.get("fecha_emision"):
-            with _INVOICE_CACHE_LOCK:
-                _INVOICE_CACHE[clave] = dict(inv)
         return inv
 
     with ThreadPoolExecutor(max_workers=min(_WSFE_PARALLEL, len(numeros))) as pool:

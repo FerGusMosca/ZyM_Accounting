@@ -1,4 +1,4 @@
-// reconciliation.js — estado en sessionStorage + base opcional
+// reconciliation.js — todo sale de la base; nada se guarda en el navegador
 //
 // Tanda 3 (pedidos del 29/08/2026):
 //   1. Aviso cuando se sube dos veces la misma factura, con la opción de
@@ -24,6 +24,27 @@
 //   2. La misma factura no se sube dos veces: ahora se mira tambien el
 //      numero de comprobante, no solo el archivo.
 //   3. Bloque de facturado por mes, con el mes en curso sumandose solo.
+//
+// Tanda 7 (pedidos del 04/10/2026):
+//   1. NADA se guarda en el navegador (se sacaron el guardado local y el
+//      guardar/cargar sesion). Lo unico que vive en la pantalla es lo que se
+//      esta haciendo en este momento; al abrirla todo se lee de la base.
+//   2. Al cambiar de paso se guardan las facturas y los pagos nuevos y la
+//      pantalla los vuelve a leer de la base (sincronizar). Si el guardado
+//      falla, no se cambia de paso. Lo que alguien borro desde Registros
+//      se saca de la pantalla y se avisa.
+//   3. El paso 3 se divide en tres solapas: cuenta corriente por cliente,
+//      cruce factura-pago y facturas pendientes de cobro.
+//
+// Tanda 7b (04/10/2026) - moverse libre entre solapas:
+//   - Saltar de solapa es INSTANTANEO: nunca se bloquea ni se frena. Lo que
+//     hay que guardar se guarda en segundo plano y se ve en un cartelito
+//     arriba a la derecha (Guardando... / Guardado / error con Reintentar).
+//   - En cada salto (pasos y solapas) se guarda TODO: facturas, pagos y los
+//     cruces hechos a mano o desarmados. Tambien se guarda apenas termina
+//     una carga y apenas se confirma un cruce a mano o un desarme.
+//   - Se saco para siempre el cartel del navegador "Leave site?": no hay
+//     ningun aviso de salida en la aplicacion.
 
 // ── State ──────────────────────────────────────────────────────────
 // Un comprobante puede venir como PDF o como foto sacada del celular.
@@ -48,54 +69,52 @@ let asignaciones = {};      // cuit -> {group_id, group_name}
 let ordenInv = { campo: null, asc: true };   // orden de la grilla de facturas
 let mensualAbierto = true;                   // bloque de facturado por mes
 
-const SS_KEY = 'zym_reconciliation_v1';
+let subTab = 1;             // solapa que se esta viendo dentro del paso 3
+let colaGuardado = Promise.resolve();   // los guardados salen de a uno, en orden
+let guardando = 0;                      // cuantos guardados hay pendientes
+let calculandoPaso3 = false;            // el paso 3 esta calculando
 
 // ── Boot ──────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  restore();
   bindDrop('dropInv', 'fileInv', files => uploadFiles(files, 'invoices'));
   bindDrop('dropPay', 'filePay', files => uploadFiles(files, 'payments'));
-  document.getElementById('importSession')
-    .addEventListener('change', e => importSession(e.target.files[0]));
   renderAll();
   checkDb();
 });
 
-function persist() {
-  sessionStorage.setItem(SS_KEY,
-    JSON.stringify({ invoices, payments, lastResult, agrupar, manuales, descartados, aSacar }));
-}
-function restore() {
-  try {
-    const raw = sessionStorage.getItem(SS_KEY);
-    if (!raw) return;
-    const s = JSON.parse(raw);
-    invoices = s.invoices || [];
-    payments = s.payments || [];
-    lastResult = s.lastResult || null;
-    agrupar = !!s.agrupar;
-    manuales = s.manuales || [];
-    descartados = s.descartados || [];
-    aSacar = s.aSacar || [];
-  } catch (_) { /* sesión corrupta → arrancar vacío */ }
+// Todos los pedidos al servidor salen por aca, con la orden de no usar nada
+// guardado: cada pedido va a buscar el dato de nuevo.
+function pedir(url, opciones = {}) {
+  return fetch(url, { ...opciones, cache: 'no-store' });
 }
 
 // ── Base de datos ──────────────────────────────────────────────────
-async function checkDb() {
+async function refrescarDb() {
   try {
-    const res = await fetch('/reconciliation/db_status');
+    const res = await pedir('/reconciliation/db_status');
     const data = await res.json();
     dbEnabled = !!data.enabled;
   } catch (_) { dbEnabled = false; }
-
   const btn = document.getElementById('btnSaveDb');
   if (btn) btn.hidden = !dbEnabled;
+  return dbEnabled;
+}
+
+async function checkDb() {
+  await refrescarDb();
   const chk = document.getElementById('chkAgrupar');
   if (chk) chk.checked = agrupar;
   if (dbEnabled) {
     loadGroups();
     arrancarEnHoy();
+  } else {
+    pintarGuardado('sinbase');
   }
+}
+
+async function reintentarBase() {
+  if (await refrescarDb()) { pintarGuardado('ok'); guardarTodo(); loadGroups(); }
+  else pintarGuardado('sinbase');
 }
 
 // Al abrir la pantalla se muestra lo guardado del ÚLTIMO AÑO: Desde es
@@ -123,7 +142,7 @@ async function arrancarEnHoy() {
 
 async function loadGroups() {
   try {
-    const res = await fetch('/reconciliation/groups');
+    const res = await pedir('/reconciliation/groups');
     const data = await res.json();
     grupos = data.grupos || [];
     asignaciones = data.asignaciones || {};
@@ -202,7 +221,7 @@ async function uploadFiles(fileList, kind) {
     fd.append('files', f);
 
     try {
-      const res  = await fetch(endpoint, { method: 'POST', body: fd });
+      const res  = await pedir(endpoint, { method: 'POST', body: fd });
       const data = await res.json();
 
       if (data.status === 'not_configured') {
@@ -224,11 +243,11 @@ async function uploadFiles(fileList, kind) {
     progressStep(pfx, i + 1, files.length, f.name);
     // Los datos nuevos invalidan la conciliación anterior
     lastResult = null;
-    persist(); renderAll();
+    renderAll();
   }
 
   progressEnd(pfx);
-  if (ok) toast(`✅ ${ok} documento(s) procesado(s)`);
+  if (ok) { toast(`✅ ${ok} documento(s) procesado(s)`); guardarTodo(); }
   if (saltados) toast(`↩️ ${saltados} documento(s) repetido(s) no se cargaron`);
 }
 
@@ -303,6 +322,36 @@ async function aceptarDoc(d, target, isInv, errEl) {
   return true;
 }
 
+/**
+ * Que clase de comprobante es: FACTURA, NOTA_CREDITO o NOTA_DEBITO.
+ * Se limpia lo que haya devuelto el extractor (acentos, minusculas, guiones).
+ */
+function tipoDeComprobante(inv) {
+  let t = String(inv.tipo_comprobante || '').toUpperCase()
+    .replace(/[ÁÀ]/g, 'A').replace(/[ÉÈ]/g, 'E').replace(/[ÍÌ]/g, 'I')
+    .replace(/[ÓÒ]/g, 'O').replace(/[ÚÙ]/g, 'U')
+    .replace(/[-_]/g, ' ');
+  if (t.includes('CREDITO')) return 'NOTA_CREDITO';
+  if (t.includes('DEBITO'))  return 'NOTA_DEBITO';
+  return 'FACTURA';
+}
+
+/** Como se llama en pantalla: "NC", "ND" o vacio si es una factura comun. */
+function siglaDeComprobante(inv) {
+  const t = tipoDeComprobante(inv);
+  return t === 'NOTA_CREDITO' ? 'NC' : t === 'NOTA_DEBITO' ? 'ND' : '';
+}
+
+/**
+ * El importe como entra en las cuentas.
+ * La nota de credito viene impresa en positivo pero resta de la deuda:
+ * se le da vuelta el signo. La nota de debito suma, como una factura.
+ */
+function importeConSigno(inv) {
+  const bruto = Math.abs(Number(inv.importe_total || 0));
+  return tipoDeComprobante(inv) === 'NOTA_CREDITO' ? -bruto : bruto;
+}
+
 /** Numero de comprobante de una factura: "00002-00000222", o vacio. */
 function numeroDeFactura(inv) {
   const limpio = v => {
@@ -337,8 +386,10 @@ function progressEnd(pfx) {
 async function runReconcile() {
   if (!invoices.length) { toast('⚠️ Cargá al menos una factura'); showStep(1); return; }
   if (!payments.length) { toast('⚠️ Cargá al menos un comprobante de pago'); showStep(2); return; }
-  showStep(3);
-  await conciliar();
+  // Desde otro paso: se entra al 3 y ahi se guarda y se concilia.
+  if (pasoActual !== 3) { showStep(3); return; }
+  // Ya estaba en el 3: se guarda, se relee y se concilia de nuevo.
+  await calcularPaso3();
 }
 
 /**
@@ -350,7 +401,7 @@ async function conciliar({ silencioso = false } = {}) {
   if (!invoices.length && !payments.length) return;
   if (!silencioso) trabajando(`Cruzando ${invoices.length} factura(s) con ${payments.length} pago(s)…`);
   try {
-    const res = await fetch('/reconciliation/reconcile', {
+    const res = await pedir('/reconciliation/reconcile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ invoices, payments, manuales, descartados, sacar: aSacar })
@@ -359,7 +410,7 @@ async function conciliar({ silencioso = false } = {}) {
     if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
     lastResult = data;
     limpiarSeleccion(false);
-    persist(); renderAll();
+    renderAll();
     if (!silencioso) toast(`✅ Conciliado: ${data.resumen.n_matches} cruce(s)`);
   } catch (e) {
     toast(`❌ ${e.message}`);
@@ -393,7 +444,7 @@ function renderSeleccion() {
   if (!bar || !lastResult) return;
   const facts = lastResult.facturas_pendientes.filter(f => selFacturas.includes(f.key));
   const pago  = lastResult.pagos_sin_imputar.find(p => p.key === selPago);
-  bar.hidden = !facts.length && !pago;
+  bar.hidden = (!facts.length && !pago) || subTab !== 3;
   if (bar.hidden) return;
 
   const totFact = facts.reduce((a, f) => a + Number(f.saldo || 0), 0);
@@ -418,6 +469,7 @@ function renderSeleccion() {
 }
 
 async function cruzarManual() {
+  await colaGuardado;   // si hay un guardado en curso, se espera a que termine
   const facts = lastResult.facturas_pendientes
     .filter(f => selFacturas.includes(f.key))
     .sort((a, b) => selFacturas.indexOf(a.key) - selFacturas.indexOf(b.key));
@@ -430,7 +482,7 @@ async function cruzarManual() {
                 `contra ${facts.length} factura(s) por ${money(totFact)}.`;
   if (dif > 0.005)  detalle += `\n\nSobran <b>${money(dif)}</b>: quedan como un pago aparte, sin imputar, para cruzarlo después.`;
   if (dif < -0.005) detalle += `\n\nEl pago no alcanza: la última factura queda con saldo de <b>${money(-dif)}</b>.`;
-  detalle += '\n\nTodavía no se guarda nada: queda en pantalla hasta “Guardar en base”.';
+  detalle += '\n\nSe guarda en la base apenas confirmás.';
 
   const seguir = await ask({ titulo: 'Cruzar a mano', mensaje: detalle,
                              cancel: 'Cancelar', ok: 'Cruzar' });
@@ -440,8 +492,8 @@ async function cruzarManual() {
   const keys = facts.map(f => f.key);
   if (previo) keys.forEach(k => { if (!previo.facturas.includes(k)) previo.facturas.push(k); });
   else manuales.push({ pago: pago.key, facturas: keys });
-  persist();
   await conciliar();
+  await guardarTodo();
 }
 
 // ── Desarmar cruces ────────────────────────────────────────────────
@@ -462,12 +514,12 @@ function quitarArista(invKey, payKey) {
 
 // Desarma UN cruce (una arista).
 async function desarmarArista(i) {
+  await colaGuardado;
   const m = lastResult && lastResult.matches[i];
   if (!m) return;
   if (m.guardado) return desarmarGuardado(m);
   quitarArista(m.factura.key, m.pago.key);
-  persist();
-  await conciliar();
+    await conciliar();
   toast('↩️ Cruce desarmado: la factura y el pago vuelven a estar libres');
 }
 
@@ -475,21 +527,21 @@ async function desarmarArista(i) {
 // No toca la base en el momento: se saca recién con "Guardar en base", y
 // "Cancelar cambios" lo vuelve atrás.
 async function desarmarGuardado(m) {
+  await colaGuardado;
   const seguir = await ask({
     titulo: 'Desarmar un cruce guardado',
     mensaje: `Factura <b>${esc(m.factura.comp)}</b> con el pago de <b>${esc(m.pago.originante)}</b> ` +
              `por ${money(m.monto)}.\n\nLa factura vuelve a pendientes y la plata vuelve al pago.\n\n` +
-             `En la base se saca recién al apretar “Guardar en base”. ` +
-             `Con “Cancelar cambios” vuelve a quedar como estaba.`,
+             `Se saca de la base apenas confirmás.`,
     cancel: 'Volver',
     ok: 'Desarmar',
   });
   if (!seguir) return;
   if (!aSacar.includes(m.match_id)) aSacar.push(m.match_id);
   quitarArista(m.factura.key, m.pago.key);
-  persist();
   await conciliar();
-  toast('↩️ Cruce desarmado; se saca de la base al guardar');
+  await guardarTodo();
+  toast('↩️ Cruce desarmado y sacado de la base');
 }
 
 // Grupos: facturas y pagos unidos por cruces (un pago con varias facturas,
@@ -508,6 +560,7 @@ function gruposDeCruces(matches) {
 
 // Desarma el grupo entero de un cruce. Lo ya guardado queda: se saca de a uno.
 async function desarmarGrupo(i) {
+  await colaGuardado;
   if (!lastResult) return;
   const grupos = gruposDeCruces(lastResult.matches);
   const g = grupos[i];
@@ -524,8 +577,7 @@ async function desarmarGrupo(i) {
   });
   if (!seguir) return;
   libres.forEach(m => quitarArista(m.factura.key, m.pago.key));
-  persist();
-  await conciliar();
+    await conciliar();
   toast(`↩️ ${libres.length} cruce(s) desarmado(s)`);
 }
 
@@ -537,8 +589,8 @@ async function desarmarGrupo(i) {
 async function cancelarCambios() {
   const seguir = await ask({
     titulo: 'Cancelar cambios',
-    mensaje: 'Se anulan <b>todas las acciones hechas en esta pantalla</b> que no se guardaron ' +
-             'y la pantalla vuelve a la carga inicial, con las mismas fechas.\n\n' +
+    mensaje: 'La pantalla vuelve a leer todo de la base, con las mismas fechas, y se ' +
+             'anulan los cruces que el sistema propuso y se desarmaron sin guardar.\n\n' +
              'Lo que ya está guardado en la base no se toca.',
     cancel: 'Volver',
     ok: 'Anular todo',
@@ -547,84 +599,185 @@ async function cancelarCambios() {
   invoices = []; payments = []; lastResult = null;
   manuales = []; descartados = []; aSacar = [];
   limpiarSeleccion(false);
-  persist(); renderAll();
+  renderAll();
   if (dbEnabled) {
     await traerDeLaBase();
   } else {
-    showStep(1);
+    irAlPaso(1);
   }
-  toast('↩️ Se anularon los cambios: pantalla como en la carga inicial');
+  toast('↩️ Pantalla releída de la base');
 }
 
-// ── Guardado al pasar de paso ──────────────────────────────────────
-// Facturas y pagos se guardan solos al cambiar de paso, así no se pierden
-// si nadie aprieta "Guardar en base". Los cruces NO: esos solo con el botón.
-async function guardarDocs() {
-  if (!dbEnabled) return;
-  const sinGuardar = d => !d._guardado && !d._de_la_base && !d._id_bd;
-  const invs = invoices.filter(sinGuardar);
-  const pays = payments.filter(sinGuardar);
-  if (!invs.length && !pays.length) return;
+// ── Guardado: todo, siempre, sin frenar la pantalla ────────────────
+// guardarTodo() se llama en cada salto de solapa, apenas termina una carga y
+// apenas se confirma un cruce a mano o un desarme. Los guardados salen de a
+// uno y en orden (cola), y mientras tanto la pantalla sigue libre: el estado
+// se ve en el cartelito de arriba a la derecha.
+//
+// Lo que guarda:
+//   1) facturas y pagos nuevos, y vuelve a leer de la base lo que hay en
+//      pantalla (lo que se ve es lo que dice la base, no una copia);
+//   2) los cruces hechos a mano y los desarmados.
+// Los cruces que solo propone el sistema se guardan con "Guardar en base".
+let temporizadorGuardado;
+function pintarGuardado(tipo, detalle) {
+  const el = document.getElementById('rcSave');
+  if (!el) return;
+  clearTimeout(temporizadorGuardado);
+  el.hidden = false;
+  el.className = `rc-savepill ${tipo}`;
+  if (tipo === 'guardando') {
+    el.innerHTML = '<span class="rc-spinner-sm"></span> Guardando…';
+  } else if (tipo === 'ok') {
+    el.innerHTML = '✓ Guardado';
+    temporizadorGuardado = setTimeout(() => { el.hidden = true; }, 2200);
+  } else if (tipo === 'error') {
+    el.innerHTML = `❌ No se pudo guardar${detalle ? ': ' + esc(detalle) : ''} ` +
+                   '<button onclick="guardarTodo()">Reintentar</button>';
+  } else if (tipo === 'sinbase') {
+    el.innerHTML = '⚠️ Sin conexión con la base: lo que hagas NO se está guardando ' +
+                   '<button onclick="reintentarBase()">Reintentar</button>';
+  } else {
+    el.hidden = true;
+  }
+}
+
+let guardadoEnEspera = null;   // un guardado que todavía no empezó: absorbe a los que lleguen
+function guardarTodo() {
+  // Si ya hay uno esperando su turno, ese mismo va a guardar todo lo pendiente.
+  if (guardadoEnEspera) return guardadoEnEspera;
+  guardando++;
+  pintarGuardado('guardando');
+  const trabajo = colaGuardado
+    .then(() => { guardadoEnEspera = null; return _guardarTodo(); })
+    .catch(e => ({ ok: false, error: e.message }));
+  guardadoEnEspera = trabajo;
+  colaGuardado = trabajo;
+  return trabajo.then(r => {
+    guardando--;
+    if (guardando === 0) {
+      if (r.sinBase) pintarGuardado('sinbase');
+      else if (!r.ok) pintarGuardado('error', r.error);
+      else if (r.nada) pintarGuardado('nada');
+      else pintarGuardado('ok');
+    }
+    return r;
+  });
+}
+
+async function _guardarTodo() {
+  if (!dbEnabled && !await refrescarDb()) return { ok: false, sinBase: true };
+  if (!invoices.length && !payments.length && !aSacar.length) return { ok: true, nada: true };
   try {
-    const res = await fetch('/reconciliation/save_docs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ invoices: invs, payments: pays })
-    });
-    const data = await res.json();
-    if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
-    invs.forEach(d => { d._guardado = true; });
-    pays.forEach(d => { d._guardado = true; });
-    persist();
-    toast(`💾 Guardado: ${invs.length} factura(s) y ${pays.length} pago(s)`);
+    await sincronizarDocs();
+    if (lastResult && (aSacar.length ||
+        lastResult.matches.some(m => !m.guardado && m.confianza === 'manual'))) {
+      await guardarCruces({ soloManuales: true });
+    }
+    // Si al releer de la base cambió algo, el cálculo viejo ya no vale.
+    if (!lastResult && invoices.length && payments.length &&
+        (pasoActual === 3 || !calculandoPaso3)) {
+      await conciliar({ silencioso: true });
+    }
+    return { ok: true };
   } catch (e) {
-    toast(`❌ No se pudo guardar al pasar de paso: ${e.message}`);
+    return { ok: false, error: e.message };
   }
 }
 
-// Si quedan cruces sin guardar y se cierra la pestaña, el navegador avisa.
-function hayCrucesSinGuardar() {
-  return dbEnabled && (aSacar.length > 0 ||
-         (!!lastResult && lastResult.matches.some(m => !m.guardado)));
+// Guarda facturas y pagos nuevos y relee de la base todo lo que hay en
+// pantalla. Trabaja sobre una copia de las listas y actualiza los MISMOS
+// documentos, así lo que se cargue o quite mientras tanto no se mezcla.
+async function sincronizarDocs() {
+  const invs = [...invoices], pays = [...payments];
+  if (!invs.length && !pays.length) return;
+
+  const res = await pedir('/reconciliation/sync_docs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ invoices: invs, payments: pays })
+  });
+  const data = await res.json();
+  if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+
+  let cambio = false;
+  const quitarInv = new Set(), quitarPay = new Set();
+  const unir = (locales, deBase, quitar) => {
+    locales.forEach((local, i) => {
+      const db = deBase[i];
+      if (!db) { quitar.add(local); cambio = true; return; }   // ya no está en la base
+      if ((db._hash || '') !== (local._hash || '')) cambio = true;
+      Object.assign(local, db);                                // manda lo que dice la base
+    });
+  };
+  unir(invs, data.facturas || [], quitarInv);
+  unir(pays, data.pagos || [], quitarPay);
+
+  if (quitarInv.size) invoices = invoices.filter(d => !quitarInv.has(d));
+  if (quitarPay.size) payments = payments.filter(d => !quitarPay.has(d));
+  if (cambio) { lastResult = null; limpiarSeleccion(false); }
+  if (cambio || data.n_nuevas || data.n_nuevos) renderAll();
+
+  const sacados = quitarInv.size + quitarPay.size;
+  if (sacados) {
+    toast(`⚠️ ${sacados} documento(s) ya no estaban en la base (se borraron desde Registros): se sacaron de la pantalla`);
+  }
 }
-window.addEventListener('beforeunload', e => {
-  if (!hayCrucesSinGuardar()) return;
-  e.preventDefault();
-  e.returnValue = '';
-});
+
+// Guarda los cruces. soloManuales: solo los hechos a mano (y los desarmados).
+async function guardarCruces({ soloManuales = false } = {}) {
+  const enviados = [...aSacar];
+  const res = await pedir('/reconciliation/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ invoices, payments, result: lastResult,
+                           sacar: enviados, solo_manuales: soloManuales })
+  });
+  const data = await res.json();
+
+  // Algo de la pantalla se borró desde Registros: no se guardó nada; se saca
+  // de la pantalla y se vuelve a calcular.
+  if (data.status === 'desactualizado') {
+    const faltaInv = new Set(data.faltan_facturas || []);
+    const faltaPay = new Set(data.faltan_pagos || []);
+    invoices = invoices.filter(d => !faltaInv.has(Number(d._id_bd)));
+    payments = payments.filter(d => !faltaPay.has(Number(d._id_bd)));
+    lastResult = null; limpiarSeleccion(false);
+    renderAll();
+    toast(`⚠️ ${faltaInv.size + faltaPay.size} documento(s) ya no estaban en la base ` +
+          `(se borraron desde Registros). Se sacaron de la pantalla.`);
+    await conciliar({ silencioso: true });
+    return data;
+  }
+  if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+
+  manuales = [];                                        // ya quedaron guardados
+  aSacar = aSacar.filter(id => !enviados.includes(id)); // ya se sacaron de la base
+  loadGroups();
+  await conciliar({ silencioso: true });                // vuelven como guardados
+  return data;
+}
 
 // ── Guardar en la base ─────────────────────────────────────────────
 async function saveToDb() {
   if (!lastResult) { toast('⚠️ Primero hacé una conciliación'); return; }
   const seguir = await ask({
     titulo: 'Guardar en base',
-    mensaje: 'Se guardan los cruces de esta pantalla.\n\n' +
-             'Las facturas y los pagos ya se fueron guardando al pasar de paso; ' +
-             'las facturas cubiertas se registran como pagadas.',
+    mensaje: 'Se guardan <b>todos</b> los cruces de esta pantalla, incluidos los que propuso el sistema.\n\n' +
+             'Las facturas cubiertas se registran como pagadas.',
     cancel: 'Cancelar',
     ok: 'Guardar',
   });
   if (!seguir) return;
   trabajando('Guardando en la base…');
   try {
-    const res = await fetch('/reconciliation/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ invoices, payments, result: lastResult, sacar: aSacar })
-    });
-    const data = await res.json();
-    if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
-    invoices.forEach(d => { d._guardado = true; });
-    payments.forEach(d => { d._guardado = true; });
-    manuales = [];   // ya quedaron guardados: vuelven como cruces guardados
-    aSacar = [];     // ya se sacaron de la base
-    persist();
-    toast(`💾 Guardado: ${data.n_matches} cruce(s)` +
-          (data.n_sacados ? `, ${data.n_sacados} sacado(s)` : ''));
-    loadGroups();
-    listo();
-    // Vuelve a conciliar: ahora los cruces aparecen como guardados.
-    await conciliar({ silencioso: true });
+    await colaGuardado;
+    await sincronizarDocs();
+    const data = await guardarCruces({ soloManuales: false });
+    if (data && data.status === 'ok') {
+      toast(`💾 Guardado: ${data.n_matches} cruce(s)` +
+            (data.n_sacados ? `, ${data.n_sacados} sacado(s)` : ''));
+    }
   } catch (e) {
     toast(`❌ ${e.message}`);
   } finally {
@@ -647,7 +800,7 @@ function listo() {
 // ── Grupos de clientes ─────────────────────────────────────────────
 function toggleAgrupar() {
   agrupar = document.getElementById('chkAgrupar').checked;
-  persist(); renderResult();
+  renderResult();
 }
 
 async function openGroups() {
@@ -702,7 +855,7 @@ async function createGroup() {
   if (!nombre) { toast('⚠️ Poné un nombre para el grupo'); return; }
   if (!dbEnabled) { toast('⚠️ Sin base no se pueden guardar grupos'); return; }
   try {
-    const res = await fetch('/reconciliation/groups', {
+    const res = await pedir('/reconciliation/groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nombre })
@@ -726,7 +879,7 @@ async function renameGroup(groupId) {
   });
   if (!nombre) return;
   try {
-    const res = await fetch('/reconciliation/groups', {
+    const res = await pedir('/reconciliation/groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ group_id: groupId, nombre })
@@ -747,7 +900,7 @@ async function deleteGroup(groupId) {
   });
   if (!seguir) return;
   try {
-    const res = await fetch('/reconciliation/groups/delete', {
+    const res = await pedir('/reconciliation/groups/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ group_id: groupId })
@@ -763,7 +916,7 @@ async function assignGroup(cuit, groupId) {
   const c = (lastResult ? lastResult.cuentas_corrientes : [])
     .find(x => x.cuit === cuit);
   try {
-    const res = await fetch('/reconciliation/assign_group', {
+    const res = await pedir('/reconciliation/assign_group', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -807,6 +960,7 @@ function renderHint() {
 function ordenarInv(campo) {
   if (ordenInv.campo === campo) ordenInv.asc = !ordenInv.asc;
   else { ordenInv.campo = campo; ordenInv.asc = true; }
+  pagDe.inv = 1;
   renderInvTable();
 }
 
@@ -835,6 +989,48 @@ function facturasOrdenadas() {
   return filas;
 }
 
+// ── Paginación de las tablas de esta pantalla ──────────────────────
+// Se pagina lo que hay cargado en pantalla (que ya salió de la base): 25 por
+// página, con el tamaño a elección. Quitar, ordenar y cruzar siguen usando la
+// posición real de cada fila, no la de la página.
+let tamPag = 25;
+const pagDe = { inv: 1, pay: 1, match: 1, pend: 1, unass: 1 };
+
+function paginar(lista, clave) {
+  const paginas = Math.max(1, Math.ceil(lista.length / tamPag));
+  pagDe[clave] = Math.min(Math.max(pagDe[clave], 1), paginas);
+  const desde = (pagDe[clave] - 1) * tamPag;
+  const caja = document.getElementById(`pg_${clave}`);
+  if (caja) {
+    caja.hidden = lista.length <= 10;
+    const pg = pagDe[clave];
+    caja.innerHTML = `
+      <span class="rc-pager-info">${lista.length ? desde + 1 : 0}–${Math.min(desde + tamPag, lista.length)} de ${lista.length}</span>
+      <button class="btn btn-ghost" ${pg <= 1 ? 'disabled' : ''} onclick="irPag('${clave}', 1)" title="Primera">«</button>
+      <button class="btn btn-ghost" ${pg <= 1 ? 'disabled' : ''} onclick="irPag('${clave}', ${pg - 1})" title="Anterior">‹</button>
+      <span class="rc-pager-pag">Página ${pg} de ${paginas}</span>
+      <button class="btn btn-ghost" ${pg >= paginas ? 'disabled' : ''} onclick="irPag('${clave}', ${pg + 1})" title="Siguiente">›</button>
+      <button class="btn btn-ghost" ${pg >= paginas ? 'disabled' : ''} onclick="irPag('${clave}', ${paginas})" title="Última">»</button>
+      <label class="rc-pager-size">Por página
+        <select onchange="cambiarTamPag(this.value)">
+          ${[10, 25, 50, 100].map(n => `<option value="${n}" ${n === tamPag ? 'selected' : ''}>${n}</option>`).join('')}
+        </select>
+      </label>`;
+  }
+  return lista.slice(desde, desde + tamPag);
+}
+
+function irPag(clave, n) {
+  pagDe[clave] = n;
+  renderAll();
+}
+
+function cambiarTamPag(valor) {
+  tamPag = Number(valor) || 25;
+  Object.keys(pagDe).forEach(k => { pagDe[k] = 1; });
+  renderAll();
+}
+
 function renderFlechasOrden() {
   const flechas = { comp: 'rcSortComp', fecha: 'rcSortFecha', cliente: 'rcSortCliente' };
   Object.entries(flechas).forEach(([campo, id]) => {
@@ -848,16 +1044,21 @@ function renderInvTable() {
   const t = document.getElementById('invTable');
   const b = document.getElementById('invBody');
   t.hidden = !invoices.length;
-  b.innerHTML = facturasOrdenadas().map(({ inv, i }) => `
-    <tr class="${inv._duplicado ? 'dupe' : ''}">
-      <td class="mono">${esc(numeroDeFactura(inv))}${inv._duplicado ? ' <span class="rc-badge media" title="Ya estaba registrada — la cargaste igual">repetida</span>' : ''}</td>
+  b.innerHTML = paginar(facturasOrdenadas(), 'inv').map(({ inv, i }) => {
+    const sigla = siglaDeComprobante(inv);
+    const nota  = sigla === 'NC';
+    const clases = [inv._duplicado ? 'dupe' : '', sigla ? 'nota' : '',
+                    nota ? 'nc' : ''].filter(Boolean).join(' ');
+    return `
+    <tr class="${clases}">
+      <td class="mono">${sigla ? `<span class="rc-badge ${nota ? 'nc' : 'nd'}" title="${nota ? 'Nota de crédito: resta de la deuda' : 'Nota de débito: suma a la deuda'}">${sigla}</span> ` : ''}${esc(numeroDeFactura(inv))}${inv._duplicado ? ' <span class="rc-badge media" title="Ya estaba registrada — la cargaste igual">repetida</span>' : ''}</td>
       <td class="mono">${esc(inv.fecha_emision)}</td>
       <td>${esc(inv.razon_social_cliente)}</td>
       <td class="mono">${esc(inv.cuit_cliente)}</td>
-      <td class="num">${money(inv.importe_total)}</td>
+      <td class="num ${nota ? 'neg' : ''}">${money(importeConSigno(inv))}</td>
       <td>${esc(trunc(inv.descripcion, 70))}</td>
       <td><button class="rc-del" onclick="delDoc('invoices', ${i})" title="Quitar">✕</button></td>
-    </tr>`).join('');
+    </tr>`; }).join('');
   renderFlechasOrden();
   renderMensual();
 }
@@ -887,7 +1088,7 @@ function totalesPorMes() {
         n: 0,
       };
     }
-    porMes[clave].total += Number(inv.importe_total || 0);
+    porMes[clave].total += importeConSigno(inv);
     porMes[clave].n += 1;
   });
   return Object.values(porMes).sort((a, b) => (a.mes < b.mes ? 1 : -1));
@@ -905,7 +1106,9 @@ function renderMensual() {
   const hoy = new Date();
   const mesEnCurso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
   const actual = meses.find(m => m.mes === mesEnCurso);
-  const mayor = Math.max(...meses.map(m => m.total), 1);
+  // Con notas de credito un mes puede dar negativo: la barra se mide contra
+  // el mes mas grande en valor absoluto y se pinta de otro color.
+  const mayor = Math.max(...meses.map(m => Math.abs(m.total)), 1);
 
   document.getElementById('rcMensualSub').textContent =
     (actual ? `Este mes ${money(actual.total)} · ` : '') +
@@ -917,15 +1120,15 @@ function renderMensual() {
   cuerpo.innerHTML = meses.map(m => `
     <div class="rc-mes-row ${m.mes === mesEnCurso ? 'en-curso' : ''}">
       <span class="rc-mes-label">${esc(m.etiqueta)}${m.mes === mesEnCurso ? ' <span class="rc-badge cuenta">en curso</span>' : ''}</span>
-      <span class="rc-mes-barra"><span style="width:${(m.total / mayor * 100).toFixed(1)}%"></span></span>
-      <span class="rc-mes-n">${m.n} fact.</span>
-      <span class="rc-mes-total">${money(m.total)}</span>
+      <span class="rc-mes-barra"><span class="${m.total < 0 ? 'neg' : ''}" style="width:${(Math.abs(m.total) / mayor * 100).toFixed(1)}%"></span></span>
+      <span class="rc-mes-n">${m.n} comp.</span>
+      <span class="rc-mes-total ${m.total < 0 ? 'neg' : ''}">${money(m.total)}</span>
     </div>`).join('') + `
     <div class="rc-mes-row rc-mes-total-row">
       <span class="rc-mes-label">Total del período</span>
       <span class="rc-mes-barra"></span>
-      <span class="rc-mes-n">${invoices.length} fact.</span>
-      <span class="rc-mes-total">${money(total)}</span>
+      <span class="rc-mes-n">${invoices.length} comp.</span>
+      <span class="rc-mes-total ${total < 0 ? 'neg' : ''}">${money(total)}</span>
     </div>
     <div class="rc-mes-hint">Se suma lo que hay en esta pantalla: cambiá las fechas de arriba y apretá “Traer” para ver otro período.</div>`;
 }
@@ -934,7 +1137,7 @@ function renderPayTable() {
   const t = document.getElementById('payTable');
   const b = document.getElementById('payBody');
   t.hidden = !payments.length;
-  b.innerHTML = payments.map((p, i) => `
+  b.innerHTML = paginar(payments.map((p, i) => ({ p, i })), 'pay').map(({ p, i }) => `
     <tr class="${p._duplicado ? 'dupe' : ''}">
       <td>${esc(p.banco || '-')}${p._corregido ? ' <span class="rc-badge media" title="El extractor había invertido pagador y cobrador — corregido automáticamente">corregido</span>' : ''}${p._duplicado ? ' <span class="rc-badge media" title="Ya estaba registrado — lo cargaste igual">repetido</span>' : ''}</td>
       <td class="mono">${esc(p.fecha)}</td>
@@ -949,20 +1152,20 @@ function renderPayTable() {
 function delDoc(kind, i) {
   const lista = kind === 'invoices' ? invoices : payments;
   const d = lista[i];
-  if (d && (d._guardado || d._de_la_base || d._id_bd)) {
+  if (d && d._id_bd) {
     toast('ℹ️ Se quitó de la pantalla; en la base sigue guardado');
   }
   lista.splice(i, 1);
   // Los cruces a mano que usaban ese documento dejan de aplicar solos:
   // el motor ignora lo que ya no está en pantalla.
   lastResult = null;
-  persist(); renderAll();
+  renderAll();
 }
 
 function renderResult() {
   const empty = document.getElementById('rcEmpty');
   const box   = document.getElementById('rcResult');
-  if (!lastResult) { empty.hidden = false; box.hidden = true; return; }
+  if (!lastResult) { empty.hidden = calculandoPaso3; box.hidden = true; return; }
   empty.hidden = true; box.hidden = false;
 
   const r = lastResult;
@@ -980,9 +1183,18 @@ function renderResult() {
 
   renderCuentaCorriente(r);
 
+  // Contadores de las tres solapas (la solapa que se ve se mantiene)
+  document.getElementById('subCnt1').textContent = r.cuentas_corrientes.length;
+  document.getElementById('subCnt2').textContent = r.matches.length;
+  document.getElementById('subCnt3').textContent = r.facturas_pendientes.length;
+  [1, 2, 3].forEach(i => {
+    document.getElementById(`subPanel${i}`).hidden = i !== subTab;
+    document.getElementById(`subTab${i}`).classList.toggle('active', i === subTab);
+  });
+
   const grupos = gruposDeCruces(r.matches);
   document.getElementById('matchBody').innerHTML = r.matches.length
-    ? r.matches.map((m, i) => {
+    ? paginar(r.matches.map((m, i) => ({ m, i })), 'match').map(({ m, i }) => {
         const parcial = Math.abs(Number(m.monto) - Number(m.factura.importe)) > 0.005;
         const libresEnGrupo = r.matches.filter((x, j) => grupos[j] === grupos[i] && !x.guardado).length;
         const accion =
@@ -1006,7 +1218,7 @@ function renderResult() {
     : `<tr><td colspan="6">Sin cruces todavía.</td></tr>`;
 
   document.getElementById('pendBody').innerHTML = r.facturas_pendientes.length
-    ? r.facturas_pendientes.map(f => {
+    ? paginar(r.facturas_pendientes, 'pend').map(f => {
         const sel = selFacturas.includes(f.key);
         const parcial = Number(f.pagado || 0) > 0.005;
         return `
@@ -1020,7 +1232,7 @@ function renderResult() {
     : `<tr><td colspan="6">🎉 No hay facturas pendientes.</td></tr>`;
 
   document.getElementById('unassBody').innerHTML = r.pagos_sin_imputar.length
-    ? r.pagos_sin_imputar.map(p => {
+    ? paginar(r.pagos_sin_imputar, 'unass').map(p => {
         const sel = selPago === p.key;
         return `
       <tr class="rc-selectable ${sel ? 'sel-pay' : ''} ${p.remanente ? 'remanente' : ''}" onclick="elegirPago('${esc(p.key)}')">
@@ -1086,37 +1298,6 @@ function renderCuentaCorriente(r) {
   }).join('');
 }
 
-// ── Session export / import ────────────────────────────────────────
-function exportSession() {
-  const blob = new Blob([JSON.stringify({ invoices, payments, lastResult, manuales, descartados, aSacar }, null, 2)],
-                        { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `zym_conciliacion_${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-function importSession(file) {
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const s = JSON.parse(reader.result);
-      invoices = s.invoices || [];
-      payments = s.payments || [];
-      lastResult = s.lastResult || null;
-      manuales = s.manuales || [];
-      descartados = s.descartados || [];
-      aSacar = s.aSacar || [];
-      limpiarSeleccion(false);
-      persist(); renderAll();
-      toast('✅ Sesión cargada');
-    } catch (_) { toast('❌ El archivo no es una sesión válida'); }
-  };
-  reader.readAsText(file);
-}
-
 function exportCSV() {
   if (!lastResult) { toast('⚠️ Primero hacé una conciliación'); return; }
   // El nombre del cliente y el grupo vienen ya unificados por CUIT desde el
@@ -1156,19 +1337,59 @@ async function resetAll() {
   if (!seguir) return;
   invoices = []; payments = []; lastResult = null; manuales = []; descartados = []; aSacar = [];
   limpiarSeleccion(false);
-  sessionStorage.removeItem(SS_KEY);
-  renderAll(); showStep(1);
-  toast('🧹 Sesión limpia');
+  renderAll(); irAlPaso(1);
+  toast('🧹 Pantalla limpia');
 }
 
 // ── Steps ──────────────────────────────────────────────────────────
-function showStep(n) {
-  if (n !== pasoActual && (pasoActual === 1 || pasoActual === 2)) guardarDocs();
+// Cambio de lo que se ve: instantáneo, sin esperar nada.
+function irAlPaso(n) {
   pasoActual = n;
   [1, 2, 3].forEach(i => {
     document.getElementById(`panel${i}`).hidden = i !== n;
     document.getElementById(`stepTab${i}`).classList.toggle('active', i === n);
   });
+}
+
+// Saltar de paso: la pantalla cambia al instante y lo que haya que guardar
+// se guarda en segundo plano (cartelito). Al entrar al 3 se calcula con un
+// spinner adentro del propio panel, sin tapar nada y sin frenar los saltos.
+function showStep(n) {
+  if (n === pasoActual) return;
+  irAlPaso(n);
+  if (n === 3 && invoices.length && payments.length) calcularPaso3();
+  else guardarTodo();
+}
+
+async function calcularPaso3() {
+  calculandoPaso3 = true;
+  pintarCalculo(true);
+  try {
+    await guardarTodo();
+    if (invoices.length && payments.length) await conciliar({ silencioso: true });
+  } finally {
+    calculandoPaso3 = false;
+    pintarCalculo(false);
+  }
+}
+
+function pintarCalculo(si) {
+  const el = document.getElementById('rcPanelLoading');
+  if (el) el.hidden = !si;
+  renderResult();
+}
+
+// ── Solapas del paso 3 ─────────────────────────────────────────────
+// Cuenta corriente por cliente / Cruce factura-pago / Facturas pendientes.
+function showSubTab(n) {
+  if (n === subTab) return;
+  subTab = n;
+  [1, 2, 3].forEach(i => {
+    document.getElementById(`subPanel${i}`).hidden = i !== n;
+    document.getElementById(`subTab${i}`).classList.toggle('active', i === n);
+  });
+  renderSeleccion();
+  guardarTodo();
 }
 
 // ── Utils ──────────────────────────────────────────────────────────
@@ -1214,7 +1435,7 @@ async function traerDeLaBase(opciones = {}) {
 
   if (!silencioso) trabajando('Buscando lo guardado…');
   try {
-    const res = await fetch('/reconciliation/load_from_db', {
+    const res = await pedir('/reconciliation/load_from_db', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ desde, hasta })
@@ -1230,7 +1451,7 @@ async function traerDeLaBase(opciones = {}) {
       if (!payments.some(x => x._hash === d._hash)) { payments.push(d); nuevosPay++; }
     });
 
-    if (nuevasInv || nuevosPay) { lastResult = null; persist(); renderAll(); }
+    if (nuevasInv || nuevosPay) { lastResult = null; renderAll(); }
     if (!silencioso || nuevasInv || nuevosPay) {
       toast(`↓ ${nuevasInv} factura(s) y ${nuevosPay} cobro(s) traídos de la base`);
     }
@@ -1240,7 +1461,7 @@ async function traerDeLaBase(opciones = {}) {
     // en "Todavía no hay conciliación" y parecía que no se había guardado.
     if ((invoices.length || payments.length) && (nuevasInv || nuevosPay || !lastResult)) {
       await conciliar({ silencioso: true });
-      if (!silencioso) showStep(3);
+      if (!silencioso) irAlPaso(3);
     }
   } catch (e) {
     if (!silencioso) toast(`❌ ${e.message}`);

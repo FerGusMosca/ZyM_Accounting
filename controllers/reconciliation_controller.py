@@ -34,9 +34,17 @@ Tanda 3 (pedidos del 29/08/2026):
      de una administración, un holding o lo que haga falta.
   4. Un mismo CUIT sale siempre con el mismo nombre, en pantalla y en el CSV.
 
-La base es opcional: si DATABASE_URL no está en el .env, la pantalla sigue
-funcionando como antes, con el estado en el navegador. Lo único que se pierde
-es la memoria entre sesiones (duplicados y grupos).
+Tanda 7 (pedidos del 04/10/2026):
+  1. NADA se guarda en el navegador ni en memoria del servidor: todo sale de
+     la base. Facturas y cobros se guardan al pasar de un paso al otro y la
+     pantalla los vuelve a leer de la base (sync_docs). Si alguien los borro
+     desde Registros, la pantalla se entera y los saca.
+  2. Registros: todo paginado, leido de la base en cada pedido.
+  3. Borrar una factura o un cobro con cruces saca tambien los cruces y lo
+     avisa (la pantalla pide confirmacion antes).
+
+La base es obligatoria para guardar: si DATABASE_URL no está en el .env, la
+pantalla solo calcula en el momento, sin guardar nada.
 
 Routes:
     GET  /reconciliation/                → página
@@ -48,13 +56,16 @@ Routes:
     POST /reconciliation/groups         → crear o renombrar grupo
     POST /reconciliation/groups/delete  → borrar grupo
     POST /reconciliation/assign_group   → asignar un CUIT a un grupo
-    POST /reconciliation/save_docs      → guardar solo facturas y pagos (al pasar de paso)
+    POST /reconciliation/sync_docs      → guarda facturas y pagos y los relee de la base (al pasar de paso)
     POST /reconciliation/save           → guardar facturas, pagos y cruces
     GET  /reconciliation/registros      → pantalla de registros guardados
-    GET  /reconciliation/registros/data → facturas, cobros y cruces guardados
+    GET  /reconciliation/registros/page → una pagina de facturas, cobros, cruces o clientes
+    GET  /reconciliation/registros/invoice_matches → cruces de una factura
+    GET  /reconciliation/registros/payment_matches → cruces de un cobro
     GET  /reconciliation/registros/file/{huella} → abre el archivo original
     POST /reconciliation/registros/payment_manual → alta de cobro a mano
-    POST /reconciliation/registros/payment_delete → baja de cobro
+    POST /reconciliation/registros/payment_delete → baja de cobro (saca sus cruces y avisa cuantos)
+    POST /reconciliation/registros/invoice_delete → baja de factura (saca sus cruces y avisa cuantos)
     GET  /reconciliation/registros/clients       → clientes
     POST /reconciliation/registros/client_name   → cambia el nombre del cliente
     POST /reconciliation/registros/match_delete  → saca UN cruce
@@ -299,6 +310,20 @@ def _completar_marcas(invoices: list[dict], payments: list[dict]) -> None:
         pay["_hash"] = hashlib.sha256(base.encode("utf-8")).hexdigest()
 
 
+def _faltantes_en_base(mgr: ReconciliationManager, invoices: list[dict],
+                       payments: list[dict]) -> tuple[list[int], list[int]]:
+    """
+    Facturas y cobros que la pantalla da por guardados (traen id de la base)
+    pero que ya no estan: alguien los borro desde Registros.
+    Devuelve (ids de facturas que faltan, ids de cobros que faltan).
+    """
+    ids_inv = {int(d["_id_bd"]) for d in invoices if d.get("_id_bd")}
+    ids_pay = {int(d["_id_bd"]) for d in payments if d.get("_id_bd")}
+    hay_inv = mgr.get_invoices_by_ids(list(ids_inv))
+    hay_pay = mgr.get_payments_by_ids(list(ids_pay))
+    return (sorted(ids_inv - set(hay_inv)), sorted(ids_pay - set(hay_pay)))
+
+
 def _persist_docs(mgr: ReconciliationManager, invoices: list[dict],
                   payments: list[dict]) -> tuple[dict, dict]:
     """
@@ -320,10 +345,12 @@ def _persist_docs(mgr: ReconciliationManager, invoices: list[dict],
             "cuit_emisor": _norm_cuit(inv.get("cuit_emisor")),
             "comprobante": comp,
             "fecha_emision_iso": _iso_date(inv.get("fecha_emision")),
-            "importe_total": _round2(inv.get("importe_total")),
+            "importe_total": _con_signo(inv),
             "descripcion": inv.get("descripcion"),
             "archivo": inv.get("_archivo"),
             "file_hash": inv.get("_hash"),
+            "tipo_comprobante": _tipo_comprobante(inv),
+            "comp_ajustado": inv.get("comp_ajustado"),
             "raw": inv,
         })
 
@@ -361,6 +388,47 @@ def _parte_comp(v) -> str:
     """
     t = str(v if v is not None else "").strip()
     return "" if t.lower() in ("", "none", "null", "nan") else t
+
+
+_TIPOS_NOTA = ("NOTA_CREDITO", "NOTA_DEBITO")
+
+
+def _tipo_comprobante(inv: dict) -> str:
+    """
+    FACTURA, NOTA_CREDITO o NOTA_DEBITO.
+
+    Se normaliza lo que haya devuelto el extractor: puede venir con acentos,
+    en minusculas o separado con espacios o guiones.
+    """
+    t = str(inv.get("tipo_comprobante") or "").strip().upper()
+    t = (t.replace("Á", "A").replace("É", "E").replace("Í", "I")
+          .replace("Ó", "O").replace("Ú", "U"))
+    t = t.replace("-", " ").replace("_", " ")
+    t = " ".join(t.split())
+    if "CREDITO" in t:
+        return "NOTA_CREDITO"
+    if "DEBITO" in t:
+        return "NOTA_DEBITO"
+    return "FACTURA"
+
+
+def _es_nota(inv: dict) -> bool:
+    """La nota de credito o de debito no es algo que haya que cobrar."""
+    return _tipo_comprobante(inv) in _TIPOS_NOTA
+
+
+def _con_signo(inv: dict) -> float:
+    """
+    El importe tal como tiene que entrar en las cuentas.
+
+    El papel de la nota de credito viene con el importe en positivo, pero lo
+    que hace es restar de la deuda: se le da vuelta el signo una sola vez,
+    aca. La nota de debito suma, igual que una factura.
+    """
+    importe = _round2(inv.get("importe_total"))
+    if _tipo_comprobante(inv) == "NOTA_CREDITO":
+        return _round2(-abs(importe))
+    return _round2(abs(importe))
 
 
 def _comprobante(inv: dict) -> str:
@@ -522,7 +590,9 @@ def reconcile(invoices: list[dict], payments: list[dict],
             "comp": f"{inv.get('punto_venta', '')}-{inv.get('comp_nro', '')}",
             "fecha": inv.get("fecha_emision"),
             "fecha_dt": _parse_date(inv.get("fecha_emision")),
-            "importe": _round2(inv.get("importe_total")),
+            "importe": _con_signo(inv),
+            "tipo": _tipo_comprobante(inv),
+            "ajusta": inv.get("comp_ajustado") or "",
             "descripcion": inv.get("descripcion") or "",
             "archivo": inv.get("_archivo") or "",
             "pagado": 0.0,
@@ -764,7 +834,8 @@ def _match(inv, p, confianza, motivo, monto) -> dict:
 
 def _inv_out(inv) -> dict:
     return {k: inv[k] for k in
-            ("key", "cuit", "cliente", "comp", "fecha", "importe", "descripcion", "archivo")}
+            ("key", "cuit", "cliente", "comp", "fecha", "importe", "descripcion",
+             "archivo", "tipo", "ajusta")}
 
 
 def _pay_out(p) -> dict:
@@ -792,23 +863,75 @@ class ReconciliationController:
             return templates.TemplateResponse(
                 "records.html", {"request": request})
 
-        @self.router.get("/registros/data")
-        async def registros_data():
-            """Facturas, cobros y cruces ya guardados en la base."""
+        @self.router.get("/registros/page")
+        async def registros_page_data(tab: str = "facturas", page: int = 1,
+                                      size: int = 25, q: str = ""):
+            """
+            Una pagina de facturas, cobros, cruces o clientes, leida de la base
+            en este mismo momento. Tambien devuelve cuantos hay en cada solapa.
+            """
             mgr = _get_manager()
             if not mgr.is_enabled():
                 return JSONResponse({"status": "no_db",
                                      "message": "Sin DATABASE_URL no hay registros"},
                                     status_code=400)
+            lectores = {
+                "facturas": (mgr.page_invoices, "facturas"),
+                "cobros":   (mgr.page_payments, "cobros"),
+                "cruces":   (mgr.page_matches,  "cruces"),
+                "clientes": (mgr.page_clients,  "clientes"),
+            }
+            if tab not in lectores:
+                return JSONResponse({"status": "error",
+                                     "message": "Solapa desconocida"},
+                                    status_code=400)
             try:
+                size = min(max(int(size), 1), 100)
+                totales = mgr.count_records(q)
+                total = totales[lectores[tab][1]]
+                paginas = max(1, -(-total // size))
+                page = min(max(int(page), 1), paginas)   # si la ultima se vacio, retrocede
+                items = lectores[tab][0](q, size, (page - 1) * size)
                 return JSONResponse({
-                    "status":   "ok",
-                    "facturas": mgr.list_invoices(),
-                    "pagos":    mgr.list_payments(),
-                    "cruces":   mgr.list_matches(),
+                    "status":  "ok",
+                    "tab":     tab,
+                    "page":    page,
+                    "size":    size,
+                    "pages":   paginas,
+                    "total":   total,
+                    "totales": totales,
+                    "items":   items,
                 })
             except Exception as e:  # noqa: BLE001
-                logger.exception("No se pudieron traer los registros")
+                logger.exception("No se pudo traer la pagina de registros")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
+        @self.router.get("/registros/invoice_matches")
+        async def registros_invoice_matches(invoice_id: int):
+            """Los cruces guardados de UNA factura, leidos de la base ahora."""
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                return JSONResponse({"status": "ok",
+                                     "cruces": mgr.list_matches_of(invoice_id=invoice_id)})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudieron traer los cruces de la factura")
+                return JSONResponse({"status": "error", "message": str(e)},
+                                    status_code=500)
+
+        @self.router.get("/registros/payment_matches")
+        async def registros_payment_matches(payment_id: int):
+            """Los cruces guardados de UN cobro, leidos de la base ahora."""
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                return JSONResponse({"status": "ok",
+                                     "cruces": mgr.list_matches_of(payment_id=payment_id)})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudieron traer los cruces del cobro")
                 return JSONResponse({"status": "error", "message": str(e)},
                                     status_code=500)
 
@@ -863,14 +986,18 @@ class ReconciliationController:
 
         @self.router.post("/registros/payment_delete")
         async def registros_payment_delete(request: Request):
-            """Baja de un cobro."""
+            """
+            Baja de un cobro. Si tenia cruces se sacan con el, las facturas que
+            cubria vuelven a quedar pendientes, y se devuelve cuantos eran para
+            poder avisarlo en pantalla.
+            """
             body = await request.json()
             mgr = _get_manager()
             if not mgr.is_enabled():
                 return JSONResponse({"status": "no_db"}, status_code=400)
             try:
-                mgr.delete_payment(int(body.get("payment_id")))
-                return JSONResponse({"status": "ok"})
+                n_cruces = mgr.delete_payment(int(body.get("payment_id")))
+                return JSONResponse({"status": "ok", "n_cruces": n_cruces})
             except Exception as e:  # noqa: BLE001
                 logger.exception("No se pudo borrar el cobro")
                 return JSONResponse({"status": "error", "message": str(e)},
@@ -879,11 +1006,9 @@ class ReconciliationController:
         @self.router.post("/registros/invoice_delete")
         async def registros_invoice_delete(request: Request):
             """
-            Baja de una factura guardada.
-
-            Solo si no tiene cruces. Si los tiene, no se borra nada y se
-            avisa cuantos hay: primero se sacan de a uno desde la pantalla
-            de cruces, como dice la regla de siempre.
+            Baja de una factura guardada. Si tenia cruces se sacan con ella (los
+            cobros quedan en la base, libres para cruzarse de nuevo) y se
+            devuelve cuantos eran para poder avisarlo en pantalla.
             """
             body = await request.json()
             mgr = _get_manager()
@@ -896,31 +1021,22 @@ class ReconciliationController:
                                      "message": "Falta la factura"},
                                     status_code=400)
             try:
-                cruces = [m for m in mgr.list_matches()
-                          if m.get("invoice_id") == invoice_id]
-                if cruces:
-                    return JSONResponse({
-                        "status": "con_cruces",
-                        "n_cruces": len(cruces),
-                        "message": (f"La factura tiene {len(cruces)} cruce(s). "
-                                    f"Hay que sacarlos primero, en la solapa de "
-                                    f"cruces, y despues se puede borrar."),
-                    }, status_code=409)
-                mgr.delete_invoice(invoice_id)
-                return JSONResponse({"status": "ok"})
+                n_cruces = mgr.delete_invoice(invoice_id)
+                return JSONResponse({"status": "ok", "n_cruces": n_cruces})
             except Exception as e:  # noqa: BLE001
                 logger.exception("No se pudo borrar la factura")
                 return JSONResponse({"status": "error", "message": str(e)},
                                     status_code=500)
 
         @self.router.get("/registros/clients")
-        async def registros_clients():
-            """Clientes con su nombre actual."""
+        async def registros_clients(q: str = ""):
+            """Clientes que coinciden con lo escrito (hasta 20), para sugerir."""
             mgr = _get_manager()
             if not mgr.is_enabled():
                 return JSONResponse({"status": "no_db"}, status_code=400)
             try:
-                return JSONResponse({"status": "ok", "clientes": mgr.list_clients()})
+                return JSONResponse({"status": "ok",
+                                     "clientes": mgr.page_clients(q, 20, 0)})
             except Exception as e:  # noqa: BLE001
                 logger.exception("No se pudieron traer los clientes")
                 return JSONResponse({"status": "error", "message": str(e)},
@@ -1137,12 +1253,19 @@ class ReconciliationController:
                 return JSONResponse({"status": "error", "message": str(e)},
                                     status_code=500)
 
-        @self.router.post("/save_docs")
-        async def save_docs(request: Request):
+        @self.router.post("/sync_docs")
+        async def sync_docs(request: Request):
             """
-            Guarda SOLO facturas y cobros, sin cruces. La pantalla lo llama al
-            pasar de un paso al otro, para que lo subido no se pierda si nadie
-            aprieta "Guardar en base". Los cruces se guardan solo con ese boton.
+            Se llama al pasar de un paso al otro. Hace dos cosas:
+
+              1. Guarda en la base las facturas y los cobros nuevos (los que
+                 todavia no tienen id de la base).
+              2. Vuelve a leer de la base TODO lo que hay en pantalla. Lo que
+                 vuelve es lo que dice la base; lo que alguien borro desde
+                 Registros vuelve como null y la pantalla lo saca.
+
+            La respuesta trae una entrada por cada documento recibido y en el
+            mismo orden. Los cruces no se tocan: esos solo con "Guardar en base".
             """
             body = await request.json()
             invoices = body.get("invoices") or []
@@ -1151,10 +1274,36 @@ class ReconciliationController:
             if not mgr.is_enabled():
                 return JSONResponse({"status": "no_db"}, status_code=400)
             try:
-                inv_ids, pay_ids = _persist_docs(mgr, invoices, payments)
-                return JSONResponse({"status": "ok",
-                                     "n_facturas": len(inv_ids),
-                                     "n_pagos": len(pay_ids)})
+                nuevas_inv = [i for i, d in enumerate(invoices) if not d.get("_id_bd")]
+                nuevos_pay = [j for j, d in enumerate(payments) if not d.get("_id_bd")]
+
+                ids_inv, ids_pay = {}, {}
+                if nuevas_inv or nuevos_pay:
+                    inv_ids, pay_ids = _persist_docs(
+                        mgr, [invoices[i] for i in nuevas_inv],
+                        [payments[j] for j in nuevos_pay])
+                    for pos, i in enumerate(nuevas_inv):
+                        ids_inv[i] = inv_ids[_inv_key(invoices[i], pos)]
+                    for pos, j in enumerate(nuevos_pay):
+                        ids_pay[j] = pay_ids[_pay_key(payments[j], pos)]
+
+                for i, d in enumerate(invoices):
+                    if i not in ids_inv:
+                        ids_inv[i] = int(d["_id_bd"])
+                for j, d in enumerate(payments):
+                    if j not in ids_pay:
+                        ids_pay[j] = int(d["_id_bd"])
+
+                en_base_inv = mgr.get_invoices_by_ids(list(ids_inv.values()))
+                en_base_pay = mgr.get_payments_by_ids(list(ids_pay.values()))
+
+                return JSONResponse({
+                    "status":   "ok",
+                    "facturas": [en_base_inv.get(ids_inv[i]) for i in range(len(invoices))],
+                    "pagos":    [en_base_pay.get(ids_pay[j]) for j in range(len(payments))],
+                    "n_nuevas": len(nuevas_inv),
+                    "n_nuevos": len(nuevos_pay),
+                })
             except Exception as e:  # noqa: BLE001
                 logger.exception("No se pudieron guardar facturas y cobros")
                 return JSONResponse({"status": "error", "message": str(e)},
@@ -1171,6 +1320,7 @@ class ReconciliationController:
             invoices = body.get("invoices") or []
             payments = body.get("payments") or []
             result = body.get("result") or {}
+            solo_manuales = bool(body.get("solo_manuales"))
 
             mgr = _get_manager()
             if not mgr.is_enabled():
@@ -1178,6 +1328,20 @@ class ReconciliationController:
                                      "message": "Sin DATABASE_URL no se puede guardar"},
                                     status_code=400)
             try:
+                # Si la pantalla trae algo que alguien borro desde Registros, no
+                # se guarda nada: guardar lo volveria a crear sin que nadie lo
+                # pida. La pantalla lo saca y se vuelve a intentar.
+                faltan_inv, faltan_pay = _faltantes_en_base(mgr, invoices, payments)
+                if faltan_inv or faltan_pay:
+                    return JSONResponse({
+                        "status": "desactualizado",
+                        "faltan_facturas": faltan_inv,
+                        "faltan_pagos": faltan_pay,
+                        "message": ("Hay documentos de esta pantalla que ya no estan "
+                                    "en la base (se borraron desde Registros). "
+                                    "No se guardo nada."),
+                    }, status_code=409)
+
                 # Cruces guardados que se desarmaron en pantalla, uno por uno,
                 # cada uno elegido a mano con su ✕. Es lo unico que se saca.
                 sacar = [int(x) for x in (body.get("sacar") or [])]
@@ -1203,7 +1367,10 @@ class ReconciliationController:
                     par = (m["factura"].get("key"), m["pago"].get("key"))
                     monto = _round2(m.get("monto") or m["pago"]["importe"])
                     por_par[par] = _round2(por_par.get(par, 0.0) + monto)
-                    if not m.get("guardado"):
+                    # solo_manuales: al saltar de solapa se guarda lo que la persona
+                    # hizo a mano; lo que solo propone el sistema espera al boton.
+                    if not m.get("guardado") and (
+                            not solo_manuales or m["confianza"] == "manual"):
                         nuevos[par] = m["confianza"]
 
                 n_matches = 0
@@ -1293,9 +1460,13 @@ class ReconciliationController:
                 # otra como cancelada.
                 if es_factura and mgr.is_enabled():
                     numero = _comprobante(data)
+                    tipo = _tipo_comprobante(data)
+                    como_se_llama = ("La nota de crédito" if tipo == "NOTA_CREDITO"
+                                     else "La nota de débito" if tipo == "NOTA_DEBITO"
+                                     else "La factura")
                     try:
                         mismo_numero = (mgr.find_invoice_by_number(
-                            data.get("cuit_emisor") or "", numero)
+                            data.get("cuit_emisor") or "", numero, tipo)
                             if numero else None)
                     except Exception:  # noqa: BLE001
                         logger.exception(
@@ -1303,10 +1474,10 @@ class ReconciliationController:
                         mismo_numero = None
 
                     if mismo_numero:
-                        aviso = (f"La factura {numero} ya está registrada "
+                        aviso = (f"{como_se_llama} {numero} ya está registrada "
                                  f"(el archivo es otro)")
                         if mismo_numero.get("_estado") == "paid":
-                            aviso = (f"La factura {numero} ya está registrada "
+                            aviso = (f"{como_se_llama} {numero} ya está registrada "
                                      f"como PAGADA (el archivo es otro)")
                         data["_id_bd"] = mismo_numero.get("_id_bd")
                         data["_client_id"] = mismo_numero.get("_client_id")

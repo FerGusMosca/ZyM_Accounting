@@ -12,10 +12,11 @@ Uso en cualquier controller:
 
 from fastapi.templating import Jinja2Templates
 
-from common.util.cache.static_version import build_static_version, static_url
 
 # Una sola instancia — se inicializa una vez al arrancar
 templates = Jinja2Templates(directory="templates")
 
-STATIC_VERSION = build_static_version("static")
-templates.env.globals["sv"] = lambda path: static_url(path, STATIC_VERSION)
+# sv() deja el path tal cual. Nada se reutiliza del navegador: main.py manda
+# Cache-Control: no-store en TODAS las respuestas, asi que cada pedido va al
+# servidor y los templates no necesitan ningun truco de versionado.
+templates.env.globals["sv"] = lambda path: path
