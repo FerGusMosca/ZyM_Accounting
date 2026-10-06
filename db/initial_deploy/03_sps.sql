@@ -675,15 +675,21 @@ CREATE FUNCTION refresh_invoice_status(p_invoice_ids INT[])
 RETURNS VOID
 LANGUAGE sql
 AS $$
+    -- Pagada: lo cobrado mas lo que cubren las notas de credito llega al
+    -- importe. Las notas de credito y debito no se tocan (quedan como nota).
     UPDATE invoices i
     SET status = CASE
             WHEN COALESCE((SELECT SUM(ip.amount)
                            FROM invoice_payments ip
-                           WHERE ip.invoice_id = i.id), 0) >= i.amount
+                           WHERE ip.invoice_id = i.id), 0)
+               + COALESCE((SELECT SUM(a.amount)
+                           FROM credit_note_applications a
+                           WHERE a.invoice_id = i.id), 0) >= i.amount
             THEN 'paid' ELSE 'pending' END,
         updated_at = NOW()
     WHERE p_invoice_ids IS NOT NULL
-      AND i.id = ANY (p_invoice_ids);
+      AND i.id = ANY (p_invoice_ids)
+      AND i.status <> 'nota';
 $$;
 
 
@@ -780,11 +786,11 @@ $$;
 
 -- ============================================================
 -- delete_invoice
--- Baja de una factura. Si tenia cruces, se sacan junto con ella
--- (los cobros quedan en la base, libres para volver a cruzarse).
--- Devuelve cuantos cruces se sacaron, para poder avisarlo en
--- pantalla. Todo ocurre en una sola operacion: o sale todo o no
--- sale nada.
+-- Baja de una factura o nota. Si tenia cruces (con cobros o entre
+-- nota de credito y factura), se sacan junto con ella: los cobros
+-- quedan libres y las facturas que cubria una nota borrada vuelven
+-- a pendiente. Devuelve cuantos cruces se sacaron, para avisarlo.
+-- Todo en una sola operacion: o sale todo o no sale nada.
 -- ============================================================
 DROP FUNCTION IF EXISTS delete_invoice(INT);
 
@@ -793,15 +799,26 @@ RETURNS INT
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_cruces INT;
+    v_cruces    INT;
+    v_notas     INT;
+    v_afectadas INT[];
 BEGIN
     SELECT COUNT(*) INTO v_cruces
     FROM invoice_payments WHERE invoice_id = p_invoice_id;
 
+    SELECT COUNT(*), ARRAY_AGG(DISTINCT invoice_id)
+      INTO v_notas, v_afectadas
+    FROM credit_note_applications
+    WHERE credit_note_id = p_invoice_id OR invoice_id = p_invoice_id;
+
+    DELETE FROM credit_note_applications
+     WHERE credit_note_id = p_invoice_id OR invoice_id = p_invoice_id;
     DELETE FROM invoice_payments WHERE invoice_id = p_invoice_id;
     DELETE FROM invoices         WHERE id = p_invoice_id;
 
-    RETURN v_cruces;
+    PERFORM refresh_invoice_status(v_afectadas);
+
+    RETURN v_cruces + v_notas;
 END;
 $$;
 
@@ -1089,8 +1106,11 @@ $$;
 
 -- page_invoices: una pagina de facturas (mismas columnas que list_invoices).
 DROP FUNCTION IF EXISTS page_invoices(TEXT, INT, INT);
+DROP FUNCTION IF EXISTS page_invoices(TEXT, INT, INT, TEXT, BOOLEAN);
 
-CREATE FUNCTION page_invoices(p_q TEXT, p_limit INT, p_offset INT)
+-- p_orden: fecha / cliente (u originante) / importe. p_asc: true = de menor a mayor.
+CREATE FUNCTION page_invoices(p_q TEXT, p_limit INT, p_offset INT,
+                         p_orden TEXT, p_asc BOOLEAN)
 RETURNS TABLE (
     id             INT,
     client_name    VARCHAR,
@@ -1135,15 +1155,24 @@ AS $$
        OR i.invoice_number ILIKE '%' || p_q || '%'
        OR i.description ILIKE '%' || p_q || '%'
        OR i.file_name ILIKE '%' || p_q || '%'
-    ORDER BY i.issue_date DESC NULLS LAST, i.id DESC
+    ORDER BY
+        CASE WHEN p_orden = 'cliente' AND p_asc     THEN LOWER(c.name) END ASC,
+        CASE WHEN p_orden = 'cliente' AND NOT p_asc THEN LOWER(c.name) END DESC,
+        CASE WHEN p_orden = 'importe' AND p_asc     THEN (CASE WHEN i.doc_type = 'NOTA_CREDITO' THEN -ABS(i.amount) ELSE i.amount END) END ASC,
+        CASE WHEN p_orden = 'importe' AND NOT p_asc THEN (CASE WHEN i.doc_type = 'NOTA_CREDITO' THEN -ABS(i.amount) ELSE i.amount END) END DESC,
+        CASE WHEN p_orden = 'fecha'   AND p_asc     THEN i.issue_date END ASC NULLS LAST,
+        i.issue_date DESC NULLS LAST, i.id DESC
     LIMIT p_limit OFFSET p_offset;
 $$;
 
 
 -- page_payments: una pagina de cobros (mismas columnas que list_payments).
 DROP FUNCTION IF EXISTS page_payments(TEXT, INT, INT);
+DROP FUNCTION IF EXISTS page_payments(TEXT, INT, INT, TEXT, BOOLEAN);
 
-CREATE FUNCTION page_payments(p_q TEXT, p_limit INT, p_offset INT)
+-- p_orden: fecha / cliente (u originante) / importe. p_asc: true = de menor a mayor.
+CREATE FUNCTION page_payments(p_q TEXT, p_limit INT, p_offset INT,
+                         p_orden TEXT, p_asc BOOLEAN)
 RETURNS TABLE (
     id             INT,
     payer_name     VARCHAR,
@@ -1181,15 +1210,24 @@ AS $$
        OR p.bank ILIKE '%' || p_q || '%'
        OR p.reference ILIKE '%' || p_q || '%'
        OR p.file_name ILIKE '%' || p_q || '%'
-    ORDER BY p.payment_date DESC NULLS LAST, p.id DESC
+    ORDER BY
+        CASE WHEN p_orden = 'cliente' AND p_asc     THEN LOWER(p.payer_name) END ASC,
+        CASE WHEN p_orden = 'cliente' AND NOT p_asc THEN LOWER(p.payer_name) END DESC,
+        CASE WHEN p_orden = 'importe' AND p_asc     THEN p.amount END ASC,
+        CASE WHEN p_orden = 'importe' AND NOT p_asc THEN p.amount END DESC,
+        CASE WHEN p_orden = 'fecha'   AND p_asc     THEN p.payment_date END ASC NULLS LAST,
+        p.payment_date DESC NULLS LAST, p.id DESC
     LIMIT p_limit OFFSET p_offset;
 $$;
 
 
 -- page_matches: una pagina de cruces (mismas columnas que list_matches).
 DROP FUNCTION IF EXISTS page_matches(TEXT, INT, INT);
+DROP FUNCTION IF EXISTS page_matches(TEXT, INT, INT, TEXT, BOOLEAN);
 
-CREATE FUNCTION page_matches(p_q TEXT, p_limit INT, p_offset INT)
+-- p_orden: fecha / cliente (u originante) / importe. p_asc: true = de menor a mayor.
+CREATE FUNCTION page_matches(p_q TEXT, p_limit INT, p_offset INT,
+                         p_orden TEXT, p_asc BOOLEAN)
 RETURNS TABLE (
     id             INT,
     invoice_id     INT,
@@ -1229,7 +1267,13 @@ AS $$
        OR c.name ILIKE '%' || p_q || '%'
        OR p.bank ILIKE '%' || p_q || '%'
        OR p.payer_name ILIKE '%' || p_q || '%'
-    ORDER BY ip.created_at DESC, ip.id DESC
+    ORDER BY
+        CASE WHEN p_orden = 'cliente' AND p_asc     THEN LOWER(c.name) END ASC,
+        CASE WHEN p_orden = 'cliente' AND NOT p_asc THEN LOWER(c.name) END DESC,
+        CASE WHEN p_orden = 'importe' AND p_asc     THEN ip.amount END ASC,
+        CASE WHEN p_orden = 'importe' AND NOT p_asc THEN ip.amount END DESC,
+        CASE WHEN p_orden = 'fecha'   AND p_asc     THEN p.payment_date END ASC NULLS LAST,
+        p.payment_date DESC NULLS LAST, ip.id DESC
     LIMIT p_limit OFFSET p_offset;
 $$;
 
@@ -1314,3 +1358,127 @@ AS $$
       AND (p_payment_id IS NULL OR ip.payment_id = p_payment_id)
     ORDER BY ip.created_at DESC, ip.id DESC;
 $$;
+
+
+-- ============================================================
+-- Cruces de notas de credito con facturas
+-- ============================================================
+
+-- list_nc_applications: los cruces donde participa alguno de esos
+-- documentos (como nota o como factura).
+DROP FUNCTION IF EXISTS list_nc_applications(INT[]);
+
+CREATE FUNCTION list_nc_applications(p_ids INT[])
+RETURNS TABLE (
+    id             INT,
+    credit_note_id INT,
+    invoice_id     INT,
+    amount         NUMERIC,
+    created_at     TIMESTAMP
+)
+LANGUAGE sql
+AS $$
+    SELECT a.id, a.credit_note_id, a.invoice_id, a.amount, a.created_at
+    FROM credit_note_applications a
+    WHERE a.credit_note_id = ANY (COALESCE(p_ids, ARRAY[]::INT[]))
+       OR a.invoice_id     = ANY (COALESCE(p_ids, ARRAY[]::INT[]))
+    ORDER BY a.id;
+$$;
+
+
+-- save_nc_application: guarda (o actualiza) cuanto de una nota de credito
+-- se aplica a una factura. Reglas que controla la base:
+--   - la nota tiene que ser nota de credito y la otra, factura;
+--   - las dos del mismo cliente;
+--   - no se puede aplicar mas de lo que tiene la nota ni mas de lo que
+--     vale la factura (contando lo que ya tenian aplicado).
+DROP FUNCTION IF EXISTS save_nc_application(INT, INT, NUMERIC);
+
+CREATE FUNCTION save_nc_application(p_nc_id INT, p_invoice_id INT, p_amount NUMERIC)
+RETURNS INT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_nc        invoices%ROWTYPE;
+    v_inv       invoices%ROWTYPE;
+    v_usado_nc  NUMERIC;
+    v_usado_inv NUMERIC;
+    v_id        INT;
+BEGIN
+    SELECT * INTO v_nc  FROM invoices WHERE id = p_nc_id;
+    SELECT * INTO v_inv FROM invoices WHERE id = p_invoice_id;
+
+    IF v_nc.id IS NULL OR v_inv.id IS NULL THEN
+        RAISE EXCEPTION 'La nota de credito o la factura ya no estan en la base';
+    END IF;
+    IF v_nc.doc_type <> 'NOTA_CREDITO' THEN
+        RAISE EXCEPTION 'El primer comprobante no es una nota de credito';
+    END IF;
+    IF v_inv.doc_type <> 'FACTURA' THEN
+        RAISE EXCEPTION 'Una nota de credito solo se cruza con facturas';
+    END IF;
+    IF v_nc.client_id <> v_inv.client_id THEN
+        RAISE EXCEPTION 'La nota de credito y la factura son de clientes distintos';
+    END IF;
+    IF p_amount IS NULL OR p_amount <= 0 THEN
+        RAISE EXCEPTION 'El importe a aplicar tiene que ser mayor a cero';
+    END IF;
+
+    SELECT COALESCE(SUM(amount), 0) INTO v_usado_nc
+    FROM credit_note_applications
+    WHERE credit_note_id = p_nc_id AND invoice_id <> p_invoice_id;
+
+    SELECT COALESCE(SUM(amount), 0) INTO v_usado_inv
+    FROM credit_note_applications
+    WHERE invoice_id = p_invoice_id AND credit_note_id <> p_nc_id;
+
+    IF v_usado_nc + p_amount > ABS(v_nc.amount) + 0.005 THEN
+        RAISE EXCEPTION 'La nota de credito no alcanza: le quedan %', ABS(v_nc.amount) - v_usado_nc;
+    END IF;
+    IF v_usado_inv + p_amount > v_inv.amount + 0.005 THEN
+        RAISE EXCEPTION 'Es mas de lo que vale la factura: le quedan %', v_inv.amount - v_usado_inv;
+    END IF;
+
+    INSERT INTO credit_note_applications (credit_note_id, invoice_id, amount)
+    VALUES (p_nc_id, p_invoice_id, p_amount)
+    ON CONFLICT (credit_note_id, invoice_id)
+    DO UPDATE SET amount = EXCLUDED.amount
+    RETURNING id INTO v_id;
+
+    PERFORM refresh_invoice_status(ARRAY[p_invoice_id]);
+    RETURN v_id;
+END;
+$$;
+
+
+-- delete_nc_application: deshace un cruce nota de credito <-> factura.
+DROP FUNCTION IF EXISTS delete_nc_application(INT);
+
+CREATE FUNCTION delete_nc_application(p_id INT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_inv INT;
+BEGIN
+    DELETE FROM credit_note_applications WHERE id = p_id
+    RETURNING invoice_id INTO v_inv;
+    IF v_inv IS NOT NULL THEN
+        PERFORM refresh_invoice_status(ARRAY[v_inv]);
+    END IF;
+END;
+$$;
+
+
+-- count_nc_applications: cuantos cruces con notas de credito tiene un
+-- documento (para avisar antes de borrarlo).
+DROP FUNCTION IF EXISTS count_nc_applications(INT);
+
+CREATE FUNCTION count_nc_applications(p_id INT)
+RETURNS INT
+LANGUAGE sql
+AS $$
+    SELECT COUNT(*)::INT FROM credit_note_applications
+    WHERE credit_note_id = p_id OR invoice_id = p_id;
+$$;
+

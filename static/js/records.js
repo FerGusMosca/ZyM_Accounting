@@ -26,6 +26,26 @@ let clientes = [];
 
 let temporizadorBusqueda = null;
 
+// Orden de cada solapa: campo (fecha / cliente u originante / importe) y sentido.
+// Lo ordena la base, así el orden vale para todas las páginas, no solo la visible.
+const ordenDe = { 1: { campo: 'fecha', dir: 'desc' }, 2: { campo: 'fecha', dir: 'desc' },
+                  3: { campo: 'fecha', dir: 'desc' }, 4: { campo: 'fecha', dir: 'desc' } };
+
+function ordenarPor(tab, campo) {
+  const o = ordenDe[tab];
+  if (o.campo === campo) o.dir = o.dir === 'asc' ? 'desc' : 'asc';
+  else { o.campo = campo; o.dir = campo === 'fecha' ? 'desc' : 'asc'; }
+  paginaDe[tab] = 1;
+  cargar();
+}
+
+function pintarFlechas() {
+  [1, 2, 3].forEach(t => ['fecha', 'cliente', 'importe'].forEach(c => {
+    const el = document.getElementById(`rgs_${t}_${c}`);
+    if (el) el.textContent = ordenDe[t].campo === c ? (ordenDe[t].dir === 'asc' ? '▲' : '▼') : '';
+  }));
+}
+
 document.addEventListener('DOMContentLoaded', () => cargar());
 
 // Todos los pedidos van con la orden de no usar nada guardado.
@@ -73,7 +93,8 @@ async function cargar() {
   try {
     const url = `/reconciliation/registros/page?tab=${TABS[tabActual]}` +
                 `&page=${paginaDe[tabActual]}&size=${tamano}` +
-                `&q=${encodeURIComponent(textoBusqueda())}`;
+                `&q=${encodeURIComponent(textoBusqueda())}` +
+                `&orden=${ordenDe[tabActual].campo}&dir=${ordenDe[tabActual].dir}`;
     const res  = await pedir(url);
     const data = await res.json();
 
@@ -145,6 +166,7 @@ function renderTab(data) {
   if (tabActual === 3) renderCruces();
   if (tabActual === 4) renderClientes();
   renderPager(data);
+  pintarFlechas();
 }
 
 function renderPager(data) {
@@ -439,6 +461,7 @@ async function guardarPagoManual() {
 }
 
 /** Los cruces guardados de una factura o de un cobro, leidos de la base ahora. */
+let notasDelUltimo = 0;   // cruces con notas de credito del documento consultado
 async function crucesDe(que, id) {
   const url = que === 'invoice'
     ? `/reconciliation/registros/invoice_matches?invoice_id=${id}`
@@ -446,6 +469,7 @@ async function crucesDe(que, id) {
   const res  = await pedir(url);
   const data = await res.json();
   if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+  notasDelUltimo = Number(data.n_notas || 0);
   return data.cruces || [];
 }
 
@@ -473,10 +497,13 @@ async function borrarFactura(id) {
                  `${c.fecha_pago || '—'} · ${c.banco || ''} ${c.originante || ''} · ${money(c.importe)}`)) +
                `\n\nLos cobros quedan en la base, libres para cruzarlos de nuevo.`;
   }
+  if (notasDelUltimo) {
+    mensaje += `\n\n🧾 Tiene <b>${notasDelUltimo} cruce(s) con notas de crédito</b>: también se eliminan.`;
+  }
   mensaje += '\n\nNo se puede deshacer.';
 
   const seguir = await confirmar({
-    titulo: propios.length ? 'Borrar la factura y sus cruces' : 'Borrar la factura',
+    titulo: (propios.length || notasDelUltimo) ? 'Borrar la factura y sus cruces' : 'Borrar la factura',
     mensaje,
     ok: propios.length ? 'Borrar factura y cruces' : 'Borrar',
     cancel: 'Cancelar',

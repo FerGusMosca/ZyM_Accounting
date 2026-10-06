@@ -36,6 +36,14 @@
 //   3. El paso 3 se divide en tres solapas: cuenta corriente por cliente,
 //      cruce factura-pago y facturas pendientes de cobro.
 //
+// Tanda 8 (06/10/2026):
+//   - La conciliacion se dispara SOLO con el boton "Conciliar" (arriba).
+//     Al terminar, un aviso dice que lo propuesto todavia no esta guardado.
+//   - Todas las grillas se ordenan (fecha / cliente u originante / importe).
+//   - Las notas de credito se ven, marcadas, en pendientes de cobro, y se
+//     cruzan con sus facturas en la solapa 4 (se guarda aparte, antes de
+//     conciliar). La factura cruzada se muestra con su importe actualizado.
+//
 // Tanda 7b (04/10/2026) - moverse libre entre solapas:
 //   - Saltar de solapa es INSTANTANEO: nunca se bloquea ni se frena. Lo que
 //     hay que guardar se guarda en segundo plano y se ve en un cartelito
@@ -70,6 +78,15 @@ let ordenInv = { campo: null, asc: true };   // orden de la grilla de facturas
 let mensualAbierto = true;                   // bloque de facturado por mes
 
 let subTab = 1;             // solapa que se esta viendo dentro del paso 3
+// Orden de las grillas (ademas del de facturas): campo = fecha / nombre / importe
+const ordenT = { pay: {}, match: {}, pend: {}, unass: {} };
+// Cruces nota de credito <-> factura: los guardados (de la base) y los
+// armados en la solapa 4 que todavia no se guardaron.
+let notasGuardadas = [];   // [{id, nc_id, invoice_id, monto}]
+let notasPendientes = [];  // [{nc_id, invoice_id, monto}]
+let ncElegida = null;      // id de la nota elegida en la solapa 4
+let ncFacturas = [];       // ids de las facturas elegidas en la solapa 4
+let notasCambiaron = false;
 let colaGuardado = Promise.resolve();   // los guardados salen de a uno, en orden
 let guardando = 0;                      // cuantos guardados hay pendientes
 let calculandoPaso3 = false;            // el paso 3 esta calculando
@@ -386,9 +403,8 @@ function progressEnd(pfx) {
 async function runReconcile() {
   if (!invoices.length) { toast('⚠️ Cargá al menos una factura'); showStep(1); return; }
   if (!payments.length) { toast('⚠️ Cargá al menos un comprobante de pago'); showStep(2); return; }
-  // Desde otro paso: se entra al 3 y ahi se guarda y se concilia.
-  if (pasoActual !== 3) { showStep(3); return; }
-  // Ya estaba en el 3: se guarda, se relee y se concilia de nuevo.
+  // Se va al paso 3 (si no estaba) y se concilia: SOLO desde este botón.
+  if (pasoActual !== 3) showStep(3);
   await calcularPaso3();
 }
 
@@ -397,14 +413,18 @@ async function runReconcile() {
  * ya estaban guardados en la base los recupera el servidor solo.
  * silencioso: sin cartel de espera ni aviso (se usa al traer de la base).
  */
-async function conciliar({ silencioso = false } = {}) {
+async function conciliar({ silencioso = false, soloGuardados = null } = {}) {
+  // Si no se dice nada, se mantiene el modo de lo que se ve: si se estaban
+  // mostrando solo los guardados, un cruce a mano no dispara el cálculo nuevo.
+  if (soloGuardados === null) soloGuardados = !!(lastResult && lastResult.solo_guardados);
   if (!invoices.length && !payments.length) return;
   if (!silencioso) trabajando(`Cruzando ${invoices.length} factura(s) con ${payments.length} pago(s)…`);
   try {
     const res = await pedir('/reconciliation/reconcile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ invoices, payments, manuales, descartados, sacar: aSacar })
+      body: JSON.stringify({ invoices, payments, manuales, descartados, sacar: aSacar,
+                             solo_guardados: soloGuardados })
     });
     const data = await res.json();
     if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
@@ -424,6 +444,8 @@ async function conciliar({ silencioso = false } = {}) {
 // se reparte entre las facturas en el orden elegido. Si sobra plata, queda
 // como un pago aparte (remanente) que se puede volver a cruzar.
 function toggleFactura(key) {
+  const f = lastResult && lastResult.facturas_pendientes.find(x => x.key === key);
+  if (f && f.tipo === 'NOTA_CREDITO') return;   // las notas no se cruzan con pagos
   const i = selFacturas.indexOf(key);
   if (i >= 0) selFacturas.splice(i, 1); else selFacturas.push(key);
   renderResult();
@@ -667,18 +689,15 @@ function guardarTodo() {
 
 async function _guardarTodo() {
   if (!dbEnabled && !await refrescarDb()) return { ok: false, sinBase: true };
-  if (!invoices.length && !payments.length && !aSacar.length) return { ok: true, nada: true };
+  if (!invoices.length && !payments.length && !aSacar.length && !notasPendientes.length) return { ok: true, nada: true };
   try {
     await sincronizarDocs();
     if (lastResult && (aSacar.length ||
         lastResult.matches.some(m => !m.guardado && m.confianza === 'manual'))) {
       await guardarCruces({ soloManuales: true });
     }
-    // Si al releer de la base cambió algo, el cálculo viejo ya no vale.
-    if (!lastResult && invoices.length && payments.length &&
-        (pasoActual === 3 || !calculandoPaso3)) {
-      await conciliar({ silencioso: true });
-    }
+    if (notasPendientes.length) await guardarNotas();
+    else await refrescarNotas();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -754,7 +773,7 @@ async function guardarCruces({ soloManuales = false } = {}) {
   manuales = [];                                        // ya quedaron guardados
   aSacar = aSacar.filter(id => !enviados.includes(id)); // ya se sacaron de la base
   loadGroups();
-  await conciliar({ silencioso: true });                // vuelven como guardados
+  await conciliar({ silencioso: true });                // vuelven como guardados (mismo modo)
   return data;
 }
 
@@ -972,6 +991,7 @@ function fechaComparable(f) {
 
 function valorDeOrden(inv, campo) {
   if (campo === 'comp')  return numeroDeFactura(inv);
+  if (campo === 'importe') return importeConSigno(inv);
   if (campo === 'fecha') return fechaComparable(inv.fecha_emision);
   return String(inv.razon_social_cliente || '').toLowerCase();
 }
@@ -1032,7 +1052,7 @@ function cambiarTamPag(valor) {
 }
 
 function renderFlechasOrden() {
-  const flechas = { comp: 'rcSortComp', fecha: 'rcSortFecha', cliente: 'rcSortCliente' };
+  const flechas = { comp: 'rcSortComp', fecha: 'rcSortFecha', cliente: 'rcSortCliente', importe: 'rcSortImporte' };
   Object.entries(flechas).forEach(([campo, id]) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -1055,7 +1075,10 @@ function renderInvTable() {
       <td class="mono">${esc(inv.fecha_emision)}</td>
       <td>${esc(inv.razon_social_cliente)}</td>
       <td class="mono">${esc(inv.cuit_cliente)}</td>
-      <td class="num ${nota ? 'neg' : ''}">${money(importeConSigno(inv))}</td>
+      <td class="num ${nota ? 'neg' : ''}">${money(importeConSigno(inv))}${
+        !nota && inv._id_bd && aplicadoFac(inv._id_bd) > 0.005
+          ? `<div class="rc-sub" title="Importe actualizado por las notas de crédito cruzadas">actualizado: ${money(importeActualizado(inv))} (NC −${money(aplicadoFac(inv._id_bd))})</div>`
+          : ''}</td>
       <td>${esc(trunc(inv.descripcion, 70))}</td>
       <td><button class="rc-del" onclick="delDoc('invoices', ${i})" title="Quitar">✕</button></td>
     </tr>`; }).join('');
@@ -1137,7 +1160,7 @@ function renderPayTable() {
   const t = document.getElementById('payTable');
   const b = document.getElementById('payBody');
   t.hidden = !payments.length;
-  b.innerHTML = paginar(payments.map((p, i) => ({ p, i })), 'pay').map(({ p, i }) => `
+  b.innerHTML = paginar(ordenarLista(payments.map((p, i) => ({ p, i })), 'pay', x => valorPago(x.p)), 'pay').map(({ p, i }) => `
     <tr class="${p._duplicado ? 'dupe' : ''}">
       <td>${esc(p.banco || '-')}${p._corregido ? ' <span class="rc-badge media" title="El extractor había invertido pagador y cobrador — corregido automáticamente">corregido</span>' : ''}${p._duplicado ? ' <span class="rc-badge media" title="Ya estaba registrado — lo cargaste igual">repetido</span>' : ''}</td>
       <td class="mono">${esc(p.fecha)}</td>
@@ -1165,6 +1188,13 @@ function delDoc(kind, i) {
 function renderResult() {
   const empty = document.getElementById('rcEmpty');
   const box   = document.getElementById('rcResult');
+  [1, 2, 3, 4].forEach(i => {
+    document.getElementById(`subTab${i}`).classList.toggle('active', i === subTab);
+  });
+  document.getElementById('subPanel4').hidden = subTab !== 4;
+  document.getElementById('subCnt4').textContent = notasDePantalla().length;
+  pintarAviso();
+  if (subTab === 4) { empty.hidden = true; box.hidden = true; return; }
   if (!lastResult) { empty.hidden = calculandoPaso3; box.hidden = true; return; }
   empty.hidden = true; box.hidden = false;
 
@@ -1189,12 +1219,12 @@ function renderResult() {
   document.getElementById('subCnt3').textContent = r.facturas_pendientes.length;
   [1, 2, 3].forEach(i => {
     document.getElementById(`subPanel${i}`).hidden = i !== subTab;
-    document.getElementById(`subTab${i}`).classList.toggle('active', i === subTab);
   });
+  pintarFlechasT();
 
   const grupos = gruposDeCruces(r.matches);
   document.getElementById('matchBody').innerHTML = r.matches.length
-    ? paginar(r.matches.map((m, i) => ({ m, i })), 'match').map(({ m, i }) => {
+    ? paginar(ordenarLista(r.matches.map((m, i) => ({ m, i })), 'match', x => valorCruce(x.m)), 'match').map(({ m, i }) => {
         const parcial = Math.abs(Number(m.monto) - Number(m.factura.importe)) > 0.005;
         const libresEnGrupo = r.matches.filter((x, j) => grupos[j] === grupos[i] && !x.guardado).length;
         const accion =
@@ -1207,8 +1237,9 @@ function renderResult() {
                : ''}
            </div>`;
         return `
-      <tr>
-        <td><span class="rc-badge ${m.confianza}">${label(m.confianza)}</span></td>
+      <tr class="${m.guardado ? '' : 'rc-sin-guardar'}" ${m.guardado ? '' : 'title="Este cruce lo propuso el sistema y todavía NO está guardado en la base"'}>
+        <td><span class="rc-badge ${m.confianza}">${label(m.confianza)}</span>${m.guardado ? ''
+              : '<div><span class="rc-badge-sin-guardar">⚠ Sin guardar</span></div>'}</td>
         <td class="mono">${esc(m.factura.comp)} · ${esc(m.factura.fecha)}</td>
         <td>${esc(m.factura.cliente)}</td>
         <td class="num">${money(m.monto)}${parcial ? `<div class="rc-sub">de ${money(m.factura.importe)}</div>` : ''}</td>
@@ -1218,21 +1249,33 @@ function renderResult() {
     : `<tr><td colspan="6">Sin cruces todavía.</td></tr>`;
 
   document.getElementById('pendBody').innerHTML = r.facturas_pendientes.length
-    ? paginar(r.facturas_pendientes, 'pend').map(f => {
+    ? paginar(ordenarLista(r.facturas_pendientes, 'pend', f => ({ fecha: fechaComparable(f.fecha), nombre: String(f.cliente || '').toLowerCase(), importe: Number(f.saldo) })), 'pend').map(f => {
+        if (f.tipo === 'NOTA_CREDITO') {
+          // La nota de crédito no se cruza con pagos: se aplica a su factura en la solapa 4.
+          return `
+      <tr class="nota nc" title="Las notas de crédito se cruzan con su factura en la solapa “Notas de crédito ↔ Facturas”">
+        <td><input type="checkbox" disabled></td>
+        <td class="mono"><span class="rc-badge nc">NC</span> ${esc(f.comp)}</td><td class="mono">${esc(f.fecha)}</td>
+        <td>${esc(f.cliente)}</td>
+        <td class="num neg">${money(f.saldo)}<div class="rc-sub">sin aplicar${f.ajusta ? ` · ajusta ${esc(f.ajusta)}` : ''}</div></td>
+        <td>${esc(trunc(f.descripcion, 70))}</td>
+      </tr>`;
+        }
         const sel = selFacturas.includes(f.key);
         const parcial = Number(f.pagado || 0) > 0.005;
+        const conNc = Number(f.nc_aplicado || 0) > 0.005;
         return `
       <tr class="rc-selectable ${sel ? 'sel-inv' : ''}" onclick="toggleFactura('${esc(f.key)}')">
         <td><input type="checkbox" ${sel ? 'checked' : ''} onclick="event.stopPropagation(); toggleFactura('${esc(f.key)}')"></td>
         <td class="mono">${esc(f.comp)}</td><td class="mono">${esc(f.fecha)}</td>
         <td>${esc(f.cliente)}</td>
-        <td class="num">${money(f.saldo)}${parcial ? `<div class="rc-sub">de ${money(f.importe)}</div>` : ''}</td>
+        <td class="num">${money(f.saldo)}${conNc ? `<div class="rc-sub">de ${money(f.importe)} − NC ${money(f.nc_aplicado)}</div>` : parcial ? `<div class="rc-sub">de ${money(f.importe)}</div>` : ''}</td>
         <td>${esc(trunc(f.descripcion, 70))}</td>
       </tr>`; }).join('')
     : `<tr><td colspan="6">🎉 No hay facturas pendientes.</td></tr>`;
 
   document.getElementById('unassBody').innerHTML = r.pagos_sin_imputar.length
-    ? paginar(r.pagos_sin_imputar, 'unass').map(p => {
+    ? paginar(ordenarLista(r.pagos_sin_imputar, 'unass', p => ({ fecha: fechaComparable(p.fecha), nombre: String(p.originante || '').toLowerCase(), importe: Number(p.libre) })), 'unass').map(p => {
         const sel = selPago === p.key;
         return `
       <tr class="rc-selectable ${sel ? 'sel-pay' : ''} ${p.remanente ? 'remanente' : ''}" onclick="elegirPago('${esc(p.key)}')">
@@ -1357,18 +1400,23 @@ function irAlPaso(n) {
 function showStep(n) {
   if (n === pasoActual) return;
   irAlPaso(n);
-  if (n === 3 && invoices.length && payments.length) calcularPaso3();
-  else guardarTodo();
+  guardarTodo();
+  if (n === 3) renderResult();
 }
 
 async function calcularPaso3() {
   calculandoPaso3 = true;
   pintarCalculo(true);
+  const btn = document.getElementById('btnConciliar');
+  if (btn) btn.disabled = true;
   try {
     await guardarTodo();
-    if (invoices.length && payments.length) await conciliar({ silencioso: true });
+    if (invoices.length && payments.length) await conciliar({ silencioso: true, soloGuardados: false });
+    notasCambiaron = false;
+    if (lastResult && subTab === 4) showSubTab(1);
   } finally {
     calculandoPaso3 = false;
+    if (btn) btn.disabled = false;
     pintarCalculo(false);
   }
 }
@@ -1384,11 +1432,8 @@ function pintarCalculo(si) {
 function showSubTab(n) {
   if (n === subTab) return;
   subTab = n;
-  [1, 2, 3].forEach(i => {
-    document.getElementById(`subPanel${i}`).hidden = i !== n;
-    document.getElementById(`subTab${i}`).classList.toggle('active', i === n);
-  });
-  renderSeleccion();
+  renderResult();
+  renderNotas();
   guardarTodo();
 }
 
@@ -1456,13 +1501,13 @@ async function traerDeLaBase(opciones = {}) {
       toast(`↓ ${nuevasInv} factura(s) y ${nuevosPay} cobro(s) traídos de la base`);
     }
 
-    // Lo traído se concilia solo: los cruces ya guardados vuelven tal cual y
-    // lo que no estaba cruzado se intenta cruzar. Antes quedaba la pantalla
-    // en "Todavía no hay conciliación" y parecía que no se había guardado.
-    if ((invoices.length || payments.length) && (nuevasInv || nuevosPay || !lastResult)) {
-      await conciliar({ silencioso: true });
-      if (!silencioso) irAlPaso(3);
+    // Se muestran los cruces YA GUARDADOS de lo traído, sin buscar cruces
+    // nuevos: eso se hace solo con el botón "Conciliar".
+    await refrescarNotas();
+    if (invoices.length || payments.length) {
+      await conciliar({ silencioso: true, soloGuardados: true });
     }
+    renderAll();
   } catch (e) {
     if (!silencioso) toast(`❌ ${e.message}`);
   } finally {
@@ -1499,4 +1544,254 @@ function desdeCalendario(id) {
   if (!cal.value) return;
   const [a, me, d] = cal.value.split('-');
   document.getElementById(id).value = `${d}/${me}/${a}`;
+}
+
+
+// ── Orden de las grillas (pagos, cruces, pendientes, pagos sin imputar) ──
+// Clic en el título: ordena; otro clic: da vuelta el orden. Se ordena todo
+// lo que hay en pantalla y después se pagina.
+function ordenarT(tabla, campo) {
+  const o = ordenT[tabla];
+  if (o.campo === campo) o.asc = !o.asc;
+  else { o.campo = campo; o.asc = true; }
+  pagDe[tabla] = 1;
+  renderAll();
+}
+
+function ordenarLista(lista, tabla, valores) {
+  const o = ordenT[tabla];
+  if (!o.campo) return lista;
+  const conPos = lista.map((x, pos) => ({ x, pos, v: valores(x)[o.campo] }));
+  conPos.sort((a, b) => {
+    if (a.v === b.v) return a.pos - b.pos;
+    return (a.v < b.v ? -1 : 1) * (o.asc ? 1 : -1);
+  });
+  return conPos.map(c => c.x);
+}
+
+function valorPago(p) {
+  return { fecha: fechaComparable(p.fecha),
+           nombre: String(p.originante || '').toLowerCase(),
+           importe: Number(p.importe || 0) };
+}
+
+function valorCruce(m) {
+  return { fecha: fechaComparable(m.pago && m.pago.fecha),
+           nombre: String((m.factura && m.factura.cliente) || '').toLowerCase(),
+           importe: Number(m.monto || 0) };
+}
+
+function pintarFlechasT() {
+  Object.keys(ordenT).forEach(t => ['fecha', 'nombre', 'importe'].forEach(c => {
+    const el = document.getElementById(`srt_${t}_${c}`);
+    if (el) el.textContent = ordenT[t].campo === c ? (ordenT[t].asc ? '▲' : '▼') : '';
+  }));
+}
+
+// ── Aviso arriba del paso 3 ────────────────────────────────────────
+function pintarAviso() {
+  const el = document.getElementById('rcAviso');
+  if (!el) return;
+  let msg = '';
+  if (lastResult && lastResult.solo_guardados && !calculandoPaso3) {
+    msg = `📂 Se muestran los <b>${lastResult.matches.length} cruce(s) ya guardados</b>. ` +
+          'Apretá <b>▶ Conciliar</b> para buscar cruces nuevos.';
+  } else if (notasCambiaron && lastResult) {
+    msg = '🧾 Cambiaron los cruces de notas de crédito: apretá <b>▶ Conciliar</b> para recalcular con los importes actualizados.';
+  } else if (lastResult && !calculandoPaso3) {
+    const sinGuardar = lastResult.matches.filter(m => !m.guardado).length;
+    if (sinGuardar) {
+      msg = `✅ Conciliación lista. Ya podés revisar y guardar: <b>${sinGuardar} cruce(s)</b> ` +
+            `que propuso el sistema todavía <b>no están guardados</b> en la base. ` +
+            `Apretá <b>💾 Guardar en base</b> cuando estés de acuerdo.`;
+    } else if (lastResult.matches.length) {
+      msg = '✅ Conciliación lista. Todos los cruces de la pantalla ya están guardados en la base.';
+    }
+  }
+  el.innerHTML = msg;
+  el.hidden = !msg;
+}
+
+// ── Notas de crédito ↔ Facturas (solapa 4) ────────────────────────
+function notasDePantalla() {
+  return invoices.filter(d => tipoDeComprobante(d) === 'NOTA_CREDITO');
+}
+
+function facturasDePantalla() {
+  return invoices.filter(d => tipoDeComprobante(d) === 'FACTURA');
+}
+
+/** Lo ya aplicado (guardado + armado sin guardar) a una nota o a una factura. */
+function aplicadoNc(id)  {
+  return [...notasGuardadas, ...notasPendientes].filter(a => a.nc_id === id)
+    .reduce((t, a) => t + Number(a.monto), 0);
+}
+function aplicadoFac(id) {
+  return [...notasGuardadas, ...notasPendientes].filter(a => a.invoice_id === id)
+    .reduce((t, a) => t + Number(a.monto), 0);
+}
+
+function queleQuedaNc(nc)  { return Math.round((Math.abs(Number(nc.importe_total || 0)) - aplicadoNc(nc._id_bd)) * 100) / 100; }
+function importeActualizado(f) { return Math.round((Math.abs(Number(f.importe_total || 0)) - aplicadoFac(f._id_bd)) * 100) / 100; }
+
+async function refrescarNotas() {
+  if (!dbEnabled) return;
+  const ids = invoices.map(d => d._id_bd).filter(Boolean);
+  if (!ids.length) { notasGuardadas = []; renderNotas(); return; }
+  try {
+    const res = await pedir('/reconciliation/nc/list', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    const data = await res.json();
+    if (data.status === 'ok') notasGuardadas = data.cruces || [];
+  } catch (_) { /* se vuelve a intentar en el próximo guardado */ }
+  renderNotas();
+  renderInvTable();
+}
+
+function elegirNota(id) {
+  ncElegida = ncElegida === id ? null : id;
+  ncFacturas = [];
+  renderNotas();
+}
+
+function elegirFacturaNc(id) {
+  const i = ncFacturas.indexOf(id);
+  if (i >= 0) ncFacturas.splice(i, 1); else ncFacturas.push(id);
+  renderNotas();
+}
+
+function renderNotas() {
+  const body = document.getElementById('ncBody');
+  if (!body) return;
+  const notas = notasDePantalla();
+  body.innerHTML = notas.length ? notas.map(nc => {
+    const queda = queleQuedaNc(nc);
+    const ok = !!nc._id_bd;
+    const sel = ncElegida === nc._id_bd;
+    return `
+      <tr class="rc-selectable ${sel ? 'sel-pay' : ''} ${ok ? '' : 'rc-off'}" ${ok ? `onclick="elegirNota(${nc._id_bd})"` : 'title="Todavía no está guardada en la base"'}>
+        <td><input type="radio" name="rcNc" ${sel ? 'checked' : ''} ${ok ? '' : 'disabled'} onclick="event.stopPropagation(); elegirNota(${nc._id_bd})"></td>
+        <td class="mono"><span class="rc-badge nc">NC</span> ${esc(numeroDeFactura(nc))}${nc.comp_ajustado ? `<div class="rc-sub">ajusta ${esc(nc.comp_ajustado)}</div>` : ''}</td>
+        <td class="mono">${esc(nc.fecha_emision || '')}</td>
+        <td>${esc(nc.razon_social_cliente || '')}</td>
+        <td class="num">${money(queda)}<div class="rc-sub">de ${money(Math.abs(Number(nc.importe_total || 0)))}</div></td>
+      </tr>`; }).join('')
+    : '<tr><td colspan="5">No hay notas de crédito en pantalla.</td></tr>';
+
+  const nc = notas.find(n => n._id_bd === ncElegida);
+  const cuit = nc ? String(nc.cuit_cliente || '').replace(/\D/g, '') : null;
+  const facts = nc ? facturasDePantalla().filter(f => f._id_bd &&
+                      String(f.cuit_cliente || '').replace(/\D/g, '') === cuit) : [];
+  document.getElementById('ncInvBody').innerHTML = !nc
+    ? '<tr><td colspan="4">Elegí una nota de crédito para ver las facturas de ese cliente.</td></tr>'
+    : facts.length ? facts.map(f => {
+        const sel = ncFacturas.includes(f._id_bd);
+        const act = importeActualizado(f);
+        const sinLugar = act <= 0.005;
+        return `
+      <tr class="rc-selectable ${sel ? 'sel-inv' : ''} ${sinLugar ? 'rc-off' : ''}" ${sinLugar ? '' : `onclick="elegirFacturaNc(${f._id_bd})"`}>
+        <td><input type="checkbox" ${sel ? 'checked' : ''} ${sinLugar ? 'disabled' : ''} onclick="event.stopPropagation(); elegirFacturaNc(${f._id_bd})"></td>
+        <td class="mono">${esc(numeroDeFactura(f))}${nc.comp_ajustado && nc.comp_ajustado === numeroDeFactura(f) ? ' <span class="rc-badge cuenta">la que ajusta</span>' : ''}</td>
+        <td class="mono">${esc(f.fecha_emision || '')}</td>
+        <td class="num">${money(act)}${act < Math.abs(Number(f.importe_total || 0)) - 0.005 ? `<div class="rc-sub">de ${money(Math.abs(Number(f.importe_total || 0)))}</div>` : ''}</td>
+      </tr>`; }).join('')
+      : '<tr><td colspan="4">Ese cliente no tiene facturas en pantalla.</td></tr>';
+
+  const porId = id => invoices.find(d => d._id_bd === id);
+  const filas = [
+    ...notasPendientes.map((a, i) => ({ a, i, guardado: false })),
+    ...notasGuardadas.map(a => ({ a, guardado: true })),
+  ];
+  document.getElementById('ncCrucesBody').innerHTML = filas.length ? filas.map(({ a, i, guardado }) => {
+    const n = porId(a.nc_id), f = porId(a.invoice_id);
+    return `
+      <tr>
+        <td>${guardado ? '<span class="rc-badge alta">Guardado</span>' : '<span class="rc-badge revisar">Sin guardar</span>'}</td>
+        <td class="mono">${n ? esc(numeroDeFactura(n)) : `#${a.nc_id}`}</td>
+        <td class="mono">${f ? esc(numeroDeFactura(f)) : `#${a.invoice_id}`}</td>
+        <td>${esc((f && f.razon_social_cliente) || (n && n.razon_social_cliente) || '')}</td>
+        <td class="num">${money(a.monto)}</td>
+        <td><button class="rc-del" title="Deshacer este cruce" onclick="${guardado ? `deshacerNotaGuardada(${a.id})` : `deshacerNotaPendiente(${i})`}">✕</button></td>
+      </tr>`; }).join('')
+    : '<tr><td colspan="6">Todavía no hay cruces de notas de crédito.</td></tr>';
+
+  document.getElementById('btnAplicarNc').disabled = !(ncElegida && ncFacturas.length);
+  document.getElementById('btnGuardarNc').disabled = !notasPendientes.length;
+  document.getElementById('subCnt4').textContent = notas.length;
+}
+
+/** Aplica la nota elegida a las facturas marcadas, en orden, hasta que se termine. */
+async function aplicarNota() {
+  const nc = notasDePantalla().find(n => n._id_bd === ncElegida);
+  if (!nc || !ncFacturas.length) return;
+  let queda = queleQuedaNc(nc);
+  if (queda <= 0.005) { toast('⚠️ Esa nota de crédito ya está aplicada completa'); return; }
+  const nuevos = [];
+  for (const id of ncFacturas) {
+    const f = invoices.find(d => d._id_bd === id);
+    const lugar = importeActualizado(f);
+    const monto = Math.round(Math.min(queda, lugar) * 100) / 100;
+    if (monto <= 0.005) continue;
+    nuevos.push({ nc_id: nc._id_bd, invoice_id: id, monto });
+    queda = Math.round((queda - monto) * 100) / 100;
+    if (queda <= 0.005) break;
+  }
+  if (!nuevos.length) { toast('⚠️ Nada para aplicar'); return; }
+  notasPendientes.push(...nuevos);
+  ncFacturas = [];
+  notasCambiaron = true;
+  renderNotas(); renderInvTable(); pintarAviso();
+  toast(`🧾 ${nuevos.length} cruce(s) armado(s). Se guardan con “Guardar notas de crédito” o al cambiar de solapa.`);
+}
+
+function deshacerNotaPendiente(i) {
+  notasPendientes.splice(i, 1);
+  renderNotas(); renderInvTable();
+}
+
+async function deshacerNotaGuardada(id) {
+  const seguir = await ask({
+    titulo: 'Deshacer el cruce de la nota de crédito',
+    mensaje: 'La factura vuelve a su importe original. Se saca de la base apenas confirmás.',
+    cancel: 'Volver', ok: 'Deshacer',
+  });
+  if (!seguir) return;
+  try {
+    const res = await pedir('/reconciliation/nc/delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const data = await res.json();
+    if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+    notasCambiaron = true;
+    await refrescarNotas();
+    pintarAviso();
+    toast('↩️ Cruce de nota de crédito deshecho');
+  } catch (e) { toast(`❌ ${e.message}`); }
+}
+
+/** Guarda SOLO los cruces de notas de crédito armados en la solapa 4. */
+async function guardarNotas() {
+  if (!notasPendientes.length) return;
+  const enviados = [...notasPendientes];
+  const res = await pedir('/reconciliation/nc/save', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cruces: enviados })
+  });
+  const data = await res.json();
+  if (data.status !== 'ok') throw new Error(data.message || 'Error del servidor');
+  notasPendientes = notasPendientes.filter(a => !enviados.includes(a));
+  await refrescarNotas();
+  if (data.errores && data.errores.length) {
+    toast(`⚠️ ${data.errores.length} cruce(s) no se guardaron: ${data.errores[0].error}`);
+  } else if (data.guardados) {
+    toast(`💾 ${data.guardados} cruce(s) de notas de crédito guardados`);
+  }
+}
+
+async function guardarNotasBoton() {
+  await colaGuardado;
+  try { await guardarNotas(); } catch (e) { toast(`❌ ${e.message}`); }
 }

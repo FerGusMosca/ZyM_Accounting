@@ -324,6 +324,25 @@ def _faltantes_en_base(mgr: ReconciliationManager, invoices: list[dict],
     return (sorted(ids_inv - set(hay_inv)), sorted(ids_pay - set(hay_pay)))
 
 
+def _notas_por_clave(mgr: ReconciliationManager, invoices: list[dict]) -> dict:
+    """
+    {clave del documento: importe} con los cruces nota de credito <-> factura
+    guardados: la factura suma lo que le descuentan; la nota, lo ya aplicado
+    en negativo.
+    """
+    clave_de = {}
+    for i, inv in enumerate(invoices):
+        if inv.get("_id_bd"):
+            clave_de[int(inv["_id_bd"])] = _inv_key(inv, i)
+    notas = defaultdict(float)
+    for a in mgr.list_nc_applications(list(clave_de)):
+        if a["invoice_id"] in clave_de:
+            notas[clave_de[a["invoice_id"]]] += a["monto"]
+        if a["nc_id"] in clave_de:
+            notas[clave_de[a["nc_id"]]] -= a["monto"]
+    return dict(notas)
+
+
 def _persist_docs(mgr: ReconciliationManager, invoices: list[dict],
                   payments: list[dict]) -> tuple[dict, dict]:
     """
@@ -534,8 +553,12 @@ def _pay_key(pay: dict, j: int) -> str:
 
 
 def _saldo(inv: dict) -> float:
-    """Lo que le falta cobrar a la factura."""
-    return _round2(inv["importe"] - inv["pagado"])
+    """
+    Lo que le falta cobrar a la factura: su importe, menos lo que cubren las
+    notas de credito cruzadas con ella, menos lo cobrado. En una nota de
+    credito da negativo: lo que todavia le queda por aplicar.
+    """
+    return _round2(inv["importe"] - inv.get("nc", 0.0) - inv["pagado"])
 
 
 def _libre(pay: dict) -> float:
@@ -555,7 +578,9 @@ def reconcile(invoices: list[dict], payments: list[dict],
               grupos: dict | None = None,
               manuales: list[dict] | None = None,
               guardados: list[dict] | None = None,
-              descartados: list[dict] | None = None) -> dict:
+              descartados: list[dict] | None = None,
+              notas: dict | None = None,
+              solo_guardados: bool = False) -> dict:
     """
     Paso 0: cruces YA GUARDADOS en la base               → 'guardado'
     Paso 1: cruces MANUALES hechos en pantalla            → 'manual'
@@ -596,6 +621,9 @@ def reconcile(invoices: list[dict], payments: list[dict],
             "descripcion": inv.get("descripcion") or "",
             "archivo": inv.get("_archivo") or "",
             "pagado": 0.0,
+            # notas de credito cruzadas: en la factura, lo que le descuentan;
+            # en la nota, lo ya aplicado con signo negativo.
+            "nc": _round2((notas or {}).get(_inv_key(inv, i), 0.0)),
         })
     # Si el pagador de un cobro es el propio emisor, el extractor lo dio vuelta.
     emisores = _emisor_cuits(invoices)
@@ -663,8 +691,12 @@ def reconcile(invoices: list[dict], payments: list[dict],
                 motivo += " — cubre una parte de la factura"
             matches.append(_match(inv, pay, "manual", motivo, monto))
 
+    # solo_guardados: se muestra lo que ya estaba guardado (y lo hecho a mano)
+    # sin buscar cruces nuevos. Lo nuevo se busca con el boton "Conciliar".
+    pays_auto = [] if solo_guardados else pays
+
     # Paso 2 — CUIT + importe exacto
-    for p in pays:
+    for p in pays_auto:
         if _libre(p) <= _CENT or not p["cuit"]:
             continue
         for inv in invs:
@@ -679,7 +711,7 @@ def reconcile(invoices: list[dict], payments: list[dict],
                 break
 
     # Paso 3 — importe exacto + fecha compatible
-    for p in pays:
+    for p in pays_auto:
         libre = _libre(p)
         if libre <= _CENT:
             continue
@@ -705,7 +737,8 @@ def reconcile(invoices: list[dict], payments: list[dict],
 
     pendientes = []
     for inv in invs:
-        if _saldo(inv) > _CENT:
+        es_nc = inv["tipo"] == "NOTA_CREDITO"
+        if _saldo(inv) > _CENT or (es_nc and _saldo(inv) < -_CENT):
             out = _inv_out(inv)
             out["saldo"] = _saldo(inv)
             out["pagado"] = inv["pagado"]
@@ -833,9 +866,13 @@ def _match(inv, p, confianza, motivo, monto) -> dict:
 
 
 def _inv_out(inv) -> dict:
-    return {k: inv[k] for k in
-            ("key", "cuit", "cliente", "comp", "fecha", "importe", "descripcion",
-             "archivo", "tipo", "ajusta")}
+    out = {k: inv[k] for k in
+           ("key", "cuit", "cliente", "comp", "fecha", "importe", "descripcion",
+            "archivo", "tipo", "ajusta")}
+    # Importe "actualizado" por las notas de credito cruzadas con la factura.
+    out["nc_aplicado"] = abs(inv.get("nc", 0.0))
+    out["importe_neto"] = _round2(inv["importe"] - inv.get("nc", 0.0))
+    return out
 
 
 def _pay_out(p) -> dict:
@@ -865,7 +902,8 @@ class ReconciliationController:
 
         @self.router.get("/registros/page")
         async def registros_page_data(tab: str = "facturas", page: int = 1,
-                                      size: int = 25, q: str = ""):
+                                      size: int = 25, q: str = "",
+                                      orden: str = "fecha", dir: str = "desc"):
             """
             Una pagina de facturas, cobros, cruces o clientes, leida de la base
             en este mismo momento. Tambien devuelve cuantos hay en cada solapa.
@@ -891,7 +929,11 @@ class ReconciliationController:
                 total = totales[lectores[tab][1]]
                 paginas = max(1, -(-total // size))
                 page = min(max(int(page), 1), paginas)   # si la ultima se vacio, retrocede
-                items = lectores[tab][0](q, size, (page - 1) * size)
+                if tab == "clientes":
+                    items = mgr.page_clients(q, size, (page - 1) * size)
+                else:
+                    items = lectores[tab][0](q, size, (page - 1) * size,
+                                             orden, dir == "asc")
                 return JSONResponse({
                     "status":  "ok",
                     "tab":     tab,
@@ -901,6 +943,8 @@ class ReconciliationController:
                     "total":   total,
                     "totales": totales,
                     "items":   items,
+                    "orden":   orden,
+                    "dir":     dir,
                 })
             except Exception as e:  # noqa: BLE001
                 logger.exception("No se pudo traer la pagina de registros")
@@ -915,7 +959,8 @@ class ReconciliationController:
                 return JSONResponse({"status": "no_db"}, status_code=400)
             try:
                 return JSONResponse({"status": "ok",
-                                     "cruces": mgr.list_matches_of(invoice_id=invoice_id)})
+                                     "cruces": mgr.list_matches_of(invoice_id=invoice_id),
+                                     "n_notas": mgr.count_nc_applications(invoice_id)})
             except Exception as e:  # noqa: BLE001
                 logger.exception("No se pudieron traer los cruces de la factura")
                 return JSONResponse({"status": "error", "message": str(e)},
@@ -1164,8 +1209,16 @@ class ReconciliationController:
                     # (en la base se sacan recien al guardar).
                     guardados = [g for g in guardados
                                  if g.get("match_id") not in sacar]
+                notas = {}
+                if mgr.is_enabled():
+                    try:
+                        notas = _notas_por_clave(mgr, invoices)
+                    except Exception:  # noqa: BLE001
+                        logger.exception("No se pudieron leer los cruces de notas de credito")
                 result = reconcile(invoices, payments, nombres_db, grupos,
-                                   manuales, guardados, descartados)
+                                   manuales, guardados, descartados, notas,
+                                   solo_guardados=bool(body.get("solo_guardados")))
+                result["solo_guardados"] = bool(body.get("solo_guardados"))
                 return JSONResponse({"status": "ok", **result})
             except Exception as e:  # noqa: BLE001
                 logger.exception("Error en conciliación")
@@ -1252,6 +1305,59 @@ class ReconciliationController:
                 logger.exception("Error asignando grupo")
                 return JSONResponse({"status": "error", "message": str(e)},
                                     status_code=500)
+
+        # ── Cruces nota de credito <-> factura (se guardan aparte) ─────────
+
+        @self.router.post("/nc/list")
+        async def nc_list(request: Request):
+            """Cruces de notas de credito donde participa alguno de estos ids."""
+            body = await request.json()
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                return JSONResponse({"status": "ok",
+                                     "cruces": mgr.list_nc_applications(body.get("ids") or [])})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudieron leer los cruces de notas de credito")
+                return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+        @self.router.post("/nc/save")
+        async def nc_save(request: Request):
+            """
+            Guarda solo los cruces nota de credito <-> factura de esta solapa.
+            Cada uno pasa por las reglas de la base; si alguno no las cumple se
+            avisa cual y por que, y los demas se guardan igual.
+            """
+            body = await request.json()
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            guardados, errores = 0, []
+            for c in body.get("cruces") or []:
+                try:
+                    mgr.save_nc_application(int(c["nc_id"]), int(c["invoice_id"]),
+                                            float(c["monto"]))
+                    guardados += 1
+                except Exception as e:  # noqa: BLE001
+                    msg = str(e).split("\n")[0].split("CONTEXT")[0].strip()
+                    errores.append({"nc_id": c.get("nc_id"),
+                                    "invoice_id": c.get("invoice_id"), "error": msg})
+            return JSONResponse({"status": "ok", "guardados": guardados, "errores": errores})
+
+        @self.router.post("/nc/delete")
+        async def nc_delete(request: Request):
+            """Deshace un cruce nota de credito <-> factura guardado."""
+            body = await request.json()
+            mgr = _get_manager()
+            if not mgr.is_enabled():
+                return JSONResponse({"status": "no_db"}, status_code=400)
+            try:
+                mgr.delete_nc_application(int(body.get("id")))
+                return JSONResponse({"status": "ok"})
+            except Exception as e:  # noqa: BLE001
+                logger.exception("No se pudo deshacer el cruce de la nota de credito")
+                return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
         @self.router.post("/sync_docs")
         async def sync_docs(request: Request):

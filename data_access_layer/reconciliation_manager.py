@@ -522,30 +522,78 @@ class ReconciliationManager:
                         "cruces": int(r[2]), "clientes": int(r[3])}
 
     def _page(self, sql_fn: str, mapper, q: str | None,
-              limit: int, offset: int) -> list[dict]:
+              limit: int, offset: int, orden: str = "fecha",
+              asc: bool = False) -> list[dict]:
+        if not self.is_enabled():
+            return []
+        if orden not in ("fecha", "cliente", "importe"):
+            orden = "fecha"
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SELECT * FROM {sql_fn}(%s::TEXT, %s::INT, %s::INT, %s::TEXT, %s::BOOLEAN)",
+                            (_escape_like(q), limit, offset, orden, bool(asc)))
+                return [mapper(r) for r in cur.fetchall()]
+
+    def page_invoices(self, q, limit, offset, orden="fecha", asc=False) -> list[dict]:
+        """Una pagina de facturas guardadas, en el orden pedido."""
+        return self._page("page_invoices", _fila_a_factura_registro, q, limit, offset, orden, asc)
+
+    def page_payments(self, q, limit, offset, orden="fecha", asc=False) -> list[dict]:
+        """Una pagina de cobros guardados, en el orden pedido."""
+        return self._page("page_payments", _fila_a_pago_registro, q, limit, offset, orden, asc)
+
+    def page_matches(self, q, limit, offset, orden="fecha", asc=False) -> list[dict]:
+        """Una pagina de cruces guardados, en el orden pedido."""
+        return self._page("page_matches", _fila_a_cruce_registro, q, limit, offset, orden, asc)
+
+    def page_clients(self, q, limit, offset) -> list[dict]:
+        """Una pagina de clientes."""
         if not self.is_enabled():
             return []
         with self._connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"SELECT * FROM {sql_fn}(%s::TEXT, %s::INT, %s::INT)",
+                cur.execute("SELECT * FROM page_clients(%s::TEXT, %s::INT, %s::INT)",
                             (_escape_like(q), limit, offset))
-                return [mapper(r) for r in cur.fetchall()]
+                return [_fila_a_cliente_registro(r) for r in cur.fetchall()]
 
-    def page_invoices(self, q, limit, offset) -> list[dict]:
-        """Una pagina de facturas guardadas."""
-        return self._page("page_invoices", _fila_a_factura_registro, q, limit, offset)
+    # ── Cruces nota de credito <-> factura ───────────────────────────────
 
-    def page_payments(self, q, limit, offset) -> list[dict]:
-        """Una pagina de cobros guardados."""
-        return self._page("page_payments", _fila_a_pago_registro, q, limit, offset)
+    def list_nc_applications(self, ids: list[int]) -> list[dict]:
+        """Cruces donde participa alguno de estos documentos (nota o factura)."""
+        ids = [int(i) for i in ids if i is not None]
+        if not self.is_enabled() or not ids:
+            return []
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM list_nc_applications(%s::INT[])", (ids,))
+                return [{"id": r[0], "nc_id": r[1], "invoice_id": r[2],
+                         "monto": float(r[3] or 0)} for r in cur.fetchall()]
 
-    def page_matches(self, q, limit, offset) -> list[dict]:
-        """Una pagina de cruces guardados."""
-        return self._page("page_matches", _fila_a_cruce_registro, q, limit, offset)
+    def save_nc_application(self, nc_id: int, invoice_id: int, monto: float) -> int:
+        """Guarda cuanto de la nota se aplica a la factura (la base controla las reglas)."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT save_nc_application(%s::INT, %s::INT, %s::NUMERIC)",
+                            (nc_id, invoice_id, monto))
+                nuevo = cur.fetchone()[0]
+                conn.commit()
+                return int(nuevo)
 
-    def page_clients(self, q, limit, offset) -> list[dict]:
-        """Una pagina de clientes."""
-        return self._page("page_clients", _fila_a_cliente_registro, q, limit, offset)
+    def delete_nc_application(self, app_id: int) -> None:
+        """Deshace un cruce nota de credito <-> factura."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT delete_nc_application(%s::INT)", (app_id,))
+                conn.commit()
+
+    def count_nc_applications(self, doc_id: int) -> int:
+        """Cuantos cruces con notas de credito tiene un documento."""
+        if not self.is_enabled():
+            return 0
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT count_nc_applications(%s::INT)", (doc_id,))
+                return int(cur.fetchone()[0] or 0)
 
     def list_matches_of(self, invoice_id: int | None = None,
                         payment_id: int | None = None) -> list[dict]:

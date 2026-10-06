@@ -425,3 +425,21 @@
                     font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500; }
 .rc-panel-loading[hidden] { display: none !important; }
 
+/* ── Paso 3: botones arriba, aviso, notas de credito (tanda 8) ── */
+.rc-actionbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+.rc-aviso { margin-bottom: 14px; padding: 12px 16px; border-radius: 12px;
+            background: #eef8f1; border: 1px solid #9fd3b2; color: #1f6b41;
+            font-family: 'Outfit', sans-serif; font-size: 14px; line-height: 1.45; }
+.rc-aviso[hidden] { display: none !important; }
+.rc-nc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 14px; }
+@media (max-width: 1100px) { .rc-nc-grid { grid-template-columns: 1fr; } }
+.rc-off { opacity: .5; }
+.rc-table tr.nc td { background: #fbf1ef; }
+
+/* ── Cruces propuestos que todavia no estan guardados ── */
+.rc-table tr.rc-sin-guardar td { background: #fff6dc; }
+.rc-table tr.rc-sin-guardar td:first-child { box-shadow: inset 4px 0 0 #e0a100; }
+.rc-badge-sin-guardar { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 999px;
+                        background: #e0a100; color: #fff; font-family: 'Outfit', sans-serif;
+                        font-size: 11px; font-weight: 700; white-space: nowrap; }
+

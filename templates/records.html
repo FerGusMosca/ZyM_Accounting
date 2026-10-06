@@ -38,7 +38,7 @@
       </a>
       <a href="/reconciliation/registros" class="dash-nav-item active">
         <span class="dash-nav-icon">🗂️</span>
-        <span>Registros</span>
+        <span>Facturas/Pagos</span>
       </a>
       <a href="/reconciliation" class="dash-nav-item">
         <span class="dash-nav-icon">🔗</span>
@@ -62,6 +62,7 @@
       <div class="rc-header-actions">
         <input type="search" id="rgSearch" class="rg-search" placeholder="Buscar…" oninput="buscar()">
         <button class="btn btn-ghost" onclick="cargar()" title="Vuelve a leer de la base la página que estás viendo">↻ Actualizar</button>
+        <a class="btn btn-ghost" href="/" title="Volver a la pantalla de inicio">← Inicio</a>
         <a class="btn btn-primary" href="/reconciliation" title="Ir directo a la pantalla de Conciliación">Ir a Conciliación →</a>
       </div>
     </div>
@@ -94,8 +95,8 @@
         <table class="rc-table">
           <thead>
             <tr>
-              <th>Comprobante</th><th>Fecha</th><th>Cliente</th><th>CUIT</th>
-              <th class="num">Importe</th><th class="num">Imputado</th>
+              <th>Comprobante</th><th class="rc-sortable" onclick="ordenarPor(1,'fecha')" title="Clic para ordenar">Fecha <span class="rc-sort" id="rgs_1_fecha"></span></th><th class="rc-sortable" onclick="ordenarPor(1,'cliente')" title="Clic para ordenar">Cliente <span class="rc-sort" id="rgs_1_cliente"></span></th><th>CUIT</th>
+              <th class="num rc-sortable" onclick="ordenarPor(1,'importe')" title="Clic para ordenar">Importe <span class="rc-sort" id="rgs_1_importe"></span></th><th class="num">Imputado</th>
               <th>Estado</th><th>Archivo</th><th></th>
             </tr>
           </thead>
@@ -115,8 +116,8 @@
         <table class="rc-table">
           <thead>
             <tr>
-              <th>Fecha</th><th>Originante</th><th>CUIT</th><th>Banco</th>
-              <th class="num">Importe</th><th class="num">Imputado</th>
+<th class="rc-sortable" onclick="ordenarPor(2,'fecha')" title="Clic para ordenar">Fecha <span class="rc-sort" id="rgs_2_fecha"></span></th><th class="rc-sortable" onclick="ordenarPor(2,'cliente')" title="Clic para ordenar">Originante <span class="rc-sort" id="rgs_2_cliente"></span></th><th>CUIT</th><th>Banco</th>
+              <th class="num rc-sortable" onclick="ordenarPor(2,'importe')" title="Clic para ordenar">Importe <span class="rc-sort" id="rgs_2_importe"></span></th><th class="num">Imputado</th>
               <th>Archivo</th><th></th>
             </tr>
           </thead>
@@ -132,8 +133,8 @@
         <table class="rc-table">
           <thead>
             <tr>
-              <th>Comprobante</th><th>Cliente</th><th>Pago</th>
-              <th class="num">Importe</th><th>Confianza</th><th></th>
+              <th>Comprobante</th><th class="rc-sortable" onclick="ordenarPor(3,'cliente')" title="Clic para ordenar">Cliente <span class="rc-sort" id="rgs_3_cliente"></span></th><th class="rc-sortable" onclick="ordenarPor(3,'fecha')" title="Clic para ordenar">Pago <span class="rc-sort" id="rgs_3_fecha"></span></th>
+              <th class="num rc-sortable" onclick="ordenarPor(3,'importe')" title="Clic para ordenar">Importe <span class="rc-sort" id="rgs_3_importe"></span></th><th>Confianza</th><th></th>
             </tr>
           </thead>
           <tbody id="matBody"></tbody>

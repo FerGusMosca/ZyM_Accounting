@@ -175,3 +175,26 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
 
 CREATE INDEX IF NOT EXISTS ix_uploaded_files_created
     ON uploaded_files (created_at DESC);
+
+
+-- ============================================================
+-- credit_note_applications
+-- Cruce de una nota de credito con la factura que ajusta: cuanto de
+-- la nota se aplica a esa factura. La factura se muestra con su
+-- importe "actualizado" (importe - lo aplicado) y la nota queda con
+-- lo que le sobre. Si se borra la factura o la nota, sus cruces se
+-- van con ella.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS credit_note_applications (
+    id              SERIAL         PRIMARY KEY,
+    credit_note_id  INT            NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    invoice_id      INT            NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    amount          NUMERIC(14,2)  NOT NULL CHECK (amount > 0),
+    created_at      TIMESTAMP      NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_cna_par UNIQUE (credit_note_id, invoice_id),
+    CONSTRAINT ck_cna_distintos CHECK (credit_note_id <> invoice_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_cna_credit_note ON credit_note_applications (credit_note_id);
+CREATE INDEX IF NOT EXISTS ix_cna_invoice     ON credit_note_applications (invoice_id);
+
